@@ -8,6 +8,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.TextMeasurer
@@ -321,119 +324,91 @@ internal fun DrawScope.drawEnhancedFieldWeapon(
     w: Float,
     h: Float,
     cx: Float,
-    weaponId: String?
+    weaponId: String?,
+    suppressed: Boolean = false
 ) {
-    val rifleMetal = Color(0xFF161B23)
+    val metal = Color(0xFF1A1E24)
     val furniture = when {
-        weaponId?.contains("mk20") == true || weaponId?.contains("hk416") == true -> Color(0xFF8C7A56)
-        else -> Color(0xFF28303D)
+        weaponId?.contains("mk20") == true || weaponId?.contains("hk416") == true || weaponId?.contains("urg") == true -> Color(0xFF8C7A56)
+        else -> Color(0xFF2A3038)
     }
-    val opticGlass = Color(0xFF5AC8FA)
-
-    when {
-        weaponId?.contains("mk14") == true || weaponId?.contains("mk20") == true -> {
-            // Precision Long DMR / Sniper Rifle slung diagonally across chest
-            drawLine(rifleMetal, Offset(cx - w * 0.22f, h * 0.36f), Offset(cx + w * 0.26f, h * 0.91f), strokeWidth = 6.2f, cap = StrokeCap.Round)
-            // Receiver & chassis body
-            drawLine(furniture, Offset(cx - w * 0.08f, h * 0.51f), Offset(cx + w * 0.12f, h * 0.74f), strokeWidth = 9.5f, cap = StrokeCap.Butt)
-            // Telescopic scope mounted cleanly above receiver
-            drawLine(rifleMetal, Offset(cx - w * 0.02f, h * 0.49f), Offset(cx + w * 0.10f, h * 0.63f), strokeWidth = 4.2f, cap = StrokeCap.Round)
-            drawCircle(opticGlass, radius = w * 0.008f, center = Offset(cx + w * 0.10f, h * 0.63f))
-            // Suppressor & folded bipod
-            drawLine(Color(0xFF222A35), Offset(cx + w * 0.20f, h * 0.84f), Offset(cx + w * 0.27f, h * 0.92f), strokeWidth = 7.4f, cap = StrokeCap.Round)
-        }
-        weaponId?.contains("mp7") == true -> {
-            // Compact PDW + suppressor & micro red-dot
-            drawLine(rifleMetal, Offset(cx - w * 0.12f, h * 0.49f), Offset(cx + w * 0.16f, h * 0.77f), strokeWidth = 7.2f, cap = StrokeCap.Round)
-            drawLine(furniture, Offset(cx - w * 0.06f, h * 0.55f), Offset(cx + w * 0.08f, h * 0.69f), strokeWidth = 9.0f, cap = StrokeCap.Butt)
-            drawCircle(opticGlass, radius = w * 0.007f, center = Offset(cx + w * 0.01f, h * 0.56f))
-        }
-        weaponId?.contains("m249") == true -> {
-            // Heavy Squad Automatic Weapon + ammo box drum + carry handle
-            drawLine(rifleMetal, Offset(cx - w * 0.20f, h * 0.40f), Offset(cx + w * 0.24f, h * 0.88f), strokeWidth = 7.6f, cap = StrokeCap.Round)
-            drawRoundRect(
-                color = Color(0xFF3A4A30),
-                topLeft = Offset(cx - w * 0.02f, h * 0.62f),
-                size = Size(w * 0.075f, h * 0.060f),
-                cornerRadius = CornerRadius(3f, 3f)
-            )
-            drawLine(furniture, Offset(cx - w * 0.08f, h * 0.53f), Offset(cx + w * 0.09f, h * 0.71f), strokeWidth = 10.5f, cap = StrokeCap.Butt)
-        }
-        else -> {
-            // M4A1 / XM7 Tactical Carbine with holographic optic & PEQ laser
-            drawLine(rifleMetal, Offset(cx - w * 0.18f, h * 0.41f), Offset(cx + w * 0.22f, h * 0.88f), strokeWidth = 6.8f, cap = StrokeCap.Round)
-            drawLine(furniture, Offset(cx - w * 0.06f, h * 0.53f), Offset(cx + w * 0.10f, h * 0.71f), strokeWidth = 9.2f, cap = StrokeCap.Butt)
-            drawRoundRect(
-                color = Color(0xFF1F2733),
-                topLeft = Offset(cx + w * 0.005f, h * 0.545f),
-                size = Size(w * 0.036f, h * 0.022f),
-                cornerRadius = CornerRadius(2f, 2f)
-            )
-            drawCircle(opticGlass, radius = w * 0.006f, center = Offset(cx + w * 0.035f, h * 0.556f))
+    val glass = Color(0xFF5AC8FA)
+    val kind = when {
+        weaponId == null -> return
+        weaponId.contains("mk14") || weaponId.contains("mk20") -> "dmr"
+        weaponId.contains("mp7") -> "pdw"
+        weaponId.contains("m249") -> "lmg"
+        else -> "rifle"
+    }
+    // Held at low ready across the waist: stock at the wearer's right hip, muzzle up toward the left shoulder
+    val length = w * when (kind) { "dmr" -> 0.70f; "pdw" -> 0.40f; "lmg" -> 0.68f; else -> 0.60f }
+    val stock = Offset(cx - w * 0.24f, h * 0.835f)
+    val angle = -22f
+    val u = length // local units: x along the barrel, y across (down positive)
+    // Sling from the stock up over the shoulder, behind the rifle
+    drawLine(Color(0xFF23261F).copy(alpha = 0.85f), stock, Offset(cx - w * 0.12f, h * 0.36f), strokeWidth = w * 0.007f, cap = StrokeCap.Round)
+    withTransform({
+        translate(stock.x, stock.y)
+        rotate(angle, pivot = Offset.Zero)
+    }) {
+        fun rect(x0: Float, y0: Float, x1: Float, y1: Float, c: Color, r: Float = 2f) =
+            drawRoundRect(c, Offset(x0 * u, y0 * u), Size((x1 - x0) * u, (y1 - y0) * u), CornerRadius(r, r))
+        when (kind) {
+            "pdw" -> {
+                rect(0.00f, -0.035f, 0.18f, 0.020f, metal)                 // collapsed stock
+                rect(0.14f, -0.060f, 0.70f, 0.040f, furniture, 4f)         // body
+                rect(0.30f, 0.030f, 0.40f, 0.200f, metal)                  // grip + magazine
+                rect(0.48f, -0.110f, 0.62f, -0.060f, metal)                // red dot
+                drawCircle(glass, u * 0.015f, Offset(u * 0.60f, -u * 0.085f))
+                rect(0.70f, -0.025f, if (suppressed) 1.00f else 0.82f, 0.015f, metal)
+            }
+            "lmg" -> {
+                rect(0.00f, -0.050f, 0.20f, 0.040f, furniture, 3f)
+                rect(0.18f, -0.060f, 0.55f, 0.040f, metal)                 // receiver
+                rect(0.30f, 0.040f, 0.36f, 0.130f, metal)                  // grip
+                rect(0.38f, 0.040f, 0.54f, 0.170f, Color(0xFF3A4A30), 3f)  // ammo box
+                rect(0.40f, -0.105f, 0.50f, -0.060f, metal)                // carry handle
+                rect(0.55f, -0.035f, 0.78f, 0.025f, furniture)             // handguard
+                rect(0.78f, -0.015f, 1.00f, 0.010f, metal)                 // barrel
+                drawLine(metal, Offset(u * 0.80f, u * 0.01f), Offset(u * 0.86f, u * 0.10f), strokeWidth = u * 0.012f)
+                drawLine(metal, Offset(u * 0.82f, u * 0.01f), Offset(u * 0.78f, u * 0.10f), strokeWidth = u * 0.012f)
+            }
+            else -> {
+                val dmr = kind == "dmr"
+                rect(0.00f, -0.040f, 0.16f, 0.045f, furniture, 3f)         // stock
+                rect(0.10f, -0.060f, 0.18f, -0.035f, furniture)            // cheek riser
+                rect(0.15f, -0.020f, 0.24f, 0.010f, metal)                 // buffer tube
+                rect(0.22f, -0.045f, 0.47f, 0.030f, metal)                 // receiver
+                rect(0.31f, 0.025f, 0.36f, 0.120f, metal)                  // pistol grip
+                rect(0.39f, 0.025f, 0.47f, if (dmr) 0.120f else 0.150f, if (dmr) metal else furniture, 2f) // magazine
+                rect(0.47f, -0.040f, if (dmr) 0.80f else 0.76f, 0.025f, furniture, 3f) // handguard
+                val muzzleEnd = if (suppressed || dmr) 1.00f else 0.90f
+                rect(if (dmr) 0.80f else 0.76f, -0.014f, muzzleEnd, 0.008f, metal)
+                if (suppressed || dmr) rect(0.86f, -0.024f, 1.00f, 0.018f, metal, 3f)
+                // Optic: scope on the DMR, holographic sight on carbines
+                if (dmr) {
+                    rect(0.24f, -0.115f, 0.46f, -0.065f, metal, 4f)
+                    drawCircle(glass, u * 0.016f, Offset(u * 0.45f, -u * 0.090f))
+                    drawLine(metal, Offset(u * 0.70f, u * 0.025f), Offset(u * 0.66f, u * 0.11f), strokeWidth = u * 0.010f)
+                } else {
+                    rect(0.30f, -0.100f, 0.41f, -0.045f, metal)
+                    drawCircle(glass, u * 0.013f, Offset(u * 0.40f, -u * 0.072f))
+                    rect(0.58f, -0.075f, 0.66f, -0.040f, Color(0xFF3B3F2E))   // laser module
+                }
+            }
         }
     }
-}
-
-internal fun DrawScope.drawFieldCombatPatchAndLeaderTab(
-    w: Float,
-    h: Float,
-    cx: Float,
-    specialty: OperatorSpecialty,
-    combatPatch: UnitPatchStyle,
-    isSquadLeader: Boolean,
-    accentCamo: Color
-) {
-    // Combat Patch on wearer's right sleeve (viewer's left side of field shirt)
-    if (combatPatch != UnitPatchStyle.NONE) {
-        val patchColor = if (combatPatch == UnitPatchStyle.AUTO_MOS) accentCamo else Color(combatPatch.primaryHex)
-        val patchBorder = if (combatPatch == UnitPatchStyle.AUTO_MOS) Color(0xFFD8B24C) else Color(combatPatch.accentHex)
-        drawRoundRect(
-            color = patchColor,
-            topLeft = Offset(cx - w * 0.342f, h * 0.470f),
-            size = Size(w * 0.044f, h * 0.050f),
-            cornerRadius = CornerRadius(4f, 4f)
-        )
-        drawRoundRect(
-            color = patchBorder,
-            topLeft = Offset(cx - w * 0.342f, h * 0.470f),
-            size = Size(w * 0.044f, h * 0.050f),
-            cornerRadius = CornerRadius(4f, 4f),
-            style = Stroke(width = 1.2f)
-        )
-        // Subtle specialty cross/star accent inside combat patch
-        drawMiniStar(
-            center = Offset(cx - w * 0.320f, h * 0.495f),
-            outerR = (w * 0.011f).coerceAtLeast(1.8f),
-            innerR = (w * 0.005f).coerceAtLeast(0.8f),
-            color = if (specialty == OperatorSpecialty.MEDIC) Color.White else patchBorder
-        )
-    }
-
-    // Green/Brass Squad Leader Shoulder-Loop / Chest Identification Tab
-    if (isSquadLeader) {
-        val tabW = w * 0.078f
-        val tabH = h * 0.013f
-        val tabLeft = cx - tabW * 0.5f
-        val tabTop = h * 0.482f
-        drawRoundRect(
-            color = Color(0xFF285938),
-            topLeft = Offset(tabLeft, tabTop),
-            size = Size(tabW, tabH),
-            cornerRadius = CornerRadius(2f, 2f)
-        )
-        drawRoundRect(
-            color = Color(0xFFF2D272),
-            topLeft = Offset(tabLeft, tabTop),
-            size = Size(tabW, tabH),
-            cornerRadius = CornerRadius(2f, 2f),
-            style = Stroke(width = 1.0f)
-        )
-        drawMiniStar(
-            center = Offset(cx, tabTop + tabH * 0.5f),
-            outerR = (tabH * 0.42f).coerceAtLeast(1.3f),
-            innerR = (tabH * 0.19f).coerceAtLeast(0.6f),
-            color = Color(0xFFF5D576)
-        )
+    // Gloved hands: firing hand on the grip, support hand on the handguard
+    val glove = Color(0xFF3A3528)
+    val gripAt = when (kind) { "pdw" -> 0.36f; "lmg" -> 0.33f; else -> 0.335f }
+    val supportAt = when (kind) { "pdw" -> 0.58f; "lmg" -> 0.66f; "dmr" -> 0.66f; else -> 0.62f }
+    withTransform({
+        translate(stock.x, stock.y)
+        rotate(angle, pivot = Offset.Zero)
+    }) {
+        drawOval(glove, Offset(u * (gripAt - 0.045f), u * 0.030f), Size(u * 0.090f, u * 0.075f))
+        drawOval(glove, Offset(u * (supportAt - 0.050f), -u * 0.050f), Size(u * 0.100f, u * 0.085f))
+        drawOval(Color.Black.copy(alpha = 0.25f), Offset(u * (supportAt - 0.050f), -u * 0.050f), Size(u * 0.100f, u * 0.085f), style = androidx.compose.ui.graphics.drawscope.Stroke(1f))
     }
 }
 
