@@ -2830,4 +2830,23 @@ class TacticalCalculatorTest {
             TacticalCalculator.dispatchSupplyCost(mission, 4, 1.0)
         )
     }
+
+    @Test
+    fun appearanceIsStablePerSoldierVariedAcrossRosterAndOverridable() {
+        val recruits = (0 until 60).map { GameCatalog.createPostBasicRecruit("op_look_$it", OperatorSpecialty.ASSAULT, emptySet(), it) }
+        // Same soldier, same look
+        recruits.forEach { r -> assertEquals(r.skinTone, r.copy(xp = r.xp + 50).skinTone) }
+        // A roster covers the whole palette and every build
+        assertEquals(SkinTone.entries.toSet(), recruits.map { it.skinTone }.toSet())
+        assertEquals(BodyBuild.entries.toSet(), recruits.map { it.bodyBuild }.toSet())
+        // Overrides win; clearing returns to the derived look
+        val r = recruits.first()
+        assertEquals(SkinTone.DEEP, r.copy(skinToneOverride = SkinTone.DEEP).skinTone)
+        assertEquals(BodyBuild.BROAD, r.copy(bodyBuildOverride = BodyBuild.BROAD).bodyBuild)
+        assertEquals(r.skinTone, r.copy(skinToneOverride = SkinTone.DEEP).copy(skinToneOverride = null).skinTone)
+        // The Tailor request carries the overrides through
+        val req = UniformTailorRequest.fromOperator(r.copy(skinToneOverride = SkinTone.FAIR, bodyBuildOverride = BodyBuild.SLIM))
+        assertEquals(SkinTone.FAIR, req.skinToneOverride)
+        assertEquals(BodyBuild.SLIM, req.bodyBuildOverride)
+    }
 }

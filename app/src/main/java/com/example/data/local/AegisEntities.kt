@@ -71,6 +71,8 @@ data class OperatorEntity(
     val timesWounded: Int = 0,
     val combatPatchHistoryCsv: String = "",
     val equippedGearCsv: String = "",
+    val skinToneName: String? = null,
+    val bodyBuildName: String? = null,
     val unlocked: Boolean,
     val recruitCreditCost: Double,
     val recruitIntelCost: Double,

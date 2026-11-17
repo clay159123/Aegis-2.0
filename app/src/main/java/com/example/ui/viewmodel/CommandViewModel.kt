@@ -1854,7 +1854,9 @@ class CommandViewModel(
                     hasWhiteGloves = if (targetKit == WardrobeKit.ALPHAS) finalGloves else op.hasWhiteGloves,
                     hasDressSash = if (targetKit == WardrobeKit.ALPHAS) finalSash else op.hasDressSash,
                     tailorOverrides = finalOverrides,
-                    wardrobe = updatedWardrobe
+                    wardrobe = updatedWardrobe,
+                    skinToneOverride = request.skinToneOverride,
+                    bodyBuildOverride = request.bodyBuildOverride
                 )
             )
             if (sanitizedCallsign != op.callsign) {

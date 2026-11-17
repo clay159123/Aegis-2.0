@@ -807,6 +807,25 @@ enum class GearSlot(val label: String, val shortLabel: String) {
     UTILITY("Field Utility", "UTL")
 }
 
+/** Skin tones for the uniform figures; [shadowHex] shades the neck, ears, hands and features. */
+enum class SkinTone(val label: String, val toneHex: Long, val shadowHex: Long) {
+    FAIR("Fair", 0xFFF1D6C0, 0xFFCFAE96),
+    LIGHT("Light", 0xFFE6C1A1, 0xFFC09A7B),
+    LIGHT_MEDIUM("Light Medium", 0xFFD1A98E, 0xFFA98067),
+    MEDIUM("Medium", 0xFFC08A63, 0xFF96664A),
+    OLIVE("Olive", 0xFFAF8458, 0xFF86603D),
+    TAN("Tan", 0xFF9C6B47, 0xFF754D32),
+    BROWN("Brown", 0xFF7A4C32, 0xFF573423),
+    DEEP("Deep", 0xFF553424, 0xFF3A2218)
+}
+
+/** Body builds; [widthScale] widens or narrows the shoulders and torso. */
+enum class BodyBuild(val label: String, val widthScale: Float) {
+    SLIM("Slim", 0.90f),
+    AVERAGE("Average", 1.0f),
+    BROAD("Broad", 1.12f)
+}
+
 /** The unlocked gear in [operator]'s own loadout. */
 fun List<GearItem>.equippedBy(operator: Operator): List<GearItem> =
     filter { it.unlocked && operator.equippedGearIds[it.slot] == it.id }
@@ -910,8 +929,20 @@ data class Operator(
     val bio: String,
     val authorizedTier: RankTier = OperatorRank.forXp(xp).tier,
     /** This soldier's own loadout: one unlocked gear type per slot. Gear types are shared, so any number of soldiers can carry the same item. */
-    val equippedGearIds: Map<GearSlot, String> = emptyMap()
+    val equippedGearIds: Map<GearSlot, String> = emptyMap(),
+    /** Player-chosen skin tone (index into [SkinTone.entries]); null = derived from the soldier id */
+    val skinToneOverride: SkinTone? = null,
+    /** Player-chosen build; null = derived from the soldier id */
+    val bodyBuildOverride: BodyBuild? = null
 ) {
+    /** Skin tone shown on every uniform: the override, or a stable pick from the soldier id */
+    val skinTone: SkinTone
+        get() = skinToneOverride ?: SkinTone.entries[Math.floorMod(id.hashCode(), SkinTone.entries.size)]
+
+    /** Build shown on every uniform: the override, or a stable pick from the soldier id */
+    val bodyBuild: BodyBuild
+        get() = bodyBuildOverride ?: BodyBuild.entries[Math.floorMod("$id#build".hashCode(), BodyBuild.entries.size)]
+
     val rank: OperatorRank get() = OperatorRank.forXp(xp, authorizedTier)
 
     val isAtCategoryPromotionGate: Boolean
@@ -943,7 +974,10 @@ data class UniformTailorRequest(
     /** True only when the player picked headgear by hand in this request */
     val headgearTouched: Boolean = false,
     /** True when the player picked "Auto" headgear, clearing a saved manual pick */
-    val headgearAuto: Boolean = false
+    val headgearAuto: Boolean = false,
+    /** Appearance overrides; null = Auto (derived from the soldier id) */
+    val skinToneOverride: SkinTone? = null,
+    val bodyBuildOverride: BodyBuild? = null
 ) {
     companion object {
         fun fromOperator(
@@ -964,7 +998,9 @@ data class UniformTailorRequest(
                 ?: if (kit == WardrobeKit.MESS) true else op.hasWhiteGloves,
             hasDressSash = op.wardrobe.forKit(kit).hasDressSash ?: op.hasDressSash,
             tailorOverrides = op.tailorOverrides,
-            wardrobeKit = kit
+            wardrobeKit = kit,
+            skinToneOverride = op.skinToneOverride,
+            bodyBuildOverride = op.bodyBuildOverride
         )
     }
 }

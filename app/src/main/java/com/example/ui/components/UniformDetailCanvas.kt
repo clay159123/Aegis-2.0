@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextMeasurer
@@ -95,8 +97,9 @@ fun OperatorUniformPreview(
     val hasArmor = equippedGear.any { it.slot == GearSlot.ARMOR }
     val hasHelmet = equippedGear.any { it.slot == GearSlot.HELMET }
     val hasWeapon = equippedWeaponId != null
-    val skinTone = Color(0xFFD1A98E)
-    val skinShadow = Color(0xFFA98067)
+    val skinTone = Color(renderOperator.skinTone.toneHex)
+    val skinShadow = Color(renderOperator.skinTone.shadowHex)
+    val buildScale = renderOperator.bodyBuild.widthScale
     val visorTone = Color(0xFF1A242F)
 
     Box(
@@ -137,6 +140,8 @@ fun OperatorUniformPreview(
                 )
             }
 
+            // Body build widens or narrows the figure; the head draws itself back at normal width
+            withTransform({ scale(buildScale, 1f, pivot = Offset(cx, h * 0.5f)) }) {
             when (inferredKit) {
                 WardrobeKit.FIELD -> drawFieldTacticalFigure(
                     w = w,
@@ -198,8 +203,15 @@ fun OperatorUniformPreview(
                     kit = inferredKit
                 )
             }
+            }
         }
     }
+}
+
+/** Draws [block] at natural width inside a figure scaled by the soldier's build, so heads keep their shape. */
+internal inline fun DrawScope.unscaledForBuild(operator: Operator, cx: Float, block: DrawScope.() -> Unit) {
+    val s = operator.bodyBuild.widthScale
+    if (s == 1f) block() else withTransform({ scale(1f / s, 1f, pivot = Offset(cx, 0f)) }) { block() }
 }
 
 private fun DrawScope.drawDressUniformFigure(
@@ -1147,241 +1159,243 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
     headgearCol: Color,
     trimCol: Color
 ) {
-    drawRect(skinShadow, Offset(cx - w * 0.052f, h * 0.242f), Size(w * 0.104f, h * 0.062f))
-    drawOval(skinShadow, Offset(cx - w * 0.112f, h * 0.158f), Size(w * 0.022f, h * 0.044f))
-    drawOval(skinShadow, Offset(cx + w * 0.090f, h * 0.158f), Size(w * 0.022f, h * 0.044f))
-    drawOval(skinTone, Offset(cx - w * 0.102f, h * 0.082f), Size(w * 0.204f, h * 0.184f))
-    drawLine(skinShadow, Offset(cx - w * 0.052f, h * 0.152f), Offset(cx - w * 0.016f, h * 0.154f), strokeWidth = 1.6f, cap = StrokeCap.Round)
-    drawLine(skinShadow, Offset(cx + w * 0.016f, h * 0.154f), Offset(cx + w * 0.052f, h * 0.152f), strokeWidth = 1.6f, cap = StrokeCap.Round)
-    drawCircle(Color(0xFF282220), radius = w * 0.0095f, center = Offset(cx - w * 0.034f, h * 0.168f))
-    drawCircle(Color(0xFF282220), radius = w * 0.0095f, center = Offset(cx + w * 0.034f, h * 0.168f))
+    unscaledForBuild(operator, cx) {
+        drawRect(skinShadow, Offset(cx - w * 0.052f, h * 0.242f), Size(w * 0.104f, h * 0.062f))
+        drawOval(skinShadow, Offset(cx - w * 0.112f, h * 0.158f), Size(w * 0.022f, h * 0.044f))
+        drawOval(skinShadow, Offset(cx + w * 0.090f, h * 0.158f), Size(w * 0.022f, h * 0.044f))
+        drawOval(skinTone, Offset(cx - w * 0.102f, h * 0.082f), Size(w * 0.204f, h * 0.184f))
+        drawLine(skinShadow, Offset(cx - w * 0.052f, h * 0.152f), Offset(cx - w * 0.016f, h * 0.154f), strokeWidth = 1.6f, cap = StrokeCap.Round)
+        drawLine(skinShadow, Offset(cx + w * 0.016f, h * 0.154f), Offset(cx + w * 0.052f, h * 0.152f), strokeWidth = 1.6f, cap = StrokeCap.Round)
+        drawCircle(Color(0xFF282220), radius = w * 0.0095f, center = Offset(cx - w * 0.034f, h * 0.168f))
+        drawCircle(Color(0xFF282220), radius = w * 0.0095f, center = Offset(cx + w * 0.034f, h * 0.168f))
 
-    fun skullHalfW(yFrac: Float): Float {
-        val dy = ((0.174f - yFrac) / 0.092f).coerceIn(-1f, 1f)
-        return w * 0.102f * sqrt((1f - dy * dy).coerceAtLeast(0f))
-    }
-
-    // 15. Detailed Ceremonial Headgear
-    if (operator.headgearStyle.kind != HeadgearKind.BERET) {
-        val capBandW = skullHalfW(0.118f) + w * 0.008f
-        val crownPath = Path().apply {
-            moveTo(cx - w * 0.152f, h * 0.060f)
-            lineTo(cx + w * 0.152f, h * 0.060f)
-            lineTo(cx + capBandW, h * 0.122f)
-            lineTo(cx - capBandW, h * 0.122f)
-            close()
+        fun skullHalfW(yFrac: Float): Float {
+            val dy = ((0.174f - yFrac) / 0.092f).coerceIn(-1f, 1f)
+            return w * 0.102f * sqrt((1f - dy * dy).coerceAtLeast(0f))
         }
-        drawPath(crownPath, color = headgearCol)
-        drawRect(trimCol, Offset(cx - capBandW + w * 0.003f, h * 0.106f), Size((capBandW - w * 0.003f) * 2f, h * 0.016f))
-        drawArc(
-            color = Color(0xFF0A0D14),
-            startAngle = 0f,
-            sweepAngle = 180f,
-            useCenter = true,
-            topLeft = Offset(cx - capBandW + w * 0.004f, h * 0.109f),
-            size = Size((capBandW - w * 0.004f) * 2f, h * 0.044f)
-        )
-        drawArc(
-            color = Color.White.copy(alpha = 0.22f),
-            startAngle = 25f,
-            sweepAngle = 120f,
-            useCenter = false,
-            topLeft = Offset(cx - w * 0.068f, h * 0.115f),
-            size = Size(w * 0.136f, h * 0.022f),
-            style = Stroke(1.3f, cap = StrokeCap.Round)
-        )
-        if (operator.headgearStyle.kind == HeadgearKind.OFFICER_CAP ||
-            operator.headgearStyle.kind == HeadgearKind.GENERAL_CAP ||
-            tier.isOfficer
-        ) {
-            val visorStroke = when {
-                tier == RankTier.FLAG_OFFICER -> 3.4f
-                operator.rank.isFieldGradeOfficer -> 2.3f
-                else -> 1.25f
+
+        // 15. Detailed Ceremonial Headgear
+        if (operator.headgearStyle.kind != HeadgearKind.BERET) {
+            val capBandW = skullHalfW(0.118f) + w * 0.008f
+            val crownPath = Path().apply {
+                moveTo(cx - w * 0.152f, h * 0.060f)
+                lineTo(cx + w * 0.152f, h * 0.060f)
+                lineTo(cx + capBandW, h * 0.122f)
+                lineTo(cx - capBandW, h * 0.122f)
+                close()
             }
+            drawPath(crownPath, color = headgearCol)
+            drawRect(trimCol, Offset(cx - capBandW + w * 0.003f, h * 0.106f), Size((capBandW - w * 0.003f) * 2f, h * 0.016f))
             drawArc(
-                color = trimCol,
-                startAngle = 15f,
-                sweepAngle = 150f,
-                useCenter = false,
-                topLeft = Offset(cx - w * 0.082f, h * 0.114f),
-                size = Size(w * 0.164f, h * 0.034f),
-                style = Stroke(width = visorStroke, cap = StrokeCap.Round)
+                color = Color(0xFF0A0D14),
+                startAngle = 0f,
+                sweepAngle = 180f,
+                useCenter = true,
+                topLeft = Offset(cx - capBandW + w * 0.004f, h * 0.109f),
+                size = Size((capBandW - w * 0.004f) * 2f, h * 0.044f)
             )
-            // Field-Grade (MAJ–COL) & Flag Officer visor oak-leaf "scrambled eggs" darts
-            if (tier == RankTier.FLAG_OFFICER || operator.rank.isFieldGradeOfficer) {
-                for (side in listOf(-1f, 1f)) {
-                    for (leafIdx in 0..2) {
-                        val lx = cx + side * w * (0.034f + leafIdx * 0.017f)
-                        val ly = h * (0.132f - leafIdx * 0.002f)
-                        drawLine(
-                            color = trimCol,
-                            start = Offset(lx, ly),
-                            end = Offset(lx + side * w * 0.009f, ly - h * 0.006f),
-                            strokeWidth = if (tier == RankTier.FLAG_OFFICER) 1.7f else 1.3f,
-                            cap = StrokeCap.Round
-                        )
+            drawArc(
+                color = Color.White.copy(alpha = 0.22f),
+                startAngle = 25f,
+                sweepAngle = 120f,
+                useCenter = false,
+                topLeft = Offset(cx - w * 0.068f, h * 0.115f),
+                size = Size(w * 0.136f, h * 0.022f),
+                style = Stroke(1.3f, cap = StrokeCap.Round)
+            )
+            if (operator.headgearStyle.kind == HeadgearKind.OFFICER_CAP ||
+                operator.headgearStyle.kind == HeadgearKind.GENERAL_CAP ||
+                tier.isOfficer
+            ) {
+                val visorStroke = when {
+                    tier == RankTier.FLAG_OFFICER -> 3.4f
+                    operator.rank.isFieldGradeOfficer -> 2.3f
+                    else -> 1.25f
+                }
+                drawArc(
+                    color = trimCol,
+                    startAngle = 15f,
+                    sweepAngle = 150f,
+                    useCenter = false,
+                    topLeft = Offset(cx - w * 0.082f, h * 0.114f),
+                    size = Size(w * 0.164f, h * 0.034f),
+                    style = Stroke(width = visorStroke, cap = StrokeCap.Round)
+                )
+                // Field-Grade (MAJ–COL) & Flag Officer visor oak-leaf "scrambled eggs" darts
+                if (tier == RankTier.FLAG_OFFICER || operator.rank.isFieldGradeOfficer) {
+                    for (side in listOf(-1f, 1f)) {
+                        for (leafIdx in 0..2) {
+                            val lx = cx + side * w * (0.034f + leafIdx * 0.017f)
+                            val ly = h * (0.132f - leafIdx * 0.002f)
+                            drawLine(
+                                color = trimCol,
+                                start = Offset(lx, ly),
+                                end = Offset(lx + side * w * 0.009f, ly - h * 0.006f),
+                                strokeWidth = if (tier == RankTier.FLAG_OFFICER) 1.7f else 1.3f,
+                                cap = StrokeCap.Round
+                            )
+                        }
                     }
                 }
             }
-        }
-        drawStar(Offset(cx, h * 0.084f), w * 0.023f, w * 0.0095f, trimCol)
-    } else {
-        // Skull-fitted molded military beret: snug leather sweatband around cranium & wool drape hugging right temple
-        val bandLeftY = 0.124f
-        val bandRightY = 0.116f
-        val bandLeftX = cx - skullHalfW(bandLeftY) - w * 0.0035f
-        val bandRightX = cx + skullHalfW(bandRightY) + w * 0.0035f
-        val templeCurveX = cx + skullHalfW(0.100f) + w * 0.009f
-
-        // Subtle brow shadow under sweatband so beret seats naturally on the forehead
-        val browShadowPath = Path().apply {
-            moveTo(bandLeftX + w * 0.002f, h * (bandLeftY + 0.010f))
-            quadraticTo(cx, h * 0.134f, bandRightX - w * 0.002f, h * (bandRightY + 0.011f))
-        }
-        drawPath(
-            browShadowPath,
-            color = Color.Black.copy(alpha = 0.24f),
-            style = Stroke(width = 2.6f, cap = StrokeCap.Round)
-        )
-
-        val beretCrown = Path().apply {
-            moveTo(bandLeftX, h * (bandLeftY + 0.004f))
-            // Natural wool drape overhanging just past right temple/ear edge without ballooning
-            cubicTo(
-                bandLeftX - w * 0.016f, h * 0.146f,
-                cx - w * 0.124f, h * 0.146f,
-                cx - w * 0.124f, h * 0.114f
-            )
-            // Molded wool sweeps smoothly up and over top of skull
-            cubicTo(
-                cx - w * 0.124f, h * 0.086f,
-                cx - w * 0.086f, h * 0.068f,
-                cx - w * 0.028f, h * 0.067f
-            )
-            // Contours across cranium to left-brow flash stiffener
-            cubicTo(
-                cx + w * 0.024f, h * 0.066f,
-                cx + w * 0.060f, h * 0.074f,
-                cx + w * 0.073f, h * 0.090f
-            )
-            // Tapers cleanly along left temple curve directly into sweatband
-            quadraticTo(templeCurveX, h * 0.102f, bandRightX, h * (bandRightY + 0.002f))
-            quadraticTo(cx, h * 0.122f, bandLeftX, h * (bandLeftY + 0.004f))
-            close()
-        }
-        drawPath(beretCrown, color = headgearCol)
-
-        // Cylindrical wool dome shading & crisp silhouette separation
-        drawPath(
-            beretCrown,
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    Color.Black.copy(alpha = 0.28f),
-                    Color.White.copy(alpha = 0.14f),
-                    Color.Black.copy(alpha = 0.16f)
-                ),
-                start = Offset(cx - w * 0.122f, h * 0.136f),
-                end = Offset(cx + w * 0.072f, h * 0.072f)
-            )
-        )
-        drawPath(
-            beretCrown,
-            color = Color.Black.copy(alpha = 0.34f),
-            style = Stroke(width = 1.0f, join = StrokeJoin.Round)
-        )
-
-        // Fitted black leather sweatband curving across the forehead
-        val bandPath = Path().apply {
-            moveTo(bandLeftX, h * bandLeftY)
-            quadraticTo(cx, h * 0.122f, bandRightX, h * bandRightY)
-            lineTo(bandRightX, h * (bandRightY + 0.0095f))
-            quadraticTo(cx, h * 0.131f, bandLeftX, h * (bandLeftY + 0.0095f))
-            close()
-        }
-        drawPath(bandPath, color = Color(0xFF0C1017))
-        drawPath(
-            Path().apply {
-                moveTo(bandLeftX + w * 0.003f, h * (bandLeftY + 0.001f))
-                quadraticTo(cx, h * 0.123f, bandRightX - w * 0.003f, h * (bandRightY + 0.001f))
-            },
-            color = Color.White.copy(alpha = 0.20f),
-            style = Stroke(width = 0.9f, cap = StrokeCap.Round)
-        )
-
-        // Underside drape fold shadow & subtle wool pleat tucked over right temple
-        val drapeFoldShadow = Path().apply {
-            moveTo(bandLeftX, h * (bandLeftY + 0.005f))
-            cubicTo(
-                bandLeftX - w * 0.015f, h * 0.144f,
-                cx - w * 0.120f, h * 0.143f,
-                cx - w * 0.118f, h * 0.120f
-            )
-            quadraticTo(cx - w * 0.108f, h * 0.133f, bandLeftX, h * (bandLeftY + 0.005f))
-            close()
-        }
-        drawPath(drapeFoldShadow, color = Color.Black.copy(alpha = 0.32f))
-        drawPath(
-            Path().apply {
-                moveTo(cx - w * 0.056f, h * 0.082f)
-                quadraticTo(cx - w * 0.092f, h * 0.102f, cx - w * 0.104f, h * 0.132f)
-            },
-            color = Color.Black.copy(alpha = 0.22f),
-            style = Stroke(width = 1.1f, cap = StrokeCap.Round)
-        )
-
-        // Heraldic shield-shaped Beret Flash + gold DI crest centered neatly above left eye
-        val flashCx = cx + w * 0.034f
-        val flashTopY = h * 0.080f
-        val flashW = w * 0.036f
-        val flashH = h * 0.026f
-        val flashFill = when (operator.headgearStyle) {
-            HeadgearStyle.TAN_BERET -> Color(0xFF14181F)
-            HeadgearStyle.MAROON_BERET -> Color(0xFF1C4378)
-            HeadgearStyle.EMERALD_BERET -> Color(0xFF143D2C)
-            else -> Color(0xFF1B3A6B)
-        }
-        val flashPath = Path().apply {
-            moveTo(flashCx - flashW * 0.5f, flashTopY)
-            lineTo(flashCx + flashW * 0.5f, flashTopY)
-            lineTo(flashCx + flashW * 0.5f, flashTopY + flashH * 0.62f)
-            quadraticTo(flashCx, flashTopY + flashH * 1.12f, flashCx - flashW * 0.5f, flashTopY + flashH * 0.62f)
-            close()
-        }
-        drawPath(flashPath, color = flashFill)
-        if (operator.headgearStyle == HeadgearStyle.MAROON_BERET) {
-            drawLine(
-                color = Color.White.copy(alpha = 0.85f),
-                start = Offset(flashCx - flashW * 0.34f, flashTopY + flashH * 0.70f),
-                end = Offset(flashCx + flashW * 0.34f, flashTopY + flashH * 0.14f),
-                strokeWidth = 1.4f
-            )
-        } else if (operator.headgearStyle == HeadgearStyle.TAN_BERET) {
-            drawLine(
-                color = Color(0xFFA62E35),
-                start = Offset(flashCx - flashW * 0.34f, flashTopY + flashH * 0.16f),
-                end = Offset(flashCx + flashW * 0.34f, flashTopY + flashH * 0.68f),
-                strokeWidth = 1.4f
-            )
-        } else if (operator.headgearStyle == HeadgearStyle.EMERALD_BERET) {
-            drawLine(
-                color = Color(0xFFF2D272),
-                start = Offset(flashCx - flashW * 0.34f, flashTopY + flashH * 0.72f),
-                end = Offset(flashCx + flashW * 0.34f, flashTopY + flashH * 0.14f),
-                strokeWidth = 1.5f
-            )
-        }
-        drawPath(flashPath, color = trimCol, style = Stroke(width = 1.1f, join = StrokeJoin.Round))
-        if (tier.isOfficer) {
-            drawOfficerRankDevice(
-                rank = operator.rank,
-                center = Offset(flashCx, flashTopY + flashH * 0.44f),
-                boxW = flashW * 0.66f,
-                boxH = flashH * 0.54f,
-                outlineColor = Color(0xFF0A101B)
-            )
+            drawStar(Offset(cx, h * 0.084f), w * 0.023f, w * 0.0095f, trimCol)
         } else {
-            drawStar(Offset(flashCx, flashTopY + flashH * 0.44f), w * 0.0092f, w * 0.0040f, trimCol)
+            // Skull-fitted molded military beret: snug leather sweatband around cranium & wool drape hugging right temple
+            val bandLeftY = 0.124f
+            val bandRightY = 0.116f
+            val bandLeftX = cx - skullHalfW(bandLeftY) - w * 0.0035f
+            val bandRightX = cx + skullHalfW(bandRightY) + w * 0.0035f
+            val templeCurveX = cx + skullHalfW(0.100f) + w * 0.009f
+
+            // Subtle brow shadow under sweatband so beret seats naturally on the forehead
+            val browShadowPath = Path().apply {
+                moveTo(bandLeftX + w * 0.002f, h * (bandLeftY + 0.010f))
+                quadraticTo(cx, h * 0.134f, bandRightX - w * 0.002f, h * (bandRightY + 0.011f))
+            }
+            drawPath(
+                browShadowPath,
+                color = Color.Black.copy(alpha = 0.24f),
+                style = Stroke(width = 2.6f, cap = StrokeCap.Round)
+            )
+
+            val beretCrown = Path().apply {
+                moveTo(bandLeftX, h * (bandLeftY + 0.004f))
+                // Natural wool drape overhanging just past right temple/ear edge without ballooning
+                cubicTo(
+                    bandLeftX - w * 0.016f, h * 0.146f,
+                    cx - w * 0.124f, h * 0.146f,
+                    cx - w * 0.124f, h * 0.114f
+                )
+                // Molded wool sweeps smoothly up and over top of skull
+                cubicTo(
+                    cx - w * 0.124f, h * 0.086f,
+                    cx - w * 0.086f, h * 0.068f,
+                    cx - w * 0.028f, h * 0.067f
+                )
+                // Contours across cranium to left-brow flash stiffener
+                cubicTo(
+                    cx + w * 0.024f, h * 0.066f,
+                    cx + w * 0.060f, h * 0.074f,
+                    cx + w * 0.073f, h * 0.090f
+                )
+                // Tapers cleanly along left temple curve directly into sweatband
+                quadraticTo(templeCurveX, h * 0.102f, bandRightX, h * (bandRightY + 0.002f))
+                quadraticTo(cx, h * 0.122f, bandLeftX, h * (bandLeftY + 0.004f))
+                close()
+            }
+            drawPath(beretCrown, color = headgearCol)
+
+            // Cylindrical wool dome shading & crisp silhouette separation
+            drawPath(
+                beretCrown,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.Black.copy(alpha = 0.28f),
+                        Color.White.copy(alpha = 0.14f),
+                        Color.Black.copy(alpha = 0.16f)
+                    ),
+                    start = Offset(cx - w * 0.122f, h * 0.136f),
+                    end = Offset(cx + w * 0.072f, h * 0.072f)
+                )
+            )
+            drawPath(
+                beretCrown,
+                color = Color.Black.copy(alpha = 0.34f),
+                style = Stroke(width = 1.0f, join = StrokeJoin.Round)
+            )
+
+            // Fitted black leather sweatband curving across the forehead
+            val bandPath = Path().apply {
+                moveTo(bandLeftX, h * bandLeftY)
+                quadraticTo(cx, h * 0.122f, bandRightX, h * bandRightY)
+                lineTo(bandRightX, h * (bandRightY + 0.0095f))
+                quadraticTo(cx, h * 0.131f, bandLeftX, h * (bandLeftY + 0.0095f))
+                close()
+            }
+            drawPath(bandPath, color = Color(0xFF0C1017))
+            drawPath(
+                Path().apply {
+                    moveTo(bandLeftX + w * 0.003f, h * (bandLeftY + 0.001f))
+                    quadraticTo(cx, h * 0.123f, bandRightX - w * 0.003f, h * (bandRightY + 0.001f))
+                },
+                color = Color.White.copy(alpha = 0.20f),
+                style = Stroke(width = 0.9f, cap = StrokeCap.Round)
+            )
+
+            // Underside drape fold shadow & subtle wool pleat tucked over right temple
+            val drapeFoldShadow = Path().apply {
+                moveTo(bandLeftX, h * (bandLeftY + 0.005f))
+                cubicTo(
+                    bandLeftX - w * 0.015f, h * 0.144f,
+                    cx - w * 0.120f, h * 0.143f,
+                    cx - w * 0.118f, h * 0.120f
+                )
+                quadraticTo(cx - w * 0.108f, h * 0.133f, bandLeftX, h * (bandLeftY + 0.005f))
+                close()
+            }
+            drawPath(drapeFoldShadow, color = Color.Black.copy(alpha = 0.32f))
+            drawPath(
+                Path().apply {
+                    moveTo(cx - w * 0.056f, h * 0.082f)
+                    quadraticTo(cx - w * 0.092f, h * 0.102f, cx - w * 0.104f, h * 0.132f)
+                },
+                color = Color.Black.copy(alpha = 0.22f),
+                style = Stroke(width = 1.1f, cap = StrokeCap.Round)
+            )
+
+            // Heraldic shield-shaped Beret Flash + gold DI crest centered neatly above left eye
+            val flashCx = cx + w * 0.034f
+            val flashTopY = h * 0.080f
+            val flashW = w * 0.036f
+            val flashH = h * 0.026f
+            val flashFill = when (operator.headgearStyle) {
+                HeadgearStyle.TAN_BERET -> Color(0xFF14181F)
+                HeadgearStyle.MAROON_BERET -> Color(0xFF1C4378)
+                HeadgearStyle.EMERALD_BERET -> Color(0xFF143D2C)
+                else -> Color(0xFF1B3A6B)
+            }
+            val flashPath = Path().apply {
+                moveTo(flashCx - flashW * 0.5f, flashTopY)
+                lineTo(flashCx + flashW * 0.5f, flashTopY)
+                lineTo(flashCx + flashW * 0.5f, flashTopY + flashH * 0.62f)
+                quadraticTo(flashCx, flashTopY + flashH * 1.12f, flashCx - flashW * 0.5f, flashTopY + flashH * 0.62f)
+                close()
+            }
+            drawPath(flashPath, color = flashFill)
+            if (operator.headgearStyle == HeadgearStyle.MAROON_BERET) {
+                drawLine(
+                    color = Color.White.copy(alpha = 0.85f),
+                    start = Offset(flashCx - flashW * 0.34f, flashTopY + flashH * 0.70f),
+                    end = Offset(flashCx + flashW * 0.34f, flashTopY + flashH * 0.14f),
+                    strokeWidth = 1.4f
+                )
+            } else if (operator.headgearStyle == HeadgearStyle.TAN_BERET) {
+                drawLine(
+                    color = Color(0xFFA62E35),
+                    start = Offset(flashCx - flashW * 0.34f, flashTopY + flashH * 0.16f),
+                    end = Offset(flashCx + flashW * 0.34f, flashTopY + flashH * 0.68f),
+                    strokeWidth = 1.4f
+                )
+            } else if (operator.headgearStyle == HeadgearStyle.EMERALD_BERET) {
+                drawLine(
+                    color = Color(0xFFF2D272),
+                    start = Offset(flashCx - flashW * 0.34f, flashTopY + flashH * 0.72f),
+                    end = Offset(flashCx + flashW * 0.34f, flashTopY + flashH * 0.14f),
+                    strokeWidth = 1.5f
+                )
+            }
+            drawPath(flashPath, color = trimCol, style = Stroke(width = 1.1f, join = StrokeJoin.Round))
+            if (tier.isOfficer) {
+                drawOfficerRankDevice(
+                    rank = operator.rank,
+                    center = Offset(flashCx, flashTopY + flashH * 0.44f),
+                    boxW = flashW * 0.66f,
+                    boxH = flashH * 0.54f,
+                    outlineColor = Color(0xFF0A101B)
+                )
+            } else {
+                drawStar(Offset(flashCx, flashTopY + flashH * 0.44f), w * 0.0092f, w * 0.0040f, trimCol)
+            }
         }
     }
 }
@@ -2089,6 +2103,7 @@ private fun DrawScope.drawFieldTacticalFigure(
         drawEnhancedFieldWeapon(w = w, h = h, cx = cx, weaponId = equippedWeaponId)
     }
 
+    unscaledForBuild(operator, cx) {
     drawRect(skinShadow, Offset(cx - w * 0.05f, h * 0.30f), Size(w * 0.10f, h * 0.08f))
     drawOval(skinTone, Offset(cx - w * 0.095f, h * 0.14f), Size(w * 0.19f, h * 0.19f))
     drawRoundRect(visorTone, Offset(cx - w * 0.075f, h * 0.205f), Size(w * 0.15f, h * 0.042f), CornerRadius(6f, 6f))
@@ -2101,5 +2116,6 @@ private fun DrawScope.drawFieldTacticalFigure(
             drawCircle(Color(0xFF5AC8FA), radius = w * 0.022f, center = Offset(cx - w * 0.032f, h * 0.165f))
             drawCircle(Color(0xFF5AC8FA), radius = w * 0.022f, center = Offset(cx + w * 0.032f, h * 0.165f))
         }
+    }
     }
 }
