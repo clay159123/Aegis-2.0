@@ -416,17 +416,10 @@ object UniformRegaliaRules {
         operator: Operator,
         equippedGear: List<GearItem>
     ): MarksmanshipBadgeTier {
+        // The badge is the soldier's awarded qualification; gear never changes it
         val overrideTier = operator.tailorOverrides.marksmanshipBadge
         if (overrideTier != MarksmanshipBadgeTier.AUTO) return overrideTier
-        val weaponTier = equippedGear.firstOrNull { it.slot == GearSlot.WEAPON }?.tier ?: 0
-        val fpScore = operator.baseFirepower + weaponTier * 4 +
-            (if ("msn_basic_qual" in operator.completedMissionIds) 3 else 0) +
-            (if ("msn_night_qual" in operator.completedMissionIds) 3 else 0)
-        return when {
-            fpScore >= 24 -> MarksmanshipBadgeTier.EXPERT
-            fpScore >= 16 -> MarksmanshipBadgeTier.SHARPSHOOTER
-            else -> MarksmanshipBadgeTier.MARKSMAN
-        }
+        return operator.marksmanshipQual ?: MarksmanshipBadgeTier.NONE
     }
 
     fun resolveOverseasBars(operator: Operator): Int {

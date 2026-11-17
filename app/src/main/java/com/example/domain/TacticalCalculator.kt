@@ -433,6 +433,54 @@ object TacticalCalculator {
 
     const val BASE_RECOVERY_MILLIS = 45_000L
 
+    // ---------- Rifle qualification ----------
+    const val RIFLE_QUAL_MISSION_ID = "msn_rifle_qual"
+    const val MAX_REQUAL_ATTEMPTS = 3
+    const val QUAL_ROLL_MAX = RIFLE_QUAL_ROLL_MAX
+    const val RANGE_QUAL_BONUS_PER_LEVEL = 1
+
+    fun qualRank(tier: MarksmanshipBadgeTier?): Int = rifleQualRank(tier)
+
+    fun qualTierForScore(score: Int): MarksmanshipBadgeTier = rifleQualTierForScore(score)
+
+    /** Score: the soldier's own firepower (no gear) + Training Range bonus + [roll]. */
+    fun rifleQualScore(operator: Operator, citations: List<AwardedMedal>, facilities: List<FacilityState>, roll: Int): Int =
+        soldierStats(operator, citations).firepower +
+            facilityLevel(facilities, FacilityType.TRAINING_RANGE).coerceAtLeast(0) * RANGE_QUAL_BONUS_PER_LEVEL +
+            roll.coerceIn(0, QUAL_ROLL_MAX)
+
+    /** The best badge the soldier holds or has waiting. */
+    fun bestQualification(operator: Operator): MarksmanshipBadgeTier? =
+        listOfNotNull(operator.marksmanshipQual, operator.pendingMarksmanshipQual).maxByOrNull { qualRank(it) }
+
+    data class RifleQualResult(
+        val operatorId: String,
+        val callsign: String,
+        val score: Int,
+        val previous: MarksmanshipBadgeTier?,
+        val achieved: MarksmanshipBadgeTier,
+        val attemptsLeft: Int?
+    ) {
+        /** Only a better badge than the soldier holds is worth awarding. */
+        val improved: Boolean get() = qualRank(achieved) > qualRank(previous)
+    }
+
+    /**
+     * Applies a qualification score: a better badge waits for the player to award it
+     * (pending); a lower score never lowers the badge.
+     */
+    fun applyRifleQualification(operator: Operator, score: Int, attemptsLeft: Int?): Pair<Operator, RifleQualResult> {
+        val previous = bestQualification(operator)
+        val result = RifleQualResult(operator.id, operator.callsign, score, previous, qualTierForScore(score), attemptsLeft)
+        val updated = if (result.improved) {
+            operator.copy(pendingMarksmanshipQual = result.achieved, lastQualScore = score)
+        } else {
+            operator.copy(lastQualScore = score)
+        }
+        return updated to result
+    }
+
+
     /** "45s", "5m", "1h 12m", "7h" */
     fun formatBuildTime(seconds: Long): String {
         val s = seconds.coerceAtLeast(0L)
@@ -568,7 +616,7 @@ object TacticalCalculator {
         }
 
         if (mission.scope == MissionScope.TRAINING) {
-            if (mission.id in operator.completedMissionIds) {
+            if (mission.id in operator.completedMissionIds && mission.id != RIFLE_QUAL_MISSION_ID) {
                 return EligibilityResult(false, listOf("Already Graduated"))
             }
             val req = mission.schoolRequirements
@@ -583,7 +631,11 @@ object TacticalCalculator {
                 }
                 val attemptsUsed = operator.schoolAttempts[mission.id] ?: 0
                 if (req.maxAttempts != null && attemptsUsed >= req.maxAttempts) {
-                    missing += "Washed out ($attemptsUsed/${req.maxAttempts} attempts used)"
+                    missing += if (mission.id == RIFLE_QUAL_MISSION_ID) {
+                        "No requalification attempts left"
+                    } else {
+                        "Washed out ($attemptsUsed/${req.maxAttempts} attempts used)"
+                    }
                 }
 
                 if (req.minRankTier.order > RankTier.SOLDIER.order && operator.rank.tier.order < req.minRankTier.order) {

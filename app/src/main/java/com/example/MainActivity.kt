@@ -348,6 +348,7 @@ fun AegisCommandApp() {
                                     onDenyRetirementRequest = viewModel::denyRetirementRequest,
                                     onSaveSquad = viewModel::saveSquadWithStandard,
                                     onDisbandSquad = viewModel::disbandSquad,
+                                    onAwardMarksmanship = viewModel::awardMarksmanship,
                                     onConductSquadInspection = { squadId ->
                                         viewModel.conductUniformInspection(squadId = squadId)
                                     },
@@ -383,6 +384,19 @@ fun AegisCommandApp() {
                     }
                 }
             }
+        }
+    }
+
+    // Rifle qualification results, one at a time, after any debrief is closed
+    val rifleQueue by viewModel.rifleQualQueue.collectAsStateWithLifecycle()
+    if (uiState.lastDebrief == null) {
+        rifleQueue.firstOrNull()?.let { result ->
+            com.example.ui.components.RifleQualResultDialog(
+                result = result,
+                remaining = rifleQueue.size,
+                onAward = { viewModel.awardMarksmanship(result.operatorId) },
+                onDismiss = viewModel::dismissRifleQualResult
+            )
         }
     }
 

@@ -167,6 +167,24 @@ enum class FacilityType(
     fun buildSeconds(currentLevel: Int): Long = facilityBuildSeconds(currentLevel + 1)
 }
 
+/** Random part of a rifle qualification score: 0 until this value. */
+const val RIFLE_QUAL_ROLL_MAX = 12
+const val SHARPSHOOTER_SCORE = 22
+const val EXPERT_SCORE = 30
+
+fun rifleQualRank(tier: MarksmanshipBadgeTier?): Int =
+    listOf(MarksmanshipBadgeTier.MARKSMAN, MarksmanshipBadgeTier.SHARPSHOOTER, MarksmanshipBadgeTier.EXPERT).indexOf(tier)
+
+fun rifleQualTierForScore(score: Int): MarksmanshipBadgeTier = when {
+    score >= EXPERT_SCORE -> MarksmanshipBadgeTier.EXPERT
+    score >= SHARPSHOOTER_SCORE -> MarksmanshipBadgeTier.SHARPSHOOTER
+    else -> MarksmanshipBadgeTier.MARKSMAN
+}
+
+/** Starting qualification for soldiers who arrive already through basic: their firepower plus an average roll. */
+fun startingRifleQualification(operator: Operator): MarksmanshipBadgeTier? =
+    if ("msn_basic_qual" in operator.completedMissionIds) rifleQualTierForScore(operator.baseFirepower + RIFLE_QUAL_ROLL_MAX / 2) else null
+
 /** Highest level any building reaches. */
 const val MAX_FACILITY_LEVEL = 10
 /** First build of an empty lot (to Lv 1). */
@@ -584,7 +602,7 @@ enum class MarksmanshipBadgeTier(
     val subtitle: String,
     val badgeColorHex: Long
 ) {
-    AUTO("Auto (Weapon & FP)", "Auto Qual", "Scales automatically with FP & Rifle tier", 0xFFC8D3E0),
+    AUTO("Auto (Rifle Qualification)", "Auto Qual", "Shows the soldier's awarded rifle qualification", 0xFFC8D3E0),
     NONE("None Worn", "None", "Leave left pocket clean below flap", 0xFF707B89),
     MARKSMAN("Marksman Qualification", "Marksman", "Silver Marksman Cross + Carbine Clasp", 0xFFB8C4D4),
     SHARPSHOOTER("Sharpshooter Qualification", "Sharpshooter", "Silver Sharpshooter Cross + Rifle Clasp", 0xFFD4DDE8),
@@ -1024,7 +1042,13 @@ data class Operator(
     /** Player-chosen skin tone (index into [SkinTone.entries]); null = derived from the soldier id */
     val skinToneOverride: SkinTone? = null,
     /** Player-chosen build; null = derived from the soldier id */
-    val bodyBuildOverride: BodyBuild? = null
+    val bodyBuildOverride: BodyBuild? = null,
+    /** Awarded rifle qualification (Marksman, Sharpshooter or Expert); null = not yet qualified */
+    val marksmanshipQual: MarksmanshipBadgeTier? = null,
+    /** A better qualification waiting for the player to award it */
+    val pendingMarksmanshipQual: MarksmanshipBadgeTier? = null,
+    /** Score from the most recent qualification */
+    val lastQualScore: Int = 0
 ) {
     /** Skin tone shown on every uniform: the override, or a stable pick from the soldier id */
     val skinTone: SkinTone

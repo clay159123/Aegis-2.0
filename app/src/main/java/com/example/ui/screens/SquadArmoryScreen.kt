@@ -54,6 +54,7 @@ fun SquadArmoryScreen(
         standard: SquadUniformStandard
     ) -> Unit = { _, _, _, _, _, _ -> },
     onDisbandSquad: (String) -> Unit = {},
+    onAwardMarksmanship: (String) -> Unit = {},
     onConductSquadInspection: (String) -> Unit = {},
     onSwitchSquadKit: (String, WardrobeKit) -> Unit = { _, _ -> },
     onSelectWardrobeKit: (String, WardrobeKit) -> Unit = { _, _ -> },
@@ -91,6 +92,7 @@ fun SquadArmoryScreen(
             isDeployed = selectedOperator.id in deployedOpIds,
             onBack = { selectedOperatorId = null },
             onToggleUniformMode = { onToggleUniformMode(selectedOperator.id) },
+            onAwardMarksmanship = { onAwardMarksmanship(selectedOperator.id) },
             onCustomizeOperator = { req ->
                 onCustomizeOperator(selectedOperator.id, req)
             },

@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 7
+        const val SAVE_FORMAT_VERSION = 8
     }
 
     private val commanderMutex = Mutex()
@@ -425,6 +425,9 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     combatPatchHistory = decodeCombatPatchHistoryCsv(combatPatchHistoryCsv),
     equippedGearIds = decodeEquippedGearCsv(equippedGearCsv),
     skinToneOverride = skinToneName?.let { n -> SkinTone.entries.find { it.name == n } },
+    marksmanshipQual = marksmanshipQualName?.let { n -> MarksmanshipBadgeTier.entries.find { it.name == n } },
+    pendingMarksmanshipQual = pendingMarksmanshipQualName?.let { n -> MarksmanshipBadgeTier.entries.find { it.name == n } },
+    lastQualScore = lastQualScore,
     bodyBuildOverride = bodyBuildName?.let { n -> BodyBuild.entries.find { it.name == n } },
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
@@ -487,6 +490,9 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     combatPatchHistoryCsv = encodeCombatPatchHistoryCsv(combatPatchHistory),
     equippedGearCsv = encodeEquippedGearCsv(equippedGearIds),
     skinToneName = skinToneOverride?.name,
+    marksmanshipQualName = marksmanshipQual?.name,
+    pendingMarksmanshipQualName = pendingMarksmanshipQual?.name,
+    lastQualScore = lastQualScore,
     bodyBuildName = bodyBuildOverride?.name,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,

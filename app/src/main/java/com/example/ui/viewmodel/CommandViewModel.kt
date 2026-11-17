@@ -77,6 +77,9 @@ class CommandViewModel(
 
     private val _nowMillis = MutableStateFlow(System.currentTimeMillis())
     private val _offlineReport = MutableStateFlow<OfflineReport?>(null)
+    private val _rifleQualQueue = MutableStateFlow<List<TacticalCalculator.RifleQualResult>>(emptyList())
+    /** Rifle qualification results waiting to be shown, one pop-up at a time. */
+    val rifleQualQueue: StateFlow<List<TacticalCalculator.RifleQualResult>> = _rifleQualQueue
     private val _lastDebrief = MutableStateFlow<DebriefSummary?>(null)
     private val _lastInspectionReport = MutableStateFlow<UniformInspectionReport?>(null)
     private val _statusBanner = MutableStateFlow<String?>(null)
@@ -768,6 +771,7 @@ class CommandViewModel(
         val outcomes = mutableListOf<OperatorDebriefOutcome>()
 
         val missionSucceeded: Boolean
+        val rifleQualResults = mutableListOf<TacticalCalculator.RifleQualResult>()
         if (mission.risk.isTraining) {
             var anyPassed = false
             for (op in targetOps) {
@@ -779,7 +783,9 @@ class CommandViewModel(
                     hqStaffSummary = state.hqStaffSummary,
                     facilities = state.facilities
                 )
-                val passed = Random.nextInt(100) < passOdds
+                // Rifle Qualification always completes; the score decides the badge
+                val isRifleQual = mission.id == TacticalCalculator.RIFLE_QUAL_MISSION_ID
+                val passed = isRifleQual || Random.nextInt(100) < passOdds
                 if (passed) anyPassed = true
 
                 val nextAttempts = (op.schoolAttempts[mission.id] ?: 0) + 1
@@ -806,7 +812,7 @@ class CommandViewModel(
                     ""
                 }
 
-                val updatedOp = op.copy(
+                val graduatedOp = op.copy(
                     xp = newXp,
                     baseFirepower = op.baseFirepower + (gradBonus?.firepower ?: 0),
                     baseStealth = op.baseStealth + (gradBonus?.stealth ?: 0),
@@ -816,6 +822,25 @@ class CommandViewModel(
                     schoolAttempts = updatedAttempts,
                     status = nextStatus
                 )
+                // Rifle Qualification, and graduating Marksmanship & Tactical Basics, both shoot for a badge
+                val shootsForQual = isRifleQual || (passed && mission.id == "msn_basic_qual")
+                val (updatedOp, qualNote) = if (shootsForQual) {
+                    val score = TacticalCalculator.rifleQualScore(
+                        graduatedOp, state.citations, state.facilities, Random.nextInt(TacticalCalculator.QUAL_ROLL_MAX + 1)
+                    )
+                    val attemptsLeft = if (isRifleQual) (TacticalCalculator.MAX_REQUAL_ATTEMPTS - nextAttempts).coerceAtLeast(0) else null
+                    val (qualified, result) = TacticalCalculator.applyRifleQualification(graduatedOp, score, attemptsLeft)
+                    rifleQualResults.add(result)
+                    val note = if (result.improved) {
+                        " Qualified ${result.achieved.shortLabel} (score $score) • award pending."
+                    } else {
+                        " Score $score: no change (${result.previous?.shortLabel ?: "unqualified"} held)" +
+                            (attemptsLeft?.let { " • $it attempts left." } ?: ".")
+                    }
+                    qualified to note
+                } else {
+                    graduatedOp to ""
+                }
                 updatedOperators.add(updatedOp)
 
                 val existingAndQueuedMedals = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet() +
@@ -836,7 +861,7 @@ class CommandViewModel(
                 } else {
                     ""
                 }
-                val deedText = baseDeedText + statGainNote + attemptNote
+                val deedText = baseDeedText + statGainNote + attemptNote + qualNote
 
                 if (recMedalId != null) {
                     newDeeds.add(
@@ -1325,6 +1350,9 @@ class CommandViewModel(
             }
         }
 
+        if (rifleQualResults.isNotEmpty()) {
+            _rifleQualQueue.value = _rifleQualQueue.value + rifleQualResults
+        }
         viewModelScope.launch {
             repository.removeDeployment(deployment.id)
             repository.saveOperators(updatedOperators)
@@ -2239,6 +2267,22 @@ class CommandViewModel(
 
     fun dismissOfflineReport() {
         _offlineReport.value = null
+    }
+
+    /** Closes the current rifle qualification pop-up; an unawarded badge stays pending on the soldier. */
+    fun dismissRifleQualResult() {
+        _rifleQualQueue.value = _rifleQualQueue.value.drop(1)
+    }
+
+    /** Awards a soldier's pending rifle qualification badge so it appears on their uniform. */
+    fun awardMarksmanship(operatorId: String) {
+        val op = uiState.value.operators.find { it.id == operatorId } ?: return
+        val pending = op.pendingMarksmanshipQual ?: return
+        viewModelScope.launch {
+            repository.saveOperator(op.copy(marksmanshipQual = pending, pendingMarksmanshipQual = null))
+            showBanner("Awarded ${pending.shortLabel} badge to ${op.rank.code} ${op.callsign}")
+        }
+        _rifleQualQueue.value = _rifleQualQueue.value.filterNot { it.operatorId == operatorId && it.improved }
     }
 
     fun dismissDebrief() {
