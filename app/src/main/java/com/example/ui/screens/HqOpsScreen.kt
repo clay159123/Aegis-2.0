@@ -57,6 +57,7 @@ fun HqOpsScreen(
     uiState: CommandUiState,
     onReadinessDrill: () -> Unit,
     onUpgradeFacility: (FacilityType) -> Unit,
+    onRushFacility: (FacilityType) -> Unit = {},
     onStartDeployment: (MissionTemplate, List<String>) -> Unit,
     onStartDeploymentWithSquad: ((MissionTemplate, List<String>, String?) -> Unit)? = null,
     onClaimDeployment: (String) -> Unit,
@@ -399,46 +400,13 @@ fun HqOpsScreen(
         item {
             AnimatedVisibility(visible = showFacilities) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    uiState.facilities.forEach { fac ->
-                        val creditCost = fac.type.upgradeCreditCost(fac.level)
-                        val supplyCost = fac.type.upgradeSupplyCost(fac.level)
-                        val canAfford = uiState.resources.credits >= creditCost && uiState.resources.supplies >= supplyCost
-                        TacticalPanelCard {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "${fac.type.title} (Lv.${fac.level})",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "${formatRate(fac.type.productionPerSec(fac.level))} ${fac.type.primaryResource.shortCode} • ${fac.type.perkDescription}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = "Cost: ${creditCost.toInt()} CR • ${supplyCost.toInt()} SUP",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (canAfford) extra.brassBright else MaterialTheme.colorScheme.error
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Button(
-                                    onClick = { onUpgradeFacility(fac.type) },
-                                    enabled = canAfford,
-                                    modifier = Modifier
-                                        .defaultMinSize(minHeight = 48.dp)
-                                        .testTag("upgrade_facility_${fac.type.id}")
-                                ) {
-                                    Text("Upgrade")
-                                }
-                            }
-                        }
-                    }
+                    BaseMapCard(
+                        facilities = uiState.facilities,
+                        resources = uiState.resources,
+                        nowMillis = uiState.nowMillis,
+                        onUpgrade = onUpgradeFacility,
+                        onRush = onRushFacility
+                    )
 
                     TacticalPanelCard(
                         containerColor = extra.signalsContainer.copy(alpha = 0.25f),
