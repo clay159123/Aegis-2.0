@@ -70,9 +70,6 @@ fun UniformTailorStudioCard(
     val resolvedMarksmanship = remember(operator, equippedGear) {
         UniformRegaliaRules.resolveMarksmanshipTier(operator, equippedGear)
     }
-    val autoIsLeader = remember(operator.id, squads) {
-        squads.any { it.leaderId == operator.id }
-    }
 
     val tabCatalog = remember {
         UniformRegaliaRules.tabsInPrecedenceOrder(GameCatalog.medals)
@@ -300,7 +297,7 @@ fun UniformTailorStudioCard(
                     freeCustomOverride = freeOverride,
                     wardrobeKit = effectiveKit,
                     onSelect = { style ->
-                        updateRequest { it.copy(dressStyle = style, uniformMode = UniformMode.DRESS_UNIFORM) }
+                        updateRequest { it.copy(dressStyle = style, dressTouched = true, uniformMode = UniformMode.DRESS_UNIFORM) }
                     },
                     testTag = "dropdown_dress_style"
                 )
@@ -324,7 +321,7 @@ fun UniformTailorStudioCard(
                 CamoPatternDropdown(
                     selectedPattern = kitPreviewOp.camoPattern,
                     onSelect = { camo ->
-                        updateRequest { it.copy(camoPattern = camo, wardrobeKit = WardrobeKit.FIELD, uniformMode = UniformMode.FIELD_TACTICAL) }
+                        updateRequest { it.copy(camoPattern = camo, camoTouched = true, wardrobeKit = WardrobeKit.FIELD, uniformMode = UniformMode.FIELD_TACTICAL) }
                     },
                     testTag = "dropdown_camo_pattern"
                 )
@@ -788,7 +785,7 @@ fun UniformTailorStudioCard(
                         glovesElig.reasonText
                     },
                     onSelect = { gloves ->
-                        updateRequest { it.copy(hasWhiteGloves = gloves, uniformMode = UniformMode.DRESS_UNIFORM) }
+                        updateRequest { it.copy(hasWhiteGloves = gloves, glovesTouched = true, uniformMode = UniformMode.DRESS_UNIFORM) }
                     },
                     testTag = "dropdown_gloves"
                 )
@@ -813,9 +810,11 @@ fun UniformTailorStudioCard(
                     testTag = "dropdown_sash"
                 )
                 LeaderPinDropdown(
-                    selectedOverride = overrides.leaderPinOverride,
-                    autoIsLeader = autoIsLeader,
-                    onSelect = { v -> updateOverrides { it.copy(leaderPinOverride = v) } },
+                    selectedOverride = overrides.leaderRoleOverride,
+                    autoRole = UniformRegaliaRules.resolveLeaderRole(
+                        operator.copy(tailorOverrides = overrides.copy(leaderRoleOverride = null)), squads
+                    ),
+                    onSelect = { v -> updateOverrides { it.copy(leaderRoleOverride = v) } },
                     testTag = "dropdown_leader_pin"
                 )
                 BooleanChoiceDropdown(

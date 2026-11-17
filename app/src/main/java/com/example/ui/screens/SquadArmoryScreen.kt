@@ -50,21 +50,10 @@ fun SquadArmoryScreen(
         name: String,
         memberIds: List<String>,
         leaderId: String?,
-        standardPatch: UnitPatchStyle,
-        standardCamo: CamoPattern?,
-        standardHeadgear: HeadgearStyle?,
-        standardDressStyle: DressUniformStyle?
-    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
-    onSaveSquadWithStandard: ((
-        squadId: String?,
-        name: String,
-        memberIds: List<String>,
-        leaderId: String?,
-        standard: SquadUniformStandard,
-        applyImmediately: Boolean
-    ) -> Unit)? = null,
+        teamLeaderId: String?,
+        standard: SquadUniformStandard
+    ) -> Unit = { _, _, _, _, _, _ -> },
     onDisbandSquad: (String) -> Unit = {},
-    onApplySquadStandard: (String) -> Unit = {},
     onConductSquadInspection: (String) -> Unit = {},
     onSwitchSquadKit: (String, WardrobeKit) -> Unit = { _, _ -> },
     onSelectWardrobeKit: (String, WardrobeKit) -> Unit = { _, _ -> },
@@ -163,7 +152,6 @@ fun SquadArmoryScreen(
                     editingSquad = squad
                     showSquadDialog = true
                 },
-                onApplySquadStandard = onApplySquadStandard,
                 onConductSquadInspection = onConductSquadInspection,
                 onSwitchSquadKit = onSwitchSquadKit
             )
@@ -804,9 +792,9 @@ fun SquadArmoryScreen(
             allSquads = uiState.squads,
             fieldOperators = fieldOps,
             onSave = onSaveSquad,
-            onSaveWithStandard = onSaveSquadWithStandard,
             onDisband = onDisbandSquad,
-            onApplyStandard = onApplySquadStandard,
+            gearItems = uiState.gearItems,
+            citations = uiState.citations,
             onDismiss = {
                 showSquadDialog = false
                 editingSquad = null

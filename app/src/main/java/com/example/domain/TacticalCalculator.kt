@@ -727,6 +727,66 @@ object TacticalCalculator {
         }
     }
 
+    /** One kit's squad standard as it applies to a soldier: items they don't qualify for are dropped (null). */
+    data class KitStandard(
+        val camo: CamoPattern? = null,
+        val dressStyle: DressUniformStyle? = null,
+        val headgear: HeadgearStyle? = null,
+        val gloves: Boolean? = null
+    )
+
+    /** The squad whose uniform standard a soldier follows: their field squad (HQ staff follow none). */
+    fun standardSquadFor(operator: Operator, squads: List<TacticalSquad>): TacticalSquad? =
+        if (operator.status == OperatorStatus.HQ_STAFF) null else squads.firstOrNull { operator.id in it.memberIds }
+
+    /** The squad standard for [kit] as written, ignoring whether the soldier qualifies. */
+    fun rawKitStandard(squad: TacticalSquad?, kit: WardrobeKit): KitStandard = when {
+        squad == null -> KitStandard()
+        kit == WardrobeKit.FIELD -> KitStandard(camo = squad.standardCamo)
+        kit == WardrobeKit.BRAVOS -> KitStandard(dressStyle = squad.standardBravosDressStyle, headgear = squad.standardBravosHeadgear)
+        kit == WardrobeKit.ALPHAS -> KitStandard(dressStyle = squad.standardDressStyle, headgear = squad.standardHeadgear, gloves = squad.standardAlphasGloves)
+        else -> KitStandard(dressStyle = squad.standardMessDressStyle, headgear = squad.standardMessHeadgear, gloves = squad.standardMessGloves)
+    }
+
+    fun squadStandardFor(
+        operator: Operator,
+        squads: List<TacticalSquad>,
+        kit: WardrobeKit,
+        ownedMedalIds: Set<String>
+    ): KitStandard {
+        val raw = rawKitStandard(standardSquadFor(operator, squads), kit)
+        val free = operator.tailorOverrides.freeTailorOverride
+        return raw.copy(
+            dressStyle = raw.dressStyle?.takeIf { free || evaluateDressStyleEligibility(it, operator, ownedMedalIds, kit).eligible },
+            headgear = raw.headgear?.takeIf { free || evaluateHeadgearEligibility(it, operator, ownedMedalIds, kit).eligible }
+        )
+    }
+
+    /**
+     * Standard items this soldier can't wear, each with what they wear instead,
+     * e.g. "Maroon Beret: Requires Airborne School → wears Black Beret".
+     */
+    fun squadStandardFallbacks(
+        operator: Operator,
+        squads: List<TacticalSquad>,
+        kit: WardrobeKit,
+        ownedMedalIds: Set<String>
+    ): List<String> {
+        if (operator.tailorOverrides.freeTailorOverride) return emptyList()
+        val raw = rawKitStandard(standardSquadFor(operator, squads), kit)
+        val worn = resolveKitAppearance(operator, kit, squads, ownedMedalIds)
+        return buildList {
+            raw.dressStyle?.let { want ->
+                val check = evaluateDressStyleEligibility(want, operator, ownedMedalIds, kit)
+                if (!check.eligible) add("${want.shortLabel}: ${check.missingRequirements.firstOrNull() ?: "not qualified"} → wears ${worn.dressStyle.shortLabel}")
+            }
+            raw.headgear?.let { want ->
+                val check = evaluateHeadgearEligibility(want, operator, ownedMedalIds, kit)
+                if (!check.eligible) add("${want.label}: ${check.missingRequirements.firstOrNull() ?: "not qualified"} → wears ${worn.headgearStyle.label}")
+            }
+        }
+    }
+
     fun resolveKitAppearance(
         operator: Operator,
         kit: WardrobeKit,
@@ -742,12 +802,14 @@ object TacticalCalculator {
         val settings = operator.wardrobe.forKit(effectiveKit)
         val allowFree = operator.tailorOverrides.freeTailorOverride
         val sashAllowed = allowFree || evaluateDressSashEligibility(operator, squads).eligible
+        // Order for each item: the soldier's own Tailor pick, then the squad standard (if they qualify), then Auto
+        val std = squadStandardFor(operator, squads, effectiveKit, ownedMedalIds)
 
         return when (effectiveKit) {
             WardrobeKit.FIELD -> operator.copy(
                 activeWardrobeKit = WardrobeKit.FIELD,
                 uniformMode = UniformMode.FIELD_TACTICAL,
-                camoPattern = settings.camoPattern ?: operator.camoPattern
+                camoPattern = settings.camoPattern ?: std.camo ?: operator.camoPattern
             )
             WardrobeKit.BRAVOS -> {
                 val chosenDisplay = settings.dressDisplayMode ?: operator.dressDisplayMode
@@ -759,8 +821,8 @@ object TacticalCalculator {
                 operator.copy(
                     activeWardrobeKit = WardrobeKit.BRAVOS,
                     uniformMode = UniformMode.DRESS_UNIFORM,
-                    dressStyle = defaultDressStyleForKit(WardrobeKit.BRAVOS, operator.rank.tier, settings.dressStyle),
-                    headgearStyle = defaultHeadgearForKit(WardrobeKit.BRAVOS, operator, ownedMedalIds, settings.headgearStyle),
+                    dressStyle = defaultDressStyleForKit(WardrobeKit.BRAVOS, operator.rank.tier, settings.dressStyle ?: std.dressStyle),
+                    headgearStyle = defaultHeadgearForKit(WardrobeKit.BRAVOS, operator, ownedMedalIds, settings.headgearStyle ?: std.headgear),
                     dressDisplayMode = bravosDisplay,
                     hasWhiteGloves = false,
                     hasDressSash = false,
@@ -775,16 +837,16 @@ object TacticalCalculator {
                     dressStyle = defaultDressStyleForKit(
                         WardrobeKit.ALPHAS,
                         operator.rank.tier,
-                        settings.dressStyle ?: operator.dressStyle.takeIf { !it.isCutawayMess }
+                        settings.dressStyle ?: std.dressStyle ?: operator.dressStyle.takeIf { !it.isCutawayMess }
                     ),
                     headgearStyle = defaultHeadgearForKit(
                         WardrobeKit.ALPHAS,
                         operator,
                         ownedMedalIds,
-                        settings.headgearStyle
+                        settings.headgearStyle ?: std.headgear
                     ),
                     dressDisplayMode = settings.dressDisplayMode ?: operator.dressDisplayMode,
-                    hasWhiteGloves = settings.hasWhiteGloves ?: operator.hasWhiteGloves,
+                    hasWhiteGloves = settings.hasWhiteGloves ?: std.gloves ?: operator.hasWhiteGloves,
                     hasDressSash = rawSash && sashAllowed
                 )
             }
@@ -801,16 +863,16 @@ object TacticalCalculator {
                     dressStyle = defaultDressStyleForKit(
                         WardrobeKit.MESS,
                         operator.rank.tier,
-                        settings.dressStyle ?: operator.dressStyle.takeIf { it.isCutawayMess }
+                        settings.dressStyle ?: std.dressStyle ?: operator.dressStyle.takeIf { it.isCutawayMess }
                     ),
                     headgearStyle = defaultHeadgearForKit(
                         WardrobeKit.MESS,
                         operator,
                         ownedMedalIds,
-                        settings.headgearStyle
+                        settings.headgearStyle ?: std.headgear
                     ),
                     dressDisplayMode = messDisplay,
-                    hasWhiteGloves = settings.hasWhiteGloves ?: true,
+                    hasWhiteGloves = settings.hasWhiteGloves ?: std.gloves ?: true,
                     hasDressSash = false,
                     equippedLeftCordId = null,
                     equippedRightCordId = null
@@ -1066,7 +1128,7 @@ object TacticalCalculator {
 
     fun maxFieldRosterSlots(facilities: List<FacilityState>): Int {
         val hqLevel = facilityLevel(facilities, FacilityType.COMMAND_HQ)
-        return 4 + hqLevel
+        return 7 + hqLevel
     }
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {
@@ -1239,14 +1301,16 @@ object TacticalCalculator {
         smartWardrobeEnabled: Boolean = false
     ): Int {
         if (selectedOperators.isEmpty()) return 0
-        val totalPower = selectedOperators.sumOf {
+        // Difficulty compares the team's average power per soldier, so extra soldiers don't trivialize a mission;
+        // they help through MOS coverage, squad bonuses and survival instead
+        val averagePower = selectedOperators.map {
             operatorStats(it, gearItems, citations, facilities).totalPower
-        }
+        }.average()
         val staffBonus = ((hqStaffSummary?.efficiencyBonusPct ?: (hqStaffCount.coerceAtLeast(0) * 4)) / 2).coerceAtMost(14)
         val cohesionEff = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads)?.efficiencyBonusPct ?: 0
         val inspectionBonus = if (inspectionBuffActive) 8 else 0
         val kitEffBonus = evaluateMissionKitBonus(mission, selectedOperators, smartWardrobeEnabled).efficiencyBonusPct
-        val baseRatio = (totalPower.toDouble() / mission.recommendedPower.coerceAtLeast(1)) * 100.0
+        val baseRatio = (averagePower / mission.recommendedPower.coerceAtLeast(1)) * 100.0
         return (baseRatio + staffBonus + cohesionEff + inspectionBonus + kitEffBonus).roundToInt().coerceIn(45, 185)
     }
 

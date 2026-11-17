@@ -519,7 +519,8 @@ data class UniformTailorOverrides(
     val showUnitCitation: Boolean = true,
     val showServiceStripes: Boolean = true,
     val showOverseasBars: Boolean = true,
-    val leaderPinOverride: Boolean? = null,
+    /** Tailor Studio override for the leader pin and tab; null = Auto from squad roles */
+    val leaderRoleOverride: LeaderRole? = null,
     val freeTailorOverride: Boolean = false
 ) {
     companion object {
@@ -975,6 +976,12 @@ data class UniformTailorRequest(
     val headgearTouched: Boolean = false,
     /** True when the player picked "Auto" headgear, clearing a saved manual pick */
     val headgearAuto: Boolean = false,
+    /** True only when the player picked these by hand; untouched fields keep Auto or the squad standard */
+    val dressTouched: Boolean = false,
+    val camoTouched: Boolean = false,
+    val glovesTouched: Boolean = false,
+    /** Clears this kit's manual coat, headgear, camo and gloves so the squad standard applies again */
+    val followSquadStandard: Boolean = false,
     /** Appearance overrides; null = Auto (derived from the soldier id) */
     val skinToneOverride: SkinTone? = null,
     val bodyBuildOverride: BodyBuild? = null
@@ -1076,6 +1083,7 @@ data class MissionTemplate(
     val durationSeconds: Int,
     val minOperators: Int,
     val maxOperators: Int,
+    /** Target power per soldier: schools compare one soldier to it, missions compare the team's average. */
     val recommendedPower: Int,
     val primaryFocus: String,
     val isNightOp: Boolean = false,
@@ -1103,7 +1111,29 @@ data class MissionTemplate(
     }
 }
 
-const val MAX_SQUAD_SIZE = 4
+/** Leadership a soldier's uniform shows: a pin above the nameplate on dress uniforms, a chest tab in the field. */
+enum class LeaderRole(val label: String) {
+    NONE("None"),
+    TEAM_LEADER("Team Leader"),
+    SQUAD_LEADER("Squad Leader")
+}
+
+/** A gold-framed unit citation earned by a squad on a demanding combat op. */
+data class UnitCitation(
+    val missionId: String,
+    val missionTitle: String,
+    val earnedAtMillis: Long,
+    /** Squad members at the time; they keep wearing it after transferring out. */
+    val memberIds: List<String>
+)
+
+/** A squad can name a Team Leader once it has this many members. */
+const val TEAM_LEADER_MIN_SQUAD_SIZE = 5
+
+const val MAX_SQUAD_SIZE = 6
+const val MIN_SQUAD_SIZE = 2
+/** A squad with at least this many members fights at Full Strength (small survival and odds boost). */
+const val FULL_STRENGTH_SQUAD_SIZE = 4
 const val MAX_SQUAD_COHESION_XP = 1000
 
 enum class SquadCohesionTier(
@@ -1147,6 +1177,10 @@ data class TacticalSquad(
     val missionsTogether: Int = 0,
     val createdAtMillis: Long = 0L,
     val standardPatch: UnitPatchStyle = UnitPatchStyle.DIVISION_1,
+    /** Second-in-command for squads of 5+: SGT or above, never the squad leader. */
+    val teamLeaderId: String? = null,
+    /** Unit citations this squad earned; each lists who was a member when it was earned. */
+    val unitCitations: List<UnitCitation> = emptyList(),
     val standardCamo: CamoPattern? = null,
     val standardHeadgear: HeadgearStyle? = null,
     val standardDressStyle: DressUniformStyle? = null,
@@ -1220,7 +1254,8 @@ data class ActiveSquadCohesionBonus(
     val tier: SquadCohesionTier,
     val efficiencyBonusPct: Int,
     val survivalBonusPct: Int,
-    val successOddsBonusPct: Int
+    val successOddsBonusPct: Int,
+    val fullStrength: Boolean = false
 )
 
 data class ActiveDeployment(

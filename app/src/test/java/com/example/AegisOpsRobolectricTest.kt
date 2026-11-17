@@ -553,7 +553,7 @@ class AegisOpsRobolectricTest {
                     onEquipGear = { _, _ -> },
                     onUnequipGear = { _, _ -> },
                     onPurchaseOrUpgradeGear = {},
-                    onSaveSquad = { _, _, members, leader, _, _, _, _ ->
+                    onSaveSquad = { _, _, members, leader, _, _ ->
                         savedMembers = members
                         savedLeaderId = leader
                     }
@@ -846,7 +846,6 @@ class AegisOpsRobolectricTest {
             var switchedSquadId: String? = null
             var switchedKit: WardrobeKit? = null
             var savedStandard: SquadUniformStandard? = null
-            var savedApplyNow = false
 
             val starterOps = GameCatalog.initialOperators.filter { it.unlocked }
             composeTestRule.setContent {
@@ -869,9 +868,8 @@ class AegisOpsRobolectricTest {
                             switchedSquadId = sqId
                             switchedKit = kit
                         },
-                        onSaveSquadWithStandard = { _, _, _, _, std, applyNow ->
+                        onSaveSquad = { _, _, _, _, _, std ->
                             savedStandard = std
-                            savedApplyNow = applyNow
                         }
                     )
                 }
@@ -884,14 +882,21 @@ class AegisOpsRobolectricTest {
 
             composeTestRule.onNodeWithTag("manage_squad_sq_honor").performScrollTo().performClick()
             composeTestRule.waitForIdle()
+            // Uniform tab: each kit tab shows only its own controls, with the standard switched on
+            composeTestRule.onNodeWithTag("squad_editor_tab_uniform").performClick()
+            composeTestRule.onNodeWithTag("squad_uniform_preview").assertExists()
+            composeTestRule.onNodeWithTag("squad_kit_tab_bravos").performScrollTo().performClick()
             composeTestRule.onNodeWithTag("squad_standard_bravos_headgear_dropdown").performScrollTo().assertIsDisplayed()
-            composeTestRule.onNodeWithTag("squad_standard_mess_dress_dropdown").performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithTag("squad_standard_mess_dress_dropdown").assertDoesNotExist()
+            composeTestRule.onNodeWithTag("squad_kit_tab_alphas").performScrollTo().performClick()
             composeTestRule.onNodeWithTag("squad_standard_alphas_gloves_dropdown").performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithTag("squad_kit_tab_mess").performScrollTo().performClick()
+            composeTestRule.onNodeWithTag("squad_standard_mess_dress_dropdown").performScrollTo().assertIsDisplayed()
             composeTestRule.onNodeWithTag("squad_standard_mess_gloves_dropdown").performScrollTo().assertIsDisplayed()
-            composeTestRule.onNodeWithTag("dialog_apply_squad_standard").performScrollTo().performClick()
+            composeTestRule.onNodeWithTag("dialog_apply_squad_standard").assertDoesNotExist()
+            composeTestRule.onNodeWithTag("save_squad_button").performClick()
             composeTestRule.waitForIdle()
 
-            assertTrue(savedApplyNow)
             assertEquals(DressUniformStyle.HONOR_GUARD_IVORY, savedStandard?.messDressStyle)
             assertEquals(HeadgearStyle.TAN_BERET, savedStandard?.bravosHeadgear)
             assertEquals(false, savedStandard?.alphasGloves)

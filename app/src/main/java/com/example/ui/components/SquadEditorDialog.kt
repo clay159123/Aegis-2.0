@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,11 +17,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.data.catalog.GameCatalog
 import com.example.domain.SquadCohesionRules
+import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.theme.LocalAegisColors
 
+private enum class SquadEditorTab(val label: String) { ROSTER("Roster"), UNIFORM("Uniform") }
+
+/**
+ * Squad editor: a Roster tab (members, leaders, name, cohesion-loss preview) and a Uniform tab
+ * (division patch, live preview, and a Squad Standard switch per kit). Standards apply at render
+ * time to whoever is in the squad; a soldier's own Tailor Studio pick still overrides them.
+ */
 @Composable
 fun SquadEditorDialog(
     editingSquad: TacticalSquad?,
@@ -30,98 +42,99 @@ fun SquadEditorDialog(
         name: String,
         memberIds: List<String>,
         leaderId: String?,
-        standardPatch: UnitPatchStyle,
-        standardCamo: CamoPattern?,
-        standardHeadgear: HeadgearStyle?,
-        standardDressStyle: DressUniformStyle?
+        teamLeaderId: String?,
+        standard: SquadUniformStandard
     ) -> Unit,
-    onSaveWithStandard: ((
-        squadId: String?,
-        name: String,
-        memberIds: List<String>,
-        leaderId: String?,
-        standard: SquadUniformStandard,
-        applyImmediately: Boolean
-    ) -> Unit)? = null,
     onDisband: (String) -> Unit,
     onDismiss: () -> Unit,
-    onApplyStandard: ((String) -> Unit)? = null
+    gearItems: List<GearItem> = emptyList(),
+    citations: List<AwardedMedal> = emptyList()
 ) {
     val extra = LocalAegisColors.current
-    var squadName by remember(editingSquad?.id) {
-        mutableStateOf(
-            editingSquad?.name ?: SquadCohesionRules.nextDefaultSquadName(allSquads)
-        )
-    }
-    var memberIds by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.memberIds ?: emptyList())
-    }
-    var leaderId by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.leaderId)
-    }
-    var standardPatch by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardPatch ?: UnitPatchStyle.firstUnusedDivision(allSquads))
-    }
-    var standardCamo by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardCamo)
-    }
-    var standardBravosHeadgear by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardBravosHeadgear?.takeIf { it.kind == HeadgearKind.BERET })
-    }
-    var standardBravosDressStyle by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardBravosDressStyle?.takeIf { !it.isCutawayMess })
-    }
-    var standardAlphasHeadgear by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardHeadgear?.takeIf { it.kind != HeadgearKind.BERET })
-    }
-    var standardAlphasDressStyle by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardDressStyle?.takeIf { !it.isCutawayMess })
-    }
-    var standardMessDressStyle by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardMessDressStyle?.takeIf { it.isCutawayMess })
-    }
-    var standardMessHeadgear by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardMessHeadgear?.takeIf { it.kind != HeadgearKind.BERET })
-    }
-    var standardAlphasGloves by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardAlphasGloves)
-    }
-    var standardMessGloves by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardMessGloves)
+    val key = editingSquad?.id
+    var tab by remember(key) { mutableStateOf(SquadEditorTab.ROSTER) }
+    var squadName by remember(key) { mutableStateOf(editingSquad?.name ?: SquadCohesionRules.nextDefaultSquadName(allSquads)) }
+    var memberIds by remember(key) { mutableStateOf(editingSquad?.memberIds ?: emptyList()) }
+    var leaderId by remember(key) { mutableStateOf(editingSquad?.leaderId) }
+    var teamLeaderId by remember(key) { mutableStateOf(editingSquad?.teamLeaderId) }
+    var standardPatch by remember(key) {
+        mutableStateOf(editingSquad?.standardPatch?.takeIf { it.isDivision } ?: UnitPatchStyle.firstUnusedDivision(allSquads, excludingSquadId = key))
     }
 
-    fun buildStandard(): SquadUniformStandard = SquadUniformStandard(
-        patch = standardPatch,
-        camo = standardCamo,
-        bravosHeadgear = standardBravosHeadgear,
-        bravosDressStyle = standardBravosDressStyle,
-        alphasHeadgear = standardAlphasHeadgear,
-        alphasDressStyle = standardAlphasDressStyle,
-        messDressStyle = standardMessDressStyle,
-        messHeadgear = standardMessHeadgear,
-        alphasGloves = standardAlphasGloves,
-        messGloves = standardMessGloves
-    )
+    // Per-kit standards: a kit is On when its values are set
+    var camo by remember(key) { mutableStateOf(editingSquad?.standardCamo) }
+    var bravosBeret by remember(key) { mutableStateOf(editingSquad?.standardBravosHeadgear) }
+    var bravosShirt by remember(key) { mutableStateOf(editingSquad?.standardBravosDressStyle) }
+    var alphasCoat by remember(key) { mutableStateOf(editingSquad?.standardDressStyle) }
+    var alphasCap by remember(key) { mutableStateOf(editingSquad?.standardHeadgear) }
+    var alphasGloves by remember(key) { mutableStateOf(editingSquad?.standardAlphasGloves) }
+    var messJacket by remember(key) { mutableStateOf(editingSquad?.standardMessDressStyle) }
+    var messCap by remember(key) { mutableStateOf(editingSquad?.standardMessHeadgear) }
+    var messGloves by remember(key) { mutableStateOf(editingSquad?.standardMessGloves) }
+    var fieldOn by remember(key) { mutableStateOf(camo != null) }
+    var bravosOn by remember(key) { mutableStateOf(bravosBeret != null || bravosShirt != null) }
+    var alphasOn by remember(key) { mutableStateOf(alphasCoat != null || alphasCap != null || alphasGloves != null) }
+    var messOn by remember(key) { mutableStateOf(messJacket != null || messCap != null || messGloves != null) }
 
     val opsById = remember(fieldOperators) { fieldOperators.associateBy { it.id } }
-    val otherSquadByMember = remember(allSquads, editingSquad?.id) {
-        buildMap {
-            allSquads.filter { it.id != editingSquad?.id }.forEach { sq ->
-                sq.memberIds.forEach { put(it, sq.name) }
-            }
+    val members = memberIds.mapNotNull { opsById[it] }
+    val otherSquads = allSquads.filter { it.id != key }
+    val ownedById = remember(citations) { citations.groupBy { it.operatorId }.mapValues { (_, c) -> c.map { it.medalId }.toSet() } }
+    fun owned(op: Operator) = ownedById[op.id].orEmpty()
+
+    fun buildStandard() = SquadUniformStandard(
+        patch = standardPatch,
+        camo = camo.takeIf { fieldOn },
+        bravosHeadgear = bravosBeret.takeIf { bravosOn },
+        bravosDressStyle = bravosShirt.takeIf { bravosOn },
+        alphasHeadgear = alphasCap.takeIf { alphasOn },
+        alphasDressStyle = alphasCoat.takeIf { alphasOn },
+        messDressStyle = messJacket.takeIf { messOn },
+        messHeadgear = messCap.takeIf { messOn },
+        alphasGloves = alphasGloves.takeIf { alphasOn },
+        messGloves = messGloves.takeIf { messOn }
+    )
+
+    // The squad as it would be saved, for the live preview and compliance flags
+    val draftSquad = run {
+        val std = buildStandard()
+        (editingSquad ?: TacticalSquad(id = "sq_draft", name = squadName, memberIds = memberIds, leaderId = leaderId)).copy(
+            name = squadName,
+            memberIds = memberIds,
+            leaderId = leaderId,
+            teamLeaderId = teamLeaderId,
+            standardPatch = std.patch,
+            standardCamo = std.camo,
+            standardBravosHeadgear = std.bravosHeadgear,
+            standardBravosDressStyle = std.bravosDressStyle,
+            standardHeadgear = std.alphasHeadgear,
+            standardDressStyle = std.alphasDressStyle,
+            standardMessDressStyle = std.messDressStyle,
+            standardMessHeadgear = std.messHeadgear,
+            standardAlphasGloves = std.alphasGloves,
+            standardMessGloves = std.messGloves
+        )
+    }
+    val previewSquads = otherSquads + draftSquad
+
+    /** Copies the squad leader's current look for [kit] into the standard. */
+    fun matchLeader(kit: WardrobeKit) {
+        val leader = leaderId?.let { opsById[it] } ?: members.firstOrNull() ?: return
+        val look = TacticalCalculator.resolveKitAppearance(leader, kit, otherSquads, owned(leader))
+        when (kit) {
+            WardrobeKit.FIELD -> camo = look.camoPattern
+            WardrobeKit.BRAVOS -> { bravosBeret = look.headgearStyle; bravosShirt = look.dressStyle }
+            WardrobeKit.ALPHAS -> { alphasCoat = look.dressStyle; alphasCap = look.headgearStyle; alphasGloves = look.hasWhiteGloves }
+            WardrobeKit.MESS -> { messJacket = look.dressStyle; messCap = look.headgearStyle; messGloves = look.hasWhiteGloves }
         }
     }
-    val currentMembers = memberIds.mapNotNull { opsById[it] }
-    val availableCandidates = fieldOperators.filter { it.id !in memberIds }
 
     BackHandler { onDismiss() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        icon = {
-            Icon(Icons.Filled.Groups, contentDescription = null, tint = extra.brassBright)
-        },
+        icon = { Icon(Icons.Filled.Groups, contentDescription = null, tint = extra.brassBright) },
         title = {
             Text(
                 text = if (editingSquad != null) "Manage ${editingSquad.name}" else "Form Combat Squad",
@@ -130,467 +143,94 @@ fun SquadEditorDialog(
             )
         },
         text = {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .testTag("squad_editor_dialog"),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = squadName,
-                    onValueChange = { squadName = it.take(24) },
-                    label = { Text("Squad Name") },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("squad_name_input")
-                )
-
-                Text(
-                    text = "SQUAD ROSTER (${currentMembers.size}/$MAX_SQUAD_SIZE) • DESIGNATE LEADER",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = extra.textMuted
-                )
-
-                if (currentMembers.isEmpty()) {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        border = BorderStroke(1.dp, extra.borderSubtle),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Add up to $MAX_SQUAD_SIZE field soldiers below. First or chosen soldier can be set as Squad Leader.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(10.dp)
+            Column(modifier = Modifier.testTag("squad_editor_dialog")) {
+                TabRow(selectedTabIndex = tab.ordinal, containerColor = Color.Transparent) {
+                    SquadEditorTab.entries.forEach { t ->
+                        Tab(
+                            selected = tab == t,
+                            onClick = { tab = t },
+                            text = { Text(t.label) },
+                            modifier = Modifier.testTag("squad_editor_tab_${t.name.lowercase()}")
                         )
                     }
-                } else {
-                    currentMembers.forEach { member ->
-                        val isLeader = member.id == leaderId
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = if (isLeader) {
-                                extra.brassContainer.copy(alpha = 0.45f)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerLow
+                }
+                Spacer(Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    when (tab) {
+                        SquadEditorTab.ROSTER -> RosterTab(
+                            editingSquad = editingSquad,
+                            squadName = squadName,
+                            onNameChange = { squadName = it.take(24) },
+                            members = members,
+                            memberIds = memberIds,
+                            leaderId = leaderId,
+                            teamLeaderId = teamLeaderId,
+                            fieldOperators = fieldOperators,
+                            otherSquads = otherSquads,
+                            onMembersChange = { next ->
+                                memberIds = next
+                                if (leaderId !in next) leaderId = SquadCohesionRules.pickDefaultLeaderId(next, fieldOperators)
+                                if (teamLeaderId !in next || next.size < TEAM_LEADER_MIN_SQUAD_SIZE) teamLeaderId = null
                             },
-                            border = BorderStroke(
-                                1.dp,
-                                if (isLeader) extra.brass else extra.borderSubtle
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "${member.rank.code} ${member.callsign}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = if (isLeader) extra.brassBright else MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = if (isLeader) "★ Designated Squad Leader • ${member.specialty.label}" else member.specialty.label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isLeader) extra.brass else extra.textMuted
-                                    )
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(
-                                        onClick = { leaderId = member.id },
-                                        modifier = Modifier
-                                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                                            .testTag("set_leader_${member.id}")
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isLeader) Icons.Filled.Star else Icons.Filled.StarOutline,
-                                            contentDescription = "Designate ${member.callsign} as Squad Leader",
-                                            tint = if (isLeader) extra.brassBright else extra.textMuted
-                                        )
+                            onLeaderChange = { id ->
+                                leaderId = id
+                                if (teamLeaderId == id) teamLeaderId = null
+                            },
+                            onTeamLeaderChange = { teamLeaderId = it }
+                        )
+                        SquadEditorTab.UNIFORM -> UniformTab(
+                            members = members,
+                            previewSquads = previewSquads,
+                            gearItems = gearItems,
+                            owned = ::owned,
+                            standardPatch = standardPatch,
+                            onPatchChange = { standardPatch = it },
+                            kitControls = { kit ->
+                                when (kit) {
+                                    WardrobeKit.FIELD -> KitStandardSection(kit, fieldOn, {
+                                        fieldOn = it; if (it && camo == null) matchLeader(kit)
+                                    }, { matchLeader(kit) }) {
+                                        CamoStandardDropdown(camo) { camo = it }
                                     }
-                                    IconButton(
-                                        onClick = {
-                                            val nextMembers = memberIds.filter { it != member.id }
-                                            memberIds = nextMembers
-                                            if (leaderId == member.id) {
-                                                leaderId = SquadCohesionRules.pickDefaultLeaderId(nextMembers, fieldOperators)
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                                            .testTag("remove_squad_member_${member.id}")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Close,
-                                            contentDescription = "Remove ${member.callsign} from squad",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
+                                    WardrobeKit.BRAVOS -> KitStandardSection(kit, bravosOn, {
+                                        bravosOn = it; if (it && (bravosBeret == null || bravosShirt == null)) matchLeader(kit)
+                                    }, { matchLeader(kit) }) {
+                                        HeadgearStandardDropdown("Beret", true, bravosBeret, "squad_standard_bravos_headgear_dropdown") { bravosBeret = it }
+                                        DressStandardDropdown("Shirt", false, bravosShirt, "squad_standard_bravos_dress_dropdown") { bravosShirt = it }
+                                    }
+                                    WardrobeKit.ALPHAS -> KitStandardSection(kit, alphasOn, {
+                                        alphasOn = it; if (it && (alphasCoat == null || alphasCap == null || alphasGloves == null)) matchLeader(kit)
+                                    }, { matchLeader(kit) }) {
+                                        DressStandardDropdown("Coat", false, alphasCoat, "squad_standard_dress_dropdown") { alphasCoat = it }
+                                        HeadgearStandardDropdown("Cap", false, alphasCap, "squad_standard_headgear_dropdown") { alphasCap = it }
+                                        GlovesStandardDropdown(alphasGloves, "squad_standard_alphas_gloves_dropdown") { alphasGloves = it }
+                                    }
+                                    WardrobeKit.MESS -> KitStandardSection(kit, messOn, {
+                                        messOn = it; if (it && (messJacket == null || messCap == null || messGloves == null)) matchLeader(kit)
+                                    }, { matchLeader(kit) }) {
+                                        DressStandardDropdown("Jacket", true, messJacket, "squad_standard_mess_dress_dropdown") { messJacket = it }
+                                        HeadgearStandardDropdown("Cap", false, messCap, "squad_standard_mess_headgear_dropdown") { messCap = it }
+                                        GlovesStandardDropdown(messGloves, "squad_standard_mess_gloves_dropdown") { messGloves = it }
                                     }
                                 }
                             }
-                        }
+                        )
                     }
-                }
 
-                if (availableCandidates.isNotEmpty()) {
-                    HorizontalDivider(color = extra.borderSubtle)
-                    Text(
-                        text = if (currentMembers.size >= MAX_SQUAD_SIZE) {
-                            "SQUAD FULL ($MAX_SQUAD_SIZE/$MAX_SQUAD_SIZE MAX)"
-                        } else {
-                            "ASSIGN FIELD SOLDIERS"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = extra.textMuted
-                    )
-                    availableCandidates.forEach { candidate ->
-                        val existingSquadName = otherSquadByMember[candidate.id]
-                        val canAdd = currentMembers.size < MAX_SQUAD_SIZE
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            border = BorderStroke(1.dp, extra.borderSubtle),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(MaterialTheme.shapes.small)
-                                .clickable(enabled = canAdd) {
-                                    val nextMembers = (memberIds + candidate.id).take(MAX_SQUAD_SIZE)
-                                    memberIds = nextMembers
-                                    if (leaderId == null || leaderId !in nextMembers) {
-                                        leaderId = candidate.id
-                                    }
-                                }
-                                .testTag("add_squad_member_${candidate.id}")
+                    if (editingSquad != null) {
+                        HorizontalDivider(color = extra.borderSubtle)
+                        OutlinedButton(
+                            onClick = { onDisband(editingSquad.id); onDismiss() },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).testTag("disband_squad_button")
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "${candidate.rank.code} ${candidate.callsign} • ${candidate.specialty.roleTag}",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = if (canAdd) MaterialTheme.colorScheme.onSurface else extra.textMuted
-                                    )
-                                    Text(
-                                        text = if (existingSquadName != null) {
-                                            "Currently in $existingSquadName (will transfer)"
-                                        } else {
-                                            "${candidate.specialty.label} • Unassigned"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (existingSquadName != null) extra.amberTelemetry else extra.textMuted
-                                    )
-                                }
-                                Icon(
-                                    imageVector = Icons.Filled.AddCircleOutline,
-                                    contentDescription = "Add ${candidate.callsign}",
-                                    tint = if (canAdd) extra.signalsCyan else extra.textMuted
-                                )
-                            }
+                            Icon(Icons.Filled.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Disband ${editingSquad.name}")
                         }
-                    }
-                }
-
-                HorizontalDivider(color = extra.borderSubtle)
-                Text(
-                    text = "SQUAD UNIFORM STANDARD (4-KIT)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = extra.brassBright
-                )
-                Text(
-                    text = "Set shared Field, Bravos, Alphas & Mess looks while preserving individual honors & rank gates.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = extra.textMuted
-                )
-
-                // Squads pick a division patch; High Command is reserved for HQ staff
-                val patchOptions = remember {
-                    UnitPatchStyle.DIVISIONS.map { patch ->
-                        DropdownOptionItem(
-                            value = patch,
-                            title = patch.label,
-                            subtitle = patch.subtitle,
-                            primaryColor = Color(patch.primaryHex),
-                            trimColor = Color(patch.accentHex)
-                        )
-                    }
-                }
-                SingleChoiceDropdown(
-                    label = "Squad Unit Patch (SSI)",
-                    selectedText = standardPatch.label,
-                    selectedPrimaryColor = Color(standardPatch.primaryHex),
-                    selectedTrimColor = Color(standardPatch.accentHex),
-                    options = patchOptions,
-                    selectedValue = standardPatch,
-                    onSelect = { standardPatch = it },
-                    fieldTestTag = "squad_standard_patch_dropdown"
-                )
-
-                val camoOptions = remember {
-                    listOf(
-                        DropdownOptionItem<CamoPattern?>(
-                            value = null,
-                            title = "Keep Individual Camo",
-                            subtitle = "Do not override soldier's Field camo"
-                        )
-                    ) + CamoPattern.entries.map { camo ->
-                        DropdownOptionItem<CamoPattern?>(
-                            value = camo,
-                            title = camo.label,
-                            primaryColor = Color(camo.primaryHex),
-                            trimColor = Color(camo.accentHex)
-                        )
-                    }
-                }
-                SingleChoiceDropdown(
-                    label = "Field • Camo Pattern",
-                    selectedText = standardCamo?.label ?: "Keep Individual Camo",
-                    selectedPrimaryColor = standardCamo?.let { Color(it.primaryHex) },
-                    selectedTrimColor = standardCamo?.let { Color(it.accentHex) },
-                    options = camoOptions,
-                    selectedValue = standardCamo,
-                    onSelect = { standardCamo = it },
-                    fieldTestTag = "squad_standard_camo_dropdown"
-                )
-
-                val beretOptions = remember {
-                    listOf(
-                        DropdownOptionItem<HeadgearStyle?>(
-                            value = null,
-                            title = "Keep Individual Beret",
-                            subtitle = "Respect each soldier's Bravos beret"
-                        )
-                    ) + HeadgearStyle.entries.filter { it.kind == HeadgearKind.BERET }.map { hg ->
-                        DropdownOptionItem<HeadgearStyle?>(
-                            value = hg,
-                            title = hg.label,
-                            subtitle = hg.requirementHint,
-                            primaryColor = Color(hg.colorHex),
-                            trimColor = extra.brassBright
-                        )
-                    }
-                }
-                SingleChoiceDropdown(
-                    label = "Bravos • Beret Standard",
-                    selectedText = standardBravosHeadgear?.label ?: "Keep Individual Beret",
-                    selectedPrimaryColor = standardBravosHeadgear?.let { Color(it.colorHex) },
-                    selectedTrimColor = standardBravosHeadgear?.let { extra.brassBright },
-                    options = beretOptions,
-                    selectedValue = standardBravosHeadgear,
-                    onSelect = { standardBravosHeadgear = it },
-                    fieldTestTag = "squad_standard_bravos_headgear_dropdown"
-                )
-
-                val serviceDressOptions = remember {
-                    listOf(
-                        DropdownOptionItem<DressUniformStyle?>(
-                            value = null,
-                            title = "Keep Individual Cut",
-                            subtitle = "Respect each soldier's tailored service uniform"
-                        )
-                    ) + DressUniformStyle.entries.filter { !it.isCutawayMess }.map { ds ->
-                        DropdownOptionItem<DressUniformStyle?>(
-                            value = ds,
-                            title = ds.label,
-                            subtitle = ds.requirementHint,
-                            primaryColor = Color(ds.tunicHex),
-                            trimColor = Color(ds.trimHex)
-                        )
-                    }
-                }
-                SingleChoiceDropdown(
-                    label = "Bravos • Shirt / Service Standard",
-                    selectedText = standardBravosDressStyle?.label ?: "Keep Individual Cut",
-                    selectedPrimaryColor = standardBravosDressStyle?.let { Color(it.tunicHex) },
-                    selectedTrimColor = standardBravosDressStyle?.let { Color(it.trimHex) },
-                    options = serviceDressOptions,
-                    selectedValue = standardBravosDressStyle,
-                    onSelect = { standardBravosDressStyle = it },
-                    fieldTestTag = "squad_standard_bravos_dress_dropdown"
-                )
-
-                SingleChoiceDropdown(
-                    label = "Alphas • Service Coat",
-                    selectedText = standardAlphasDressStyle?.label ?: "Keep Individual Cut",
-                    selectedPrimaryColor = standardAlphasDressStyle?.let { Color(it.tunicHex) },
-                    selectedTrimColor = standardAlphasDressStyle?.let { Color(it.trimHex) },
-                    options = serviceDressOptions,
-                    selectedValue = standardAlphasDressStyle,
-                    onSelect = { standardAlphasDressStyle = it },
-                    fieldTestTag = "squad_standard_dress_dropdown"
-                )
-
-                val capOptions = remember {
-                    listOf(
-                        DropdownOptionItem<HeadgearStyle?>(
-                            value = null,
-                            title = "Keep Individual Cap",
-                            subtitle = "Respect each soldier's service/peaked cap"
-                        )
-                    ) + HeadgearStyle.entries.filter { it.kind != HeadgearKind.BERET }.map { hg ->
-                        DropdownOptionItem<HeadgearStyle?>(
-                            value = hg,
-                            title = hg.label,
-                            subtitle = hg.requirementHint,
-                            primaryColor = Color(hg.colorHex),
-                            trimColor = extra.brassBright
-                        )
-                    }
-                }
-                SingleChoiceDropdown(
-                    label = "Alphas • Service Cap",
-                    selectedText = standardAlphasHeadgear?.label ?: "Keep Individual Cap",
-                    selectedPrimaryColor = standardAlphasHeadgear?.let { Color(it.colorHex) },
-                    selectedTrimColor = standardAlphasHeadgear?.let { extra.brassBright },
-                    options = capOptions,
-                    selectedValue = standardAlphasHeadgear,
-                    onSelect = { standardAlphasHeadgear = it },
-                    fieldTestTag = "squad_standard_headgear_dropdown"
-                )
-
-                val messDressOptions = remember {
-                    listOf(
-                        DropdownOptionItem<DressUniformStyle?>(
-                            value = null,
-                            title = "Keep Individual Mess Jacket",
-                            subtitle = "Respect each soldier's formal Mess cut"
-                        )
-                    ) + DressUniformStyle.entries.filter { it.isCutawayMess }.map { ds ->
-                        DropdownOptionItem<DressUniformStyle?>(
-                            value = ds,
-                            title = ds.label,
-                            subtitle = ds.requirementHint,
-                            primaryColor = Color(ds.tunicHex),
-                            trimColor = Color(ds.trimHex)
-                        )
-                    }
-                }
-                SingleChoiceDropdown(
-                    label = "Mess • Formal Cutaway Jacket",
-                    selectedText = standardMessDressStyle?.label ?: "Keep Individual Mess Jacket",
-                    selectedPrimaryColor = standardMessDressStyle?.let { Color(it.tunicHex) },
-                    selectedTrimColor = standardMessDressStyle?.let { Color(it.trimHex) },
-                    options = messDressOptions,
-                    selectedValue = standardMessDressStyle,
-                    onSelect = { standardMessDressStyle = it },
-                    fieldTestTag = "squad_standard_mess_dress_dropdown"
-                )
-
-                SingleChoiceDropdown(
-                    label = "Mess • Formal Cap",
-                    selectedText = standardMessHeadgear?.label ?: "Keep Individual Cap",
-                    selectedPrimaryColor = standardMessHeadgear?.let { Color(it.colorHex) },
-                    selectedTrimColor = standardMessHeadgear?.let { extra.brassBright },
-                    options = capOptions,
-                    selectedValue = standardMessHeadgear,
-                    onSelect = { standardMessHeadgear = it },
-                    fieldTestTag = "squad_standard_mess_headgear_dropdown"
-                )
-
-                val glovesOptions = remember {
-                    listOf(
-                        DropdownOptionItem<Boolean?>(
-                            value = null,
-                            title = "Keep Individual Gloves",
-                            subtitle = "Respect each soldier's own glove setting for this uniform"
-                        ),
-                        DropdownOptionItem<Boolean?>(
-                            value = true,
-                            title = "White Parade Gloves Worn",
-                            subtitle = "Uniform white gloves for the whole squad"
-                        ),
-                        DropdownOptionItem<Boolean?>(
-                            value = false,
-                            title = "No Gloves (Bare Hands)",
-                            subtitle = "Bare hands for the whole squad"
-                        )
-                    )
-                }
-                fun glovesLabel(value: Boolean?): String = when (value) {
-                    null -> "Keep Individual Gloves"
-                    true -> "White Parade Gloves Worn"
-                    false -> "No Gloves (Bare Hands)"
-                }
-                SingleChoiceDropdown(
-                    label = "Alphas • White Gloves",
-                    selectedText = glovesLabel(standardAlphasGloves),
-                    options = glovesOptions,
-                    selectedValue = standardAlphasGloves,
-                    onSelect = { standardAlphasGloves = it },
-                    fieldTestTag = "squad_standard_alphas_gloves_dropdown"
-                )
-                SingleChoiceDropdown(
-                    label = "Mess • White Gloves",
-                    selectedText = glovesLabel(standardMessGloves),
-                    options = glovesOptions,
-                    selectedValue = standardMessGloves,
-                    onSelect = { standardMessGloves = it },
-                    fieldTestTag = "squad_standard_mess_gloves_dropdown"
-                )
-
-                if (editingSquad != null) {
-                    if (onApplyStandard != null || onSaveWithStandard != null) {
-                        FilledTonalButton(
-                            onClick = {
-                                val standard = buildStandard()
-                                if (onSaveWithStandard != null) {
-                                    onSaveWithStandard(
-                                        editingSquad.id,
-                                        squadName,
-                                        memberIds,
-                                        leaderId,
-                                        standard,
-                                        true
-                                    )
-                                } else {
-                                    onSave(
-                                        editingSquad.id,
-                                        squadName,
-                                        memberIds,
-                                        leaderId,
-                                        standardPatch,
-                                        standardCamo,
-                                        standardAlphasHeadgear,
-                                        standardAlphasDressStyle
-                                    )
-                                    onApplyStandard?.invoke(editingSquad.id)
-                                }
-                                onDismiss()
-                            },
-                            enabled = memberIds.isNotEmpty(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = 48.dp)
-                                .testTag("dialog_apply_squad_standard")
-                        ) {
-                            Icon(Icons.Filled.Checkroom, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Save & Dress Squad in Standard")
-                        }
-                    }
-                    HorizontalDivider(color = extra.borderSubtle)
-                    OutlinedButton(
-                        onClick = {
-                            onDisband(editingSquad.id)
-                            onDismiss()
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("disband_squad_button")
-                    ) {
-                        Icon(Icons.Filled.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Disband ${editingSquad.name}")
                     }
                 }
             }
@@ -598,47 +238,387 @@ fun SquadEditorDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val standard = buildStandard()
-                    if (onSaveWithStandard != null) {
-                        onSaveWithStandard(
-                            editingSquad?.id,
-                            squadName,
-                            memberIds,
-                            leaderId,
-                            standard,
-                            false
-                        )
-                    } else {
-                        onSave(
-                            editingSquad?.id,
-                            squadName,
-                            memberIds,
-                            leaderId,
-                            standardPatch,
-                            standardCamo,
-                            standardAlphasHeadgear,
-                            standardAlphasDressStyle
-                        )
-                    }
+                    onSave(key, squadName, memberIds, leaderId, teamLeaderId, buildStandard())
                     onDismiss()
                 },
-                enabled = memberIds.isNotEmpty(),
-                modifier = Modifier
-                    .defaultMinSize(minHeight = 48.dp)
-                    .testTag("save_squad_button")
-            ) {
-                Text("Save Squad")
-            }
+                enabled = memberIds.size >= MIN_SQUAD_SIZE,
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("save_squad_button")
+            ) { Text("Save Squad") }
         },
         dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .defaultMinSize(minHeight = 48.dp)
-                    .testTag("cancel_squad_dialog")
-            ) {
+            TextButton(onClick = onDismiss, modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("cancel_squad_dialog")) {
                 Text("Cancel")
             }
         }
+    )
+}
+
+@Composable
+private fun RosterTab(
+    editingSquad: TacticalSquad?,
+    squadName: String,
+    onNameChange: (String) -> Unit,
+    members: List<Operator>,
+    memberIds: List<String>,
+    leaderId: String?,
+    teamLeaderId: String?,
+    fieldOperators: List<Operator>,
+    otherSquads: List<TacticalSquad>,
+    onMembersChange: (List<String>) -> Unit,
+    onLeaderChange: (String) -> Unit,
+    onTeamLeaderChange: (String?) -> Unit
+) {
+    val extra = LocalAegisColors.current
+    OutlinedTextField(
+        value = squadName,
+        onValueChange = onNameChange,
+        label = { Text("Squad Name") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().testTag("squad_name_input")
+    )
+
+    // Cohesion lost to turnover, shown before the player confirms
+    if (editingSquad != null && (memberIds != editingSquad.memberIds || leaderId != editingSquad.leaderId)) {
+        val afterXp = SquadCohesionRules.cohesionAfterRosterChange(editingSquad, memberIds, leaderId)
+        val before = editingSquad.cohesionScore
+        val after = (afterXp / 10).coerceIn(0, 100)
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = extra.amberTelemetry.copy(alpha = 0.12f),
+            border = BorderStroke(1.dp, extra.amberTelemetry.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth().testTag("cohesion_loss_preview")
+        ) {
+            Text(
+                text = if (after < before) {
+                    "Cohesion $before% → $after% (−${before - after}%) from roster turnover"
+                } else {
+                    "Cohesion stays at $before%"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = extra.amberTelemetry,
+                modifier = Modifier.padding(10.dp)
+            )
+        }
+    }
+
+    Text(
+        text = "SQUAD ROSTER (${members.size}/$MAX_SQUAD_SIZE) • $MIN_SQUAD_SIZE MIN • FULL STRENGTH AT $FULL_STRENGTH_SQUAD_SIZE",
+        style = MaterialTheme.typography.labelSmall,
+        color = extra.textMuted
+    )
+    if (members.isEmpty()) {
+        Text(
+            text = "Add $MIN_SQUAD_SIZE to $MAX_SQUAD_SIZE field soldiers below. A squad of $TEAM_LEADER_MIN_SQUAD_SIZE+ can also name a Team Leader.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    val draft = TacticalSquad("sq_check", "", memberIds, leaderId)
+    members.forEach { member ->
+        val isLeader = member.id == leaderId
+        val isTeamLeader = member.id == teamLeaderId
+        val tlBlocker = SquadCohesionRules.teamLeaderBlocker(draft, member)
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = if (isLeader) extra.brassContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, if (isLeader) extra.brass else if (isTeamLeader) extra.signalsCyan else extra.borderSubtle),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "${member.rank.code} ${member.callsign}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (isLeader) extra.brassBright else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = when {
+                            isLeader -> "★ Squad Leader • ${member.specialty.label}"
+                            isTeamLeader -> "Team Leader • ${member.specialty.label}"
+                            else -> member.specialty.label
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isLeader) extra.brass else if (isTeamLeader) extra.signalsCyan else extra.textMuted
+                    )
+                }
+                IconButton(
+                    onClick = { onLeaderChange(member.id) },
+                    modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).testTag("set_leader_${member.id}")
+                ) {
+                    Icon(
+                        imageVector = if (isLeader) Icons.Filled.Star else Icons.Filled.StarOutline,
+                        contentDescription = "Make ${member.callsign} Squad Leader",
+                        tint = if (isLeader) extra.brassBright else extra.textMuted
+                    )
+                }
+                if (members.size >= TEAM_LEADER_MIN_SQUAD_SIZE && !isLeader) {
+                    IconButton(
+                        onClick = { onTeamLeaderChange(if (isTeamLeader) null else member.id) },
+                        enabled = isTeamLeader || tlBlocker == null,
+                        modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).testTag("set_team_leader_${member.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowUp,
+                            contentDescription = if (tlBlocker != null) "Team Leader: $tlBlocker" else "Make ${member.callsign} Team Leader",
+                            tint = when {
+                                isTeamLeader -> extra.signalsCyan
+                                tlBlocker == null -> extra.textMuted
+                                else -> extra.textMuted.copy(alpha = 0.3f)
+                            }
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = { onMembersChange(memberIds.filter { it != member.id }) },
+                    modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).testTag("remove_squad_member_${member.id}")
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = "Remove ${member.callsign}", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+    if (members.size >= TEAM_LEADER_MIN_SQUAD_SIZE) {
+        Text(
+            text = "Team Leader: SGT or above, not the Squad Leader. Tap the chevron to assign.",
+            style = MaterialTheme.typography.labelSmall,
+            color = extra.textMuted
+        )
+    }
+
+    val otherSquadByMember = otherSquads.flatMap { sq -> sq.memberIds.map { it to sq.name } }.toMap()
+    val candidates = fieldOperators.filter { it.id !in memberIds }
+    if (candidates.isNotEmpty()) {
+        HorizontalDivider(color = extra.borderSubtle)
+        val full = members.size >= MAX_SQUAD_SIZE
+        Text(
+            text = if (full) "SQUAD FULL ($MAX_SQUAD_SIZE/$MAX_SQUAD_SIZE)" else "ASSIGN FIELD SOLDIERS",
+            style = MaterialTheme.typography.labelSmall,
+            color = extra.textMuted
+        )
+        candidates.forEach { candidate ->
+            val existing = otherSquadByMember[candidate.id]
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                border = BorderStroke(1.dp, extra.borderSubtle),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable(enabled = !full) { onMembersChange((memberIds + candidate.id).take(MAX_SQUAD_SIZE)) }
+                    .testTag("add_squad_member_${candidate.id}")
+            ) {
+                Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${candidate.rank.code} ${candidate.callsign} • ${candidate.specialty.roleTag}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (!full) MaterialTheme.colorScheme.onSurface else extra.textMuted
+                        )
+                        Text(
+                            text = if (existing != null) "Currently in $existing (will transfer)" else "${candidate.specialty.label} • Unassigned",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (existing != null) extra.amberTelemetry else extra.textMuted
+                        )
+                    }
+                    Icon(Icons.Filled.AddCircleOutline, contentDescription = "Add ${candidate.callsign}", tint = if (!full) extra.signalsCyan else extra.textMuted)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UniformTab(
+    members: List<Operator>,
+    previewSquads: List<TacticalSquad>,
+    gearItems: List<GearItem>,
+    owned: (Operator) -> Set<String>,
+    standardPatch: UnitPatchStyle,
+    onPatchChange: (UnitPatchStyle) -> Unit,
+    kitControls: @Composable (WardrobeKit) -> Unit
+) {
+    val extra = LocalAegisColors.current
+    var kit by remember { mutableStateOf(WardrobeKit.FIELD) }
+    var previewIndex by remember { mutableIntStateOf(0) }
+
+    val patchOptions = remember {
+        UnitPatchStyle.DIVISIONS.map { patch ->
+            DropdownOptionItem(patch, patch.label, patch.subtitle, Color(patch.primaryHex), Color(patch.accentHex))
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Division Patch (left shoulder)",
+        selectedText = standardPatch.label,
+        selectedPrimaryColor = Color(standardPatch.primaryHex),
+        selectedTrimColor = Color(standardPatch.accentHex),
+        options = patchOptions,
+        selectedValue = standardPatch,
+        onSelect = onPatchChange,
+        fieldTestTag = "squad_standard_patch_dropdown"
+    )
+
+    TabRow(selectedTabIndex = kit.ordinal, containerColor = Color.Transparent) {
+        WardrobeKit.entries.forEach { k ->
+            Tab(
+                selected = kit == k,
+                onClick = { kit = k },
+                text = { Text(k.shortLabel, maxLines = 1) },
+                modifier = Modifier.testTag("squad_kit_tab_${k.name.lowercase()}")
+            )
+        }
+    }
+
+    // Live preview of the selected kit on one member at a time
+    if (members.isNotEmpty()) {
+        val idx = previewIndex.coerceIn(0, members.lastIndex)
+        val member = members[idx]
+        val medals = GameCatalog.medals.filter { it.id in owned(member) }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            IconButton(
+                onClick = { previewIndex = (idx - 1 + members.size) % members.size },
+                modifier = Modifier.testTag("squad_preview_prev")
+            ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous member") }
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                OperatorUniformPreview(
+                    operator = member,
+                    equippedGear = gearItems.equippedBy(member),
+                    awardedMedals = medals,
+                    squads = previewSquads,
+                    kitOverride = kit,
+                    modifier = Modifier.size(180.dp, 250.dp).testTag("squad_uniform_preview")
+                )
+                Text(
+                    text = "${member.rank.code} ${member.callsign} (${idx + 1}/${members.size})",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = extra.textMuted
+                )
+            }
+            IconButton(
+                onClick = { previewIndex = (idx + 1) % members.size },
+                modifier = Modifier.testTag("squad_preview_next")
+            ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next member") }
+        }
+    }
+
+    kitControls(kit)
+
+    // Compliance: members who can't wear part of the standard, and what they wear instead
+    val flags = members.flatMap { m ->
+        TacticalCalculator.squadStandardFallbacks(m, previewSquads, kit, owned(m)).map { "${m.callsign} • $it" }
+    }
+    flags.forEach { flag ->
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("squad_compliance_flag")) {
+            Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = extra.amberTelemetry, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(flag, style = MaterialTheme.typography.labelSmall, color = extra.amberTelemetry, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun KitStandardSection(
+    kit: WardrobeKit,
+    on: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onMatchLeader: () -> Unit,
+    controls: @Composable ColumnScope.() -> Unit
+) {
+    val extra = LocalAegisColors.current
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("${kit.label}: Squad Standard ${if (on) "On" else "Off"}", style = MaterialTheme.typography.titleSmall)
+            Text(
+                text = if (on) "Members wear this unless they set their own in the Tailor Studio" else "Members dress individually",
+                style = MaterialTheme.typography.labelSmall,
+                color = extra.textMuted
+            )
+        }
+        Switch(checked = on, onCheckedChange = onToggle, modifier = Modifier.testTag("squad_standard_switch_${kit.name.lowercase()}"))
+    }
+    if (on) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            controls()
+            OutlinedButton(
+                onClick = onMatchLeader,
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).testTag("squad_match_leader_${kit.name.lowercase()}")
+            ) {
+                Icon(Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Match Leader")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CamoStandardDropdown(value: CamoPattern?, onSelect: (CamoPattern) -> Unit) {
+    val options = remember { CamoPattern.entries.map { DropdownOptionItem<CamoPattern?>(it, it.label, null, Color(it.primaryHex), Color(it.accentHex)) } }
+    SingleChoiceDropdown(
+        label = "Camo Pattern",
+        selectedText = value?.label ?: "Choose",
+        selectedPrimaryColor = value?.let { Color(it.primaryHex) },
+        selectedTrimColor = value?.let { Color(it.accentHex) },
+        options = options,
+        selectedValue = value,
+        onSelect = { it?.let(onSelect) },
+        fieldTestTag = "squad_standard_camo_dropdown"
+    )
+}
+
+@Composable
+private fun HeadgearStandardDropdown(label: String, berets: Boolean, value: HeadgearStyle?, tag: String, onSelect: (HeadgearStyle) -> Unit) {
+    val extra = LocalAegisColors.current
+    val options = remember(berets) {
+        HeadgearStyle.entries.filter { (it.kind == HeadgearKind.BERET) == berets }
+            .map { DropdownOptionItem<HeadgearStyle?>(it, it.label, it.requirementHint, Color(it.colorHex), extra.brassBright) }
+    }
+    SingleChoiceDropdown(
+        label = label,
+        selectedText = value?.label ?: "Choose",
+        selectedPrimaryColor = value?.let { Color(it.colorHex) },
+        selectedTrimColor = extra.brassBright,
+        options = options,
+        selectedValue = value,
+        onSelect = { it?.let(onSelect) },
+        fieldTestTag = tag
+    )
+}
+
+@Composable
+private fun DressStandardDropdown(label: String, mess: Boolean, value: DressUniformStyle?, tag: String, onSelect: (DressUniformStyle) -> Unit) {
+    val options = remember(mess) {
+        DressUniformStyle.entries.filter { it.isCutawayMess == mess }
+            .map { DropdownOptionItem<DressUniformStyle?>(it, it.label, it.requirementHint, Color(it.tunicHex), Color(it.trimHex)) }
+    }
+    SingleChoiceDropdown(
+        label = label,
+        selectedText = value?.label ?: "Choose",
+        selectedPrimaryColor = value?.let { Color(it.tunicHex) },
+        selectedTrimColor = value?.let { Color(it.trimHex) },
+        options = options,
+        selectedValue = value,
+        onSelect = { it?.let(onSelect) },
+        fieldTestTag = tag
+    )
+}
+
+@Composable
+private fun GlovesStandardDropdown(value: Boolean?, tag: String, onSelect: (Boolean) -> Unit) {
+    val options = remember {
+        listOf(
+            DropdownOptionItem<Boolean?>(true, "White Gloves", "White parade gloves for the whole squad"),
+            DropdownOptionItem<Boolean?>(false, "No Gloves", "Bare hands for the whole squad")
+        )
+    }
+    SingleChoiceDropdown(
+        label = "Gloves",
+        selectedText = when (value) { true -> "White Gloves"; false -> "No Gloves"; null -> "Choose" },
+        options = options,
+        selectedValue = value,
+        onSelect = { it?.let(onSelect) },
+        fieldTestTag = tag
     )
 }

@@ -13,6 +13,12 @@ data class SquadCohesionGainResult(
 
 object SquadCohesionRules {
 
+    /** Survival and pass-chance boost for a squad deployed at Full Strength. */
+    const val FULL_STRENGTH_BONUS_PCT = 2
+
+    fun cohesionHeadcountXp(participants: Int): Int =
+        30 + (minOf(participants, FULL_STRENGTH_SQUAD_SIZE) - 2) * 15 + (participants - FULL_STRENGTH_SQUAD_SIZE).coerceAtLeast(0) * 5
+
     private val natoSquadCallsigns = listOf(
         "Alpha Squad",
         "Bravo Squad",
@@ -41,6 +47,77 @@ object SquadCohesionRules {
                     .thenByDescending { opsById[it]?.xp ?: -1 }
             )
             .firstOrNull()
+    }
+
+    /** Cohesion XP a Team Leader adds when present on a mission (a smaller version of the squad leader's bonus). */
+    const val TEAM_LEADER_COHESION_XP = 8
+
+    /** Why [candidate] can't be this squad's Team Leader, or null when they can. */
+    fun teamLeaderBlocker(squad: TacticalSquad, candidate: Operator?): String? = when {
+        squad.memberIds.size < TEAM_LEADER_MIN_SQUAD_SIZE -> "Squad needs $TEAM_LEADER_MIN_SQUAD_SIZE+ members"
+        candidate == null || candidate.id !in squad.memberIds -> "Not a squad member"
+        candidate.id == squad.leaderId -> "Already the Squad Leader"
+        candidate.rank.ordinal < OperatorRank.SGT.ordinal -> "Requires SGT or above"
+        else -> null
+    }
+
+    /** The squad's Team Leader if still valid; clears when the squad drops below 5 or the soldier leaves. */
+    fun validTeamLeaderId(squad: TacticalSquad, operators: List<Operator>): String? {
+        val id = squad.teamLeaderId ?: return null
+        return id.takeIf { teamLeaderBlocker(squad, operators.find { it.id == id }) == null }
+    }
+
+    /** Extra cohesion lost when the squad leader changes. */
+    const val LEADER_CHANGE_COHESION_FACTOR = 0.85
+
+    /**
+     * Cohesion XP after a roster change: scaled by the share of original members who remain,
+     * with an extra cut when the leader changes. No original members left resets it to 0.
+     */
+    fun cohesionAfterRosterChange(squad: TacticalSquad, newMemberIds: List<String>, newLeaderId: String?): Int {
+        if (squad.memberIds.isEmpty()) return squad.cohesionXp
+        val kept = squad.memberIds.count { it in newMemberIds }
+        if (kept == 0) return 0
+        val share = kept.toDouble() / squad.memberIds.size
+        val leaderChanged = squad.leaderId != null && newLeaderId != squad.leaderId
+        val factor = share * if (leaderChanged) LEADER_CHANGE_COHESION_FACTOR else 1.0
+        return (squad.cohesionXp * factor).roundToInt()
+    }
+
+    /** [squad] with a new roster, its cohesion scaled for turnover. */
+    fun applyRosterChange(squad: TacticalSquad, newMemberIds: List<String>, newLeaderId: String?): TacticalSquad {
+        if (newMemberIds == squad.memberIds && newLeaderId == squad.leaderId) return squad
+        val kept = squad.memberIds.count { it in newMemberIds }
+        return squad.copy(
+            memberIds = newMemberIds,
+            leaderId = newLeaderId,
+            cohesionXp = cohesionAfterRosterChange(squad, newMemberIds, newLeaderId),
+            missionsTogether = if (kept == 0) 0 else squad.missionsTogether
+        )
+    }
+
+    /**
+     * A unit citation for a successful High or Extreme combat op where every squad member
+     * who deployed came home, or null.
+     */
+    fun earnedUnitCitation(
+        squad: TacticalSquad,
+        deployedAfterMission: List<Operator>,
+        mission: MissionTemplate,
+        missionSucceeded: Boolean,
+        nowMillis: Long
+    ): UnitCitation? {
+        if (!missionSucceeded || mission.risk.isTraining || mission.scope == MissionScope.STAFF_DIPLOMATIC) return null
+        if (mission.risk != MissionRisk.HIGH && mission.risk != MissionRisk.EXTREME) return null
+        val squadDeployed = deployedAfterMission.filter { it.id in squad.memberIds }
+        if (squadDeployed.size < MIN_SQUAD_SIZE) return null
+        if (squadDeployed.any { it.status == OperatorStatus.FALLEN }) return null
+        return UnitCitation(
+            missionId = mission.id,
+            missionTitle = mission.title,
+            earnedAtMillis = nowMillis,
+            memberIds = squad.memberIds
+        )
     }
 
     fun isOperatorEligibleForFieldSquad(operator: Operator): Boolean =
@@ -107,7 +184,11 @@ object SquadCohesionRules {
         val survBonus = (scale * 10.0).roundToInt() + if (leaderPresent && score >= 20) 1 else 0
         val oddsBonus = (scale * 8.0).roundToInt() + leaderPresenceOdds
 
-        if (effBonus <= 0 && survBonus <= 0 && oddsBonus <= 0) return null
+        // Full Strength: a squad of 4+ that deploys at least 4 of its members
+        val fullStrength = squad.memberIds.size >= FULL_STRENGTH_SQUAD_SIZE && deployedCount >= FULL_STRENGTH_SQUAD_SIZE
+        val fullStrengthBonus = if (fullStrength) FULL_STRENGTH_BONUS_PCT else 0
+
+        if (effBonus <= 0 && survBonus <= 0 && oddsBonus <= 0 && !fullStrength) return null
 
         return ActiveSquadCohesionBonus(
             squad = squad,
@@ -116,8 +197,9 @@ object SquadCohesionRules {
             cohesionScore = score,
             tier = tier,
             efficiencyBonusPct = effBonus,
-            survivalBonusPct = survBonus,
-            successOddsBonusPct = oddsBonus
+            survivalBonusPct = survBonus + fullStrengthBonus,
+            successOddsBonusPct = oddsBonus + fullStrengthBonus,
+            fullStrength = fullStrength
         )
     }
 
@@ -135,7 +217,8 @@ object SquadCohesionRules {
 
         val leaderOp = squad.leaderId?.let { id -> participating.firstOrNull { it.id == id } }
         val leaderPresent = leaderOp != null
-        val baseXp = 30 + (participating.size - 2) * 15
+        // Headcount helps up to 4; members 5 and 6 add only a little
+        val baseXp = cohesionHeadcountXp(participating.size)
         val hazardBonus = when (mission.risk) {
             MissionRisk.TRAINING, MissionRisk.LOW -> 0
             MissionRisk.MODERATE -> 10
@@ -147,7 +230,9 @@ object SquadCohesionRules {
         } else {
             0
         }
-        val rawGain = baseXp + hazardBonus + leaderBonus
+        val teamLeaderPresent = squad.teamLeaderId != null && participating.any { it.id == squad.teamLeaderId }
+        val teamLeaderBonus = if (teamLeaderPresent) TEAM_LEADER_COHESION_XP else 0
+        val rawGain = baseXp + hazardBonus + leaderBonus + teamLeaderBonus
         val finalGain = if (missionSucceeded) rawGain else (rawGain / 2).coerceAtLeast(10)
 
         val previousScore = squad.cohesionScore
@@ -183,10 +268,14 @@ object SquadCohesionRules {
                 .take(MAX_SQUAD_SIZE)
             val validLeader = squad.leaderId?.takeIf { it in validMembers }
                 ?: pickDefaultLeaderId(validMembers, operators)
-            if (validMembers == squad.memberIds && validLeader == squad.leaderId) {
+            val validTeamLeader = validTeamLeaderId(
+                squad.copy(memberIds = validMembers, leaderId = validLeader),
+                operators
+            )
+            if (validMembers == squad.memberIds && validLeader == squad.leaderId && validTeamLeader == squad.teamLeaderId) {
                 squad
             } else {
-                squad.copy(memberIds = validMembers, leaderId = validLeader)
+                applyRosterChange(squad, validMembers, validLeader).copy(teamLeaderId = validTeamLeader)
             }
         }
     }

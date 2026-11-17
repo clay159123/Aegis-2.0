@@ -344,10 +344,8 @@ fun AegisCommandApp() {
                                     onDeclineTransferRequest = viewModel::declineTransferRequest,
                                     onApproveRetirement = viewModel::approveRetirement,
                                     onDenyRetirementRequest = viewModel::denyRetirementRequest,
-                                    onSaveSquad = viewModel::saveSquadConfiguration,
-                                    onSaveSquadWithStandard = viewModel::saveSquadWithStandard,
+                                    onSaveSquad = viewModel::saveSquadWithStandard,
                                     onDisbandSquad = viewModel::disbandSquad,
-                                    onApplySquadStandard = viewModel::applySquadUniformStandard,
                                     onConductSquadInspection = { squadId ->
                                         viewModel.conductUniformInspection(squadId = squadId)
                                     },

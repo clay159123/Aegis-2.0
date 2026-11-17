@@ -116,6 +116,8 @@ data class SquadEntity(
     val name: String,
     val memberIdsCsv: String,
     val leaderId: String?,
+    val teamLeaderId: String? = null,
+    val unitCitationsCsv: String = "",
     val cohesionXp: Int = 0,
     val missionsTogether: Int = 0,
     val createdAtMillis: Long = 0L,

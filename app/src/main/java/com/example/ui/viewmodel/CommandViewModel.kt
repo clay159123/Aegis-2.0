@@ -1211,7 +1211,19 @@ class CommandViewModel(
                 missionSucceeded = missionSucceeded
             )
         }
-        val updatedSquadMap = cohesionResults.associate { it.updatedSquad.id to it.updatedSquad }
+        val postMissionDeployed = targetOps.map { updatedOpsById[it.id] ?: it }
+        val citedSquads = participatingSquads.mapNotNull { squad ->
+            SquadCohesionRules.earnedUnitCitation(squad, postMissionDeployed, mission, missionSucceeded, now)?.let { squad.id to it }
+        }.toMap()
+        val updatedSquadMap = (cohesionResults.associate { it.updatedSquad.id to it.updatedSquad } + participatingSquads
+            .filter { it.id in citedSquads && cohesionResults.none { r -> r.updatedSquad.id == it.id } }
+            .associateBy { it.id })
+            .mapValues { (id, squad) ->
+                citedSquads[id]?.let { squad.copy(unitCitations = squad.unitCitations + it) } ?: squad
+            }
+        val unitCitationNote = citedSquads.keys.mapNotNull { id -> state.squads.find { it.id == id }?.name }
+            .takeIf { it.isNotEmpty() }
+            ?.let { names -> "${names.joinToString(", ")} earned the Unit Citation" }
         val sanitizedSquadsToSave = SquadCohesionRules.pruneUnavailableMembers(
             squads = state.squads.map { updatedSquadMap[it.id] ?: it },
             operators = effectiveRoster
@@ -1221,6 +1233,7 @@ class CommandViewModel(
         val kitDebriefNote = kitBonus.summaryLabel?.takeIf { kitBonus.allMatched }
         val cohesionSummaryNote = listOfNotNull(
             cohesionResults.maxByOrNull { it.gainedXp }?.summaryNote,
+            unitCitationNote,
             kitDebriefNote
         ).joinToString(" • ").ifBlank { null }
 
@@ -1791,11 +1804,29 @@ class CommandViewModel(
             }
         )
 
+        // Only hand-picked fields become manual picks; untouched ones keep following Auto or the squad standard
+        val reset = request.followSquadStandard
+        val savedDress: DressUniformStyle? = when {
+            reset -> null
+            request.dressTouched -> finalDress
+            else -> currentKitSettings.dressStyle
+        }
+        val savedCamo: CamoPattern? = when {
+            reset -> null
+            request.camoTouched -> request.camoPattern
+            else -> currentKitSettings.camoPattern
+        }
+        val savedGloves: Boolean? = when {
+            reset -> null
+            request.glovesTouched -> finalGloves
+            else -> currentKitSettings.hasWhiteGloves
+        }
+        val savedKitHeadgear = if (reset) null else savedHeadgear
         val updatedKitSettings = when (targetKit) {
-            WardrobeKit.FIELD -> currentKitSettings.copy(camoPattern = request.camoPattern)
+            WardrobeKit.FIELD -> currentKitSettings.copy(camoPattern = savedCamo)
             WardrobeKit.BRAVOS -> currentKitSettings.copy(
-                dressStyle = finalDress,
-                headgearStyle = savedHeadgear,
+                dressStyle = savedDress,
+                headgearStyle = savedKitHeadgear,
                 dressDisplayMode = if (request.dressDisplayMode == DressDisplayMode.CLEAN) {
                     DressDisplayMode.CLEAN
                 } else {
@@ -1805,24 +1836,24 @@ class CommandViewModel(
                 hasDressSash = false
             )
             WardrobeKit.ALPHAS -> currentKitSettings.copy(
-                dressStyle = finalDress,
-                headgearStyle = savedHeadgear,
+                dressStyle = savedDress,
+                headgearStyle = savedKitHeadgear,
                 dressDisplayMode = request.dressDisplayMode,
-                hasWhiteGloves = finalGloves,
+                hasWhiteGloves = savedGloves,
                 hasDressSash = finalSash,
                 equippedLeftCordId = finalLeftCord,
                 equippedRightCordId = finalRightCord,
                 cordCustomized = true
             )
             WardrobeKit.MESS -> currentKitSettings.copy(
-                dressStyle = finalDress,
-                headgearStyle = savedHeadgear,
+                dressStyle = savedDress,
+                headgearStyle = savedKitHeadgear,
                 dressDisplayMode = if (request.dressDisplayMode == DressDisplayMode.CLEAN) {
                     DressDisplayMode.CLEAN
                 } else {
                     DressDisplayMode.FULL_MEDALS
                 },
-                hasWhiteGloves = finalGloves,
+                hasWhiteGloves = savedGloves,
                 hasDressSash = false
             )
         }
@@ -1846,12 +1877,12 @@ class CommandViewModel(
                     callsign = sanitizedCallsign,
                     uniformMode = if (op.activeWardrobeKit == WardrobeKit.FIELD) UniformMode.FIELD_TACTICAL else UniformMode.DRESS_UNIFORM,
                     dressDisplayMode = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD) updatedKitSettings.dressDisplayMode ?: op.dressDisplayMode else op.dressDisplayMode,
-                    camoPattern = if (targetKit == WardrobeKit.FIELD) request.camoPattern else op.camoPattern,
-                    dressStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD) finalDress else op.dressStyle,
+                    camoPattern = if (targetKit == WardrobeKit.FIELD && request.camoTouched) request.camoPattern else op.camoPattern,
+                    dressStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD && request.dressTouched && !reset) finalDress else op.dressStyle,
                     headgearStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD && request.headgearTouched && !request.headgearAuto) finalHeadgear else op.headgearStyle,
                     equippedLeftCordId = finalLeftCord,
                     equippedRightCordId = finalRightCord,
-                    hasWhiteGloves = if (targetKit == WardrobeKit.ALPHAS) finalGloves else op.hasWhiteGloves,
+                    hasWhiteGloves = if (targetKit == WardrobeKit.ALPHAS && request.glovesTouched && !reset) finalGloves else op.hasWhiteGloves,
                     hasDressSash = if (targetKit == WardrobeKit.ALPHAS) finalSash else op.hasDressSash,
                     tailorOverrides = finalOverrides,
                     wardrobe = updatedWardrobe,
@@ -2183,47 +2214,14 @@ class CommandViewModel(
         }
     }
 
-    fun saveSquadConfiguration(
-        squadId: String?,
-        name: String,
-        memberIds: List<String>,
-        leaderId: String?,
-        standardPatch: UnitPatchStyle? = null,
-        standardCamo: CamoPattern? = null,
-        standardHeadgear: HeadgearStyle? = null,
-        standardDressStyle: DressUniformStyle? = null
-    ) {
-        val existing = squadId?.let { id -> uiState.value.squads.find { it.id == id } }
-        val standard = SquadUniformStandard(
-            patch = standardPatch ?: existing?.standardPatch
-                ?: UnitPatchStyle.firstUnusedDivision(uiState.value.squads),
-            camo = standardCamo,
-            bravosHeadgear = existing?.standardBravosHeadgear,
-            bravosDressStyle = existing?.standardBravosDressStyle,
-            alphasHeadgear = standardHeadgear,
-            alphasDressStyle = standardDressStyle,
-            messDressStyle = existing?.standardMessDressStyle,
-            messHeadgear = existing?.standardMessHeadgear,
-            alphasGloves = existing?.standardAlphasGloves,
-            messGloves = existing?.standardMessGloves
-        )
-        saveSquadWithStandard(
-            squadId = squadId,
-            name = name,
-            memberIds = memberIds,
-            leaderId = leaderId,
-            standard = standard,
-            applyImmediately = false
-        )
-    }
-
+    /** Saves a squad's roster, leaders and uniform standard. Standards apply at render time to whoever is in the squad. */
     fun saveSquadWithStandard(
         squadId: String?,
         name: String,
         memberIds: List<String>,
         leaderId: String?,
-        standard: SquadUniformStandard,
-        applyImmediately: Boolean = false
+        teamLeaderId: String?,
+        standard: SquadUniformStandard
     ) {
         val state = uiState.value
         val validIds = memberIds
@@ -2232,11 +2230,17 @@ class CommandViewModel(
                 state.operators.find { it.id == id }?.let { SquadCohesionRules.isOperatorEligibleForFieldSquad(it) } == true
             }
             .take(MAX_SQUAD_SIZE)
+        if (validIds.size < MIN_SQUAD_SIZE) {
+            showBanner("A squad needs at least $MIN_SQUAD_SIZE field soldiers.")
+            return
+        }
 
         val resolvedLeaderId = leaderId?.takeIf { it in validIds }
             ?: SquadCohesionRules.pickDefaultLeaderId(validIds, state.operators)
 
         val existing = squadId?.let { id -> state.squads.find { it.id == id } }
+        val teamLeaderCandidate = TacticalSquad("check", "", validIds, resolvedLeaderId, teamLeaderId = teamLeaderId)
+        val resolvedTeamLeaderId = SquadCohesionRules.validTeamLeaderId(teamLeaderCandidate, state.operators)
         val resolvedName = name.trim().take(24).ifBlank {
             existing?.name ?: SquadCohesionRules.nextDefaultSquadName(state.squads)
         }
@@ -2246,10 +2250,10 @@ class CommandViewModel(
             ?: existing?.standardPatch?.takeIf { it.isDivision }
             ?: UnitPatchStyle.firstUnusedDivision(state.squads, excludingSquadId = existing?.id)
         val targetSquad = if (existing != null) {
-            existing.copy(
+            // Turnover costs cohesion in proportion to the original members who leave
+            SquadCohesionRules.applyRosterChange(existing, validIds, resolvedLeaderId).copy(
                 name = resolvedName,
-                memberIds = validIds,
-                leaderId = resolvedLeaderId,
+                teamLeaderId = resolvedTeamLeaderId,
                 standardPatch = resolvedPatch,
                 standardCamo = standard.camo,
                 standardHeadgear = standard.alphasHeadgear,
@@ -2267,6 +2271,7 @@ class CommandViewModel(
                 name = resolvedName,
                 memberIds = validIds,
                 leaderId = resolvedLeaderId,
+                teamLeaderId = resolvedTeamLeaderId,
                 cohesionXp = 0,
                 missionsTogether = 0,
                 createdAtMillis = now,
@@ -2290,39 +2295,15 @@ class CommandViewModel(
                 val remaining = other.memberIds.filter { it !in validIds }
                 val nextLeader = other.leaderId?.takeIf { it in remaining }
                     ?: SquadCohesionRules.pickDefaultLeaderId(remaining, state.operators)
-                other.copy(memberIds = remaining, leaderId = nextLeader)
+                val trimmed = SquadCohesionRules.applyRosterChange(other, remaining, nextLeader)
+                trimmed.copy(teamLeaderId = SquadCohesionRules.validTeamLeaderId(trimmed, state.operators))
             }
-
-        val updatedMembers = if (applyImmediately) {
-            applyStandardToMembers(targetSquad, state)
-        } else {
-            emptyList()
-        }
 
         viewModelScope.launch {
             repository.saveSquads(otherUpdatedSquads + targetSquad)
-            if (updatedMembers.isNotEmpty()) {
-                repository.saveOperators(updatedMembers)
-                showBanner("Saved & dressed ${updatedMembers.size} soldiers in ${targetSquad.name} Uniform Standard.")
-            } else {
-                val leaderCallsign = resolvedLeaderId?.let { id -> state.operators.find { it.id == id }?.callsign }
-                val leaderSuffix = if (leaderCallsign != null) " • Leader: $leaderCallsign" else ""
-                showBanner("Saved ${targetSquad.name} (${validIds.size}/$MAX_SQUAD_SIZE$leaderSuffix)")
-            }
-        }
-    }
-
-    fun applySquadUniformStandard(squadId: String) {
-        val state = uiState.value
-        val squad = state.squads.find { it.id == squadId } ?: return
-        val updatedMembers = applyStandardToMembers(squad, state)
-        if (updatedMembers.isEmpty()) {
-            showBanner("${squad.name} has no members to outfit.")
-            return
-        }
-        viewModelScope.launch {
-            repository.saveOperators(updatedMembers)
-            showBanner("Dressed ${updatedMembers.size} soldiers in ${squad.name} Uniform Standard.")
+            val leaderCallsign = resolvedLeaderId?.let { id -> state.operators.find { it.id == id }?.callsign }
+            val leaderSuffix = if (leaderCallsign != null) " • Leader: $leaderCallsign" else ""
+            showBanner("Saved ${targetSquad.name} (${validIds.size}/$MAX_SQUAD_SIZE$leaderSuffix)")
         }
     }
 
@@ -2349,80 +2330,6 @@ class CommandViewModel(
                 ""
             }
             showBanner("${squad.name} switched to ${kit.label}$suffix.")
-        }
-    }
-
-    private fun applyStandardToMembers(
-        squad: TacticalSquad,
-        state: CommandUiState
-    ): List<Operator> {
-        val members = state.operators.filter { it.id in squad.memberIds }
-        return members.map { op ->
-            val ownedMedalIds = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet()
-            val allowFree = op.tailorOverrides.freeTailorOverride
-            val nextCamo = squad.standardCamo ?: op.wardrobe.field.camoPattern ?: op.camoPattern
-
-            val bravosBeret = squad.standardBravosHeadgear?.takeIf { hg ->
-                allowFree || TacticalCalculator.evaluateHeadgearEligibility(hg, op, ownedMedalIds, WardrobeKit.BRAVOS).eligible
-            } ?: op.wardrobe.bravos.headgearStyle
-            val bravosDress = squad.standardBravosDressStyle?.takeIf { ds ->
-                allowFree || TacticalCalculator.evaluateDressStyleEligibility(ds, op, ownedMedalIds, WardrobeKit.BRAVOS).eligible
-            } ?: op.wardrobe.bravos.dressStyle
-
-            val alphasCap = squad.standardHeadgear?.takeIf { hg ->
-                allowFree || TacticalCalculator.evaluateHeadgearEligibility(hg, op, ownedMedalIds, WardrobeKit.ALPHAS).eligible
-            } ?: op.wardrobe.alphas.headgearStyle
-            val alphasDress = squad.standardDressStyle?.takeIf { ds ->
-                allowFree || TacticalCalculator.evaluateDressStyleEligibility(ds, op, ownedMedalIds, WardrobeKit.ALPHAS).eligible
-            } ?: op.wardrobe.alphas.dressStyle
-
-            val messCap = squad.standardMessHeadgear?.takeIf { hg ->
-                allowFree || TacticalCalculator.evaluateHeadgearEligibility(hg, op, ownedMedalIds, WardrobeKit.MESS).eligible
-            } ?: op.wardrobe.mess.headgearStyle
-            val messDress = squad.standardMessDressStyle?.takeIf { ds ->
-                allowFree || TacticalCalculator.evaluateDressStyleEligibility(ds, op, ownedMedalIds, WardrobeKit.MESS).eligible
-            } ?: op.wardrobe.mess.dressStyle
-
-            val nextAlphasGloves = squad.standardAlphasGloves ?: op.wardrobe.alphas.hasWhiteGloves ?: op.hasWhiteGloves
-            val nextMessGloves = squad.standardMessGloves ?: op.wardrobe.mess.hasWhiteGloves ?: true
-
-            val nextWardrobe = op.wardrobe
-                .withKit(WardrobeKit.FIELD, op.wardrobe.field.copy(camoPattern = nextCamo))
-                .withKit(
-                    WardrobeKit.BRAVOS,
-                    op.wardrobe.bravos.copy(
-                        dressStyle = bravosDress,
-                        headgearStyle = bravosBeret,
-                        hasWhiteGloves = false,
-                        hasDressSash = false
-                    )
-                )
-                .withKit(
-                    WardrobeKit.ALPHAS,
-                    op.wardrobe.alphas.copy(
-                        dressStyle = alphasDress,
-                        headgearStyle = alphasCap,
-                        hasWhiteGloves = nextAlphasGloves
-                    )
-                )
-                .withKit(
-                    WardrobeKit.MESS,
-                    op.wardrobe.mess.copy(
-                        dressStyle = messDress,
-                        headgearStyle = messCap,
-                        hasWhiteGloves = nextMessGloves,
-                        hasDressSash = false
-                    )
-                )
-
-            op.copy(
-                camoPattern = nextCamo,
-                headgearStyle = alphasCap ?: op.headgearStyle,
-                dressStyle = alphasDress ?: op.dressStyle,
-                hasWhiteGloves = nextAlphasGloves,
-                // The squad patch is resolved from membership at render time, never copied onto the soldier
-                wardrobe = nextWardrobe
-            )
         }
     }
 

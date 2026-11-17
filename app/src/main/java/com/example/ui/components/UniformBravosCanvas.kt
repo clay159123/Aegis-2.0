@@ -33,7 +33,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     rightCordDef: MedalDefinition?,
     hasUnitCitation: Boolean,
     marksmanshipTier: MarksmanshipBadgeTier,
-    showLeaderPin: Boolean,
+    leaderRole: LeaderRole,
     awardDevices: Map<String, UniformRegaliaRules.AwardDeviceInfo>,
     textMeasurer: TextMeasurer
 ) {
@@ -417,7 +417,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         trimCol = trimCol,
         callsign = operator.callsign,
         hasUnitCitation = hasUnitCitation,
-        showLeaderPin = showLeaderPin,
+        leaderRole = leaderRole,
         textMeasurer = textMeasurer
     )
 

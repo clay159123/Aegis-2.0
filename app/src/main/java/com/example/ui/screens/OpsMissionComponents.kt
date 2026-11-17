@@ -391,7 +391,7 @@ internal fun CompactHqMissionCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Focus: ${mission.primaryFocus} (Power ${mission.recommendedPower}+)",
+                        text = "Focus: ${mission.primaryFocus} (${if (mission.hasClassCap) "Avg Power" else "Power"} ${mission.recommendedPower}+${if (mission.hasClassCap) " per soldier" else ""})",
                         style = MaterialTheme.typography.labelSmall,
                         color = extra.textMuted
                     )
@@ -777,6 +777,7 @@ internal fun HqStagingSheet(
                                     append(" • +${activeSquadBonus.successOddsBonusPct}% Odds")
                                 }
                                 append(if (activeSquadBonus.leaderPresent) " • Leader Leading" else " • Leader Absent (60%)")
+                                if (activeSquadBonus.fullStrength) append(" • Full Strength")
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface
