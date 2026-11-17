@@ -23,6 +23,20 @@ import com.example.domain.model.UnitPatchStyle
 import kotlin.math.cos
 import kotlin.math.sin
 
+/**
+ * Top edge of the breast pockets as a fraction of figure height, shared by every dress
+ * coat and the Bravos shirt. Ribbons, medals, nameplate, unit citation, leader pin and
+ * pocket badges are all placed relative to it, so changing this one value moves the
+ * pockets and everything on them together.
+ */
+internal const val CHEST_POCKET_TOP_FRACTION = 0.505f
+
+/** Pocket top the original chest offsets were tuned against. */
+private const val LEGACY_CHEST_POCKET_TOP_FRACTION = 0.565f
+
+/** How far the chest group sits above its original position. */
+internal const val CHEST_LIFT = LEGACY_CHEST_POCKET_TOP_FRACTION - CHEST_POCKET_TOP_FRACTION
+
 internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     rightChestCenterX: Float,
     w: Float,
@@ -35,7 +49,7 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
 ) {
     // 1. Unit Citation Bar shifted cleanly higher if Leader Pin is present so all 3 items breathe
     if (hasUnitCitation) {
-        val citTop = if (showLeaderPin) h * 0.514f else h * 0.526f
+        val citTop = if (showLeaderPin) h * (0.514f - CHEST_LIFT) else h * (0.526f - CHEST_LIFT)
         drawRect(
             color = Color(0xFF1E4C8E),
             topLeft = Offset(rightChestCenterX - w * 0.042f, citTop),
@@ -51,7 +65,7 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
 
     // 2. Small Brass/Enamel Squad Leader Pin directly above the nameplate
     if (showLeaderPin) {
-        val pinCenterY = h * 0.552f
+        val pinCenterY = h * (0.552f - CHEST_LIFT)
         val pinHalfW = (w * 0.024f).coerceAtLeast(3.5f)
         val pinHalfH = (h * 0.0085f).coerceAtLeast(1.8f)
         // Shield bar backing in command crimson & antique brass
@@ -79,7 +93,7 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
 
     // 3. Engraved Callsign Nameplate
     val plateX = rightChestCenterX - w * 0.056f
-    val plateY = h * 0.568f
+    val plateY = h * (0.568f - CHEST_LIFT)
     val plateW = w * 0.112f
     val plateH = h * 0.026f
 

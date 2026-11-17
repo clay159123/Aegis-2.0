@@ -313,7 +313,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     val leftPocketX = cx + w * 0.104f
     val rightPocketX = cx - w * 0.232f
     val pocketW = w * 0.128f
-    val pocketTopY = h * 0.565f
+    val pocketTopY = h * CHEST_POCKET_TOP_FRACTION
     val pocketH = h * 0.122f
     val flapH = h * 0.030f
     listOf(rightPocketX, leftPocketX).forEach { px ->
@@ -423,7 +423,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
 
     // 8. Left Chest: Ribbons ONLY (no full hanging medals in Bravos) + School Pins + Marksmanship
     val leftChestCenterX = cx + w * 0.168f
-    var topDecorationY = h * 0.528f
+    var topDecorationY = h * (0.528f - CHEST_LIFT)
     if (operator.dressDisplayMode != DressDisplayMode.CLEAN && rackDecorations.isNotEmpty()) {
         val rackCols = 3
         val ribW = w * 0.045f
@@ -432,7 +432,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         val gapY = h * 0.003f
         val totalRackW = rackCols * ribW + (rackCols - 1) * gapX
         val rackLeftEdge = leftChestCenterX - totalRackW / 2f
-        val baseBottomY = h * 0.532f
+        val baseBottomY = h * (0.532f - CHEST_LIFT)
         val displayMedals = rackDecorations.take(TacticalCalculator.MAX_WORN_RIBBONS)
         val rows = TacticalCalculator.layoutRibbonRackRows(displayMedals, rackCols)
         val totalRows = rows.size
@@ -467,7 +467,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     }
 
     wornRegalia.chestPinAboveRack?.let { insig ->
-        val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * 0.368f, h * 0.502f)
+        val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * (0.368f - CHEST_LIFT), h * (0.502f - CHEST_LIFT))
         drawBravosContrastSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
             center = Offset(leftChestCenterX, aboveY),
@@ -481,14 +481,14 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     if (leftPocketSchoolPin != null && showMarksmanshipOnPocket) {
         drawBravosContrastSchoolBadge(
             shape = leftPocketSchoolPin.insigniaShape ?: InsigniaShape.WINGS,
-            center = Offset(leftChestCenterX - w * 0.029f, h * 0.638f),
+            center = Offset(leftChestCenterX - w * 0.029f, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.054f,
             badgeH = h * 0.036f,
             col = Color(leftPocketSchoolPin.insigniaColorHex)
         )
         drawMarksmanshipBadge(
             tier = marksmanshipTier,
-            center = Offset(leftChestCenterX + w * 0.031f, h * 0.638f),
+            center = Offset(leftChestCenterX + w * 0.031f, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.050f,
             badgeH = h * 0.038f
         )
@@ -496,7 +496,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         leftPocketSchoolPin?.let { insig ->
             drawBravosContrastSchoolBadge(
                 shape = insig.insigniaShape ?: InsigniaShape.WINGS,
-                center = Offset(leftChestCenterX, h * 0.638f),
+                center = Offset(leftChestCenterX, h * (0.638f - CHEST_LIFT)),
                 badgeW = w * 0.088f,
                 badgeH = h * 0.044f,
                 col = Color(insig.insigniaColorHex)
@@ -505,7 +505,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         if (showMarksmanshipOnPocket) {
             drawMarksmanshipBadge(
                 tier = marksmanshipTier,
-                center = Offset(leftChestCenterX, h * 0.638f),
+                center = Offset(leftChestCenterX, h * (0.638f - CHEST_LIFT)),
                 badgeW = w * 0.068f,
                 badgeH = h * 0.042f
             )
@@ -514,7 +514,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     wornRegalia.chestPinRightPocket?.let { insig ->
         drawBravosContrastSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
-            center = Offset(rightChestCenterX, h * 0.638f),
+            center = Offset(rightChestCenterX, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.088f,
             badgeH = h * 0.044f,
             col = Color(insig.insigniaColorHex)

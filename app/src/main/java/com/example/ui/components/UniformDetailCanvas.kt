@@ -456,7 +456,7 @@ private fun DrawScope.drawDressUniformFigure(
         val leftPocketX = cx + w * 0.104f
         val rightPocketX = cx - w * 0.232f
         val pocketW = w * 0.128f
-        val pocketTopY = h * 0.565f
+        val pocketTopY = h * CHEST_POCKET_TOP_FRACTION
         val pocketH = h * 0.125f
         val flapH = h * 0.032f
 
@@ -905,10 +905,10 @@ private fun DrawScope.drawDressUniformFigure(
 
     // 12. Wearer's Left Chest: Mess Miniature Medals, Full Hanging Medals, Ribbon Rack, OR Clean Tunic
     val leftChestCenterX = cx + w * 0.168f
-    var topDecorationY = h * 0.528f
+    var topDecorationY = h * (0.528f - CHEST_LIFT)
     if (operator.dressDisplayMode == DressDisplayMode.CLEAN) {
         // Clean tunic chest: no hanging medals or ribbon rack mounted
-        topDecorationY = h * 0.528f
+        topDecorationY = h * (0.528f - CHEST_LIFT)
     } else if (style.isCutawayMess && (hangingMedals.isNotEmpty() || rackDecorations.isNotEmpty())) {
         // Cutaway Mess Dress wears compact anodized Miniature Medals pinned on the left lapel/chest
         val miniAwards = (hangingMedals + rackDecorations).distinctBy { it.id }.take(6)
@@ -925,7 +925,7 @@ private fun DrawScope.drawDressUniformFigure(
         val linkH = h * 0.004f
         val medalTotalH = broochH + ribH + linkH + (medRadius * 2f)
         val rowStepY = medalTotalH + h * 0.008f
-        val startTopY = h * 0.468f
+        val startTopY = h * (0.468f - CHEST_LIFT)
         topDecorationY = startTopY
 
         miniRows.forEachIndexed { rowIdx, rowItems ->
@@ -971,7 +971,7 @@ private fun DrawScope.drawDressUniformFigure(
         val rowStepY = medalTotalH * 0.92f
 
         val totalRows = 1
-        val bottomRowBroochY = h * 0.556f - medalTotalH
+        val bottomRowBroochY = h * (0.556f - CHEST_LIFT) - medalTotalH
         val startTopY = bottomRowBroochY - (totalRows - 1) * rowStepY
         topDecorationY = startTopY
 
@@ -1031,7 +1031,7 @@ private fun DrawScope.drawDressUniformFigure(
         val gapY = h * 0.003f
         val totalRackW = rackCols * ribW + (rackCols - 1) * gapX
         val rackLeftEdge = leftChestCenterX - totalRackW / 2f
-        val baseBottomY = h * 0.532f
+        val baseBottomY = h * (0.532f - CHEST_LIFT)
         val displayMedals = rackDecorations.take(TacticalCalculator.MAX_WORN_RIBBONS)
         // AR 670-1 row partitioning: partial counts (1 or 2) sit centered on the TOP row over full 3-ribbon lower rows
         val rows = TacticalCalculator.layoutRibbonRackRows(displayMedals, rackCols)
@@ -1068,7 +1068,7 @@ private fun DrawScope.drawDressUniformFigure(
 
     // 13. Positional Specialty School Insignia Badges (Slot 1: Above Rack, Slot 2: Left Pocket, Slot 3: Right Pocket)
     wornRegalia.chestPinAboveRack?.let { insig ->
-        val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * 0.368f, h * 0.502f)
+        val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * (0.368f - CHEST_LIFT), h * (0.502f - CHEST_LIFT))
         drawDetailedChestSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
             center = Offset(leftChestCenterX, aboveY),
@@ -1083,14 +1083,14 @@ private fun DrawScope.drawDressUniformFigure(
         // AR 670-1 two-badge pocket wear: specialty badge medial, marksmanship badge lateral on left pocket
         drawDetailedChestSchoolBadge(
             shape = leftPocketSchoolPin.insigniaShape ?: InsigniaShape.WINGS,
-            center = Offset(leftChestCenterX - w * 0.029f, h * 0.638f),
+            center = Offset(leftChestCenterX - w * 0.029f, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.054f,
             badgeH = h * 0.036f,
             col = Color(leftPocketSchoolPin.insigniaColorHex)
         )
         drawMarksmanshipBadge(
             tier = marksmanshipTier,
-            center = Offset(leftChestCenterX + w * 0.031f, h * 0.638f),
+            center = Offset(leftChestCenterX + w * 0.031f, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.050f,
             badgeH = h * 0.038f
         )
@@ -1098,7 +1098,7 @@ private fun DrawScope.drawDressUniformFigure(
         leftPocketSchoolPin?.let { insig ->
             drawDetailedChestSchoolBadge(
                 shape = insig.insigniaShape ?: InsigniaShape.WINGS,
-                center = Offset(leftChestCenterX, h * 0.638f),
+                center = Offset(leftChestCenterX, h * (0.638f - CHEST_LIFT)),
                 badgeW = w * 0.088f,
                 badgeH = h * 0.044f,
                 col = Color(insig.insigniaColorHex)
@@ -1107,7 +1107,7 @@ private fun DrawScope.drawDressUniformFigure(
         if (showMarksmanshipOnPocket) {
             drawMarksmanshipBadge(
                 tier = marksmanshipTier,
-                center = Offset(leftChestCenterX, h * 0.638f),
+                center = Offset(leftChestCenterX, h * (0.638f - CHEST_LIFT)),
                 badgeW = w * 0.068f,
                 badgeH = h * 0.042f
             )
@@ -1116,7 +1116,7 @@ private fun DrawScope.drawDressUniformFigure(
     wornRegalia.chestPinRightPocket?.let { insig ->
         drawDetailedChestSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
-            center = Offset(rightChestCenterX, h * 0.638f),
+            center = Offset(rightChestCenterX, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.088f,
             badgeH = h * 0.044f,
             col = Color(insig.insigniaColorHex)
