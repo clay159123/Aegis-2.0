@@ -578,7 +578,7 @@ object UniformRegaliaRules {
                 opScore += 5
             }
 
-            val opGear = gearItems.filter { it.equippedByOperatorId == op.id }
+            val opGear = gearItems.equippedBy(op)
             val markTier = resolveMarksmanshipTier(op, opGear)
             if (kit == WardrobeKit.MESS || markTier != MarksmanshipBadgeTier.NONE) {
                 opScore += 5

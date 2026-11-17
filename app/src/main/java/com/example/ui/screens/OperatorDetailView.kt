@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.data.catalog.GameCatalog
+import com.example.domain.GearAutoDistributor
 import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.components.*
@@ -51,7 +52,7 @@ fun OperatorDetailView(
     onToggleUniformMode: () -> Unit,
     onCustomizeOperator: (UniformTailorRequest) -> Unit,
     onEquipGear: (String) -> Unit,
-    onUnequipGear: (String) -> Unit,
+    onUnequipGear: (operatorId: String, gearId: String) -> Unit,
     onPurchaseOrUpgradeGear: (String) -> Unit,
     onAssignToHqStaff: (HqStaffRole) -> Unit = {},
     onReassignHqStaffRole: (HqStaffRole) -> Unit = {},
@@ -87,7 +88,7 @@ fun OperatorDetailView(
     }
 
     val equippedGear = remember(uiState.gearItems, operator.id) {
-        uiState.gearItems.filter { it.equippedByOperatorId == operator.id }
+        uiState.gearItems.equippedBy(operator)
     }
     val operatorCitations = remember(uiState.citations, operator.id) {
         uiState.citations.filter { it.operatorId == operator.id }
@@ -367,7 +368,7 @@ fun OperatorDetailView(
             OperatorDetailTab.LOADOUT -> {
                 item {
                     val loadoutWeightKg = remember(operator.id, uiState.gearItems) {
-                        TacticalCalculator.operatorLoadoutWeight(operator.id, uiState.gearItems)
+                        TacticalCalculator.operatorLoadoutWeight(operator, uiState.gearItems)
                     }
                     val armoryLevel = remember(uiState.facilities) {
                         TacticalCalculator.facilityLevel(uiState.facilities, FacilityType.ARMORY_WORKSHOP)
@@ -442,13 +443,23 @@ fun OperatorDetailView(
                                             color = extra.brassBright
                                         )
                                     }
+                                } else {
+                                    // Explain an empty slot: nothing unlocked, or nothing this soldier qualifies for
+                                    GearAutoDistributor.emptySlotReason(operator, slot, uiState.gearItems)?.let { reason ->
+                                        Text(
+                                            text = reason,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = extra.amberTelemetry,
+                                            modifier = Modifier.testTag("empty_slot_reason_${slot.name.lowercase()}")
+                                        )
+                                    }
                                 }
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 if (item != null && !lockedForGear) {
                                     IconButton(
-                                        onClick = { onUnequipGear(item.id) },
+                                        onClick = { onUnequipGear(operator.id, item.id) },
                                         modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                                     ) {
                                         Icon(
@@ -810,10 +821,7 @@ fun OperatorDetailView(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 slotItems.forEach { gear ->
-                    val equippedHere = gear.equippedByOperatorId == operator.id
-                    val otherHolder = gear.equippedByOperatorId?.let { holderId ->
-                        uiState.operators.find { it.id == holderId }?.callsign
-                    }
+                    val equippedHere = operator.equippedGearIds[gear.slot] == gear.id
                     val crCost = gear.nextActionCreditCost()
                     val supCost = gear.nextActionSupplyCost()
                     val canAfford = uiState.resources.credits >= crCost && uiState.resources.supplies >= supCost
@@ -852,13 +860,6 @@ fun OperatorDetailView(
                                         text = "${gear.weightKg} kg • +${gear.survivalBonusPct}% Surv • FP+${gear.firepower} ST+${gear.stealth} TC+${gear.tech} RS+${gear.resilience}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                if (otherHolder != null && !equippedHere) {
-                                    Text(
-                                        text = "ON $otherHolder",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = extra.amberTelemetry
                                     )
                                 }
                             }

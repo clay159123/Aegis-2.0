@@ -226,7 +226,7 @@ class AegisOpsRobolectricTest {
                     onToggleUniformMode = {},
                     onCustomizeOperator = { _, _ -> },
                     onEquipGear = { _, _ -> },
-                    onUnequipGear = {},
+                    onUnequipGear = { _, _ -> },
                     onPurchaseOrUpgradeGear = {}
                 )
             }
@@ -401,7 +401,7 @@ class AegisOpsRobolectricTest {
                     onToggleUniformMode = {},
                     onCustomizeOperator = { _, _ -> },
                     onEquipGear = { _, _ -> },
-                    onUnequipGear = {},
+                    onUnequipGear = { _, _ -> },
                     onAutoDistributeGear = { autoDistributeCalls++ },
                     onPurchaseOrUpgradeGear = {}
                 )
@@ -551,7 +551,7 @@ class AegisOpsRobolectricTest {
                     onToggleUniformMode = {},
                     onCustomizeOperator = { _, _ -> },
                     onEquipGear = { _, _ -> },
-                    onUnequipGear = {},
+                    onUnequipGear = { _, _ -> },
                     onPurchaseOrUpgradeGear = {},
                     onSaveSquad = { _, _, members, leader, _, _, _, _ ->
                         savedMembers = members
@@ -863,7 +863,7 @@ class AegisOpsRobolectricTest {
                         onToggleUniformMode = {},
                         onCustomizeOperator = { _, _ -> },
                         onEquipGear = { _, _ -> },
-                        onUnequipGear = {},
+                        onUnequipGear = { _, _ -> },
                         onPurchaseOrUpgradeGear = {},
                         onSwitchSquadKit = { sqId, kit ->
                             switchedSquadId = sqId

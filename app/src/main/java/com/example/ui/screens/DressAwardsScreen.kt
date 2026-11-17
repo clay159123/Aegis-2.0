@@ -147,7 +147,7 @@ fun DressAwardsScreen(
     }
 
     val opGear = remember(uiState.gearItems, selectedOp.id) {
-        uiState.gearItems.filter { it.equippedByOperatorId == selectedOp.id }
+        uiState.gearItems.equippedBy(selectedOp)
     }
     val opCitations = remember(uiState.citations, selectedOp.id) {
         uiState.citations.filter { it.operatorId == selectedOp.id }

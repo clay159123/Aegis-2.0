@@ -9,12 +9,11 @@ import com.example.domain.model.Operator
 import com.example.domain.model.OperatorSpecialty
 import com.example.domain.model.OperatorStatus
 import com.example.domain.model.StatProfile
-import kotlin.math.max
 import kotlin.math.roundToLong
 
 data class AutoGearDistributionResult(
-    val updatedGear: List<GearItem>,
-    val changedItems: List<GearItem>,
+    val updatedOperators: List<Operator>,
+    val changedOperators: List<Operator>,
     val targetOperatorCount: Int,
     val outfittedOperatorCount: Int,
     val totalEquippedCount: Int,
@@ -32,6 +31,17 @@ object GearAutoDistributor {
         val weightPenalty: Double
     )
 
+    /** Field soldiers who carry kit: unlocked, active and not on HQ staff. */
+    fun carriesFieldKit(operator: Operator): Boolean =
+        operator.unlocked &&
+            !operator.status.isOutOfActiveService &&
+            operator.status != OperatorStatus.HQ_STAFF
+
+    /**
+     * Gear types are shared, so every standby field soldier independently gets the highest-scoring
+     * unlocked item they qualify for in every slot. A slot stays empty only when nothing qualifies.
+     * Deployed soldiers keep their kit; HQ staff, retired, fallen and locked soldiers carry none.
+     */
     fun distributeFieldGear(
         operators: List<Operator>,
         gearItems: List<GearItem>,
@@ -41,125 +51,58 @@ object GearAutoDistributor {
     ): AutoGearDistributionResult {
         val deployedOpIds = deployments.flatMap { it.operatorIds }.toSet() +
             operators.filter { it.status == OperatorStatus.DEPLOYED }.map { it.id }
-
-        val activeFieldOps = operators.filter {
-            it.unlocked &&
-                !it.status.isOutOfActiveService &&
-                it.status != OperatorStatus.HQ_STAFF
-        }
-        val skippedDeployedCount = activeFieldOps.count { it.id in deployedOpIds }
-        val targetOps = activeFieldOps.filter { it.id !in deployedOpIds }
-
-        if (targetOps.isEmpty()) {
-            // Still ensure no locked/HQ/retired/fallen operator retains unlocked gear accidentally.
-            val cleaned = gearItems.map { gear ->
-                val owner = gear.equippedByOperatorId
-                if (gear.unlocked && owner != null && owner !in deployedOpIds && operators.none { it.id == owner && it.id !in deployedOpIds && it.unlocked && !it.status.isOutOfActiveService && it.status != OperatorStatus.HQ_STAFF }) {
-                    gear.copy(equippedByOperatorId = null)
-                } else {
-                    gear
-                }
-            }
-            val changed = cleaned.zip(gearItems).filter { (a, b) -> a != b }.map { it.first }
-            return AutoGearDistributionResult(
-                updatedGear = cleaned,
-                changedItems = changed,
-                targetOperatorCount = 0,
-                outfittedOperatorCount = 0,
-                totalEquippedCount = 0,
-                skippedDeployedCount = skippedDeployedCount
-            )
-        }
-
+        val unlockedGear = gearItems.filter { it.unlocked }
         val gearMult = TacticalCalculator.gearBonusMultiplier(facilities)
-        val intrinsicByOpId = targetOps.associate { op ->
-            op.id to intrinsicSkillProfile(op, citations)
-        }
 
-        // Determine new owner for every unlocked non-deployed item, slot by slot, using exact max-weight bipartite matching.
-        val assignedOwnerByGearId = mutableMapOf<String, String?>()
+        val fieldOps = operators.filter { carriesFieldKit(it) }
+        val skippedDeployedCount = fieldOps.count { it.id in deployedOpIds }
+        val targetIds = fieldOps.filter { it.id !in deployedOpIds }.map { it.id }.toSet()
 
-        for (slot in GearSlot.entries) {
-            val poolItems = gearItems.filter { gear ->
-                gear.slot == slot &&
-                    gear.unlocked &&
-                    (gear.equippedByOperatorId == null || gear.equippedByOperatorId !in deployedOpIds)
-            }
-            if (poolItems.isEmpty()) continue
-
-            val m = targetOps.size
-            val k = poolItems.size
-            val n = max(m, k)
-            val eligible = Array(m) { i ->
-                BooleanArray(k) { j ->
-                    TacticalCalculator.evaluateGearEquipEligibility(poolItems[j], targetOps[i]).eligible
-                }
-            }
-            val weights = Array(n) { i ->
-                LongArray(n) { j ->
-                    if (i < m && j < k && eligible[i][j]) {
-                        scoreGearForOperator(
-                            gear = poolItems[j],
-                            operator = targetOps[i],
-                            intrinsicSkills = intrinsicByOpId.getValue(targetOps[i].id),
-                            gearMult = gearMult
-                        )
-                    } else {
-                        0L
-                    }
-                }
-            }
-
-            val rowToCol = solveMaxWeightMatching(weights, n)
-            val matchedGearIds = mutableSetOf<String>()
-            for (i in 0 until m) {
-                val j = rowToCol[i]
-                if (j in 0 until k && eligible[i][j] && weights[i][j] > 0L) {
-                    val gear = poolItems[j]
-                    assignedOwnerByGearId[gear.id] = targetOps[i].id
-                    matchedGearIds += gear.id
-                }
-            }
-            for (gear in poolItems) {
-                if (gear.id !in matchedGearIds) {
-                    assignedOwnerByGearId[gear.id] = null
+        val updatedOperators = operators.map { op ->
+            when {
+                op.id in deployedOpIds -> op
+                op.id !in targetIds -> if (op.equippedGearIds.isEmpty()) op else op.copy(equippedGearIds = emptyMap())
+                else -> {
+                    val skills = intrinsicSkillProfile(op, citations)
+                    val loadout = GearSlot.entries.mapNotNull { slot ->
+                        unlockedGear
+                            .filter { it.slot == slot && TacticalCalculator.evaluateGearEquipEligibility(it, op).eligible }
+                            .maxByOrNull { scoreGearForOperator(it, op, skills, gearMult) }
+                            ?.let { slot to it.id }
+                    }.toMap()
+                    if (loadout == op.equippedGearIds) op else op.copy(equippedGearIds = loadout)
                 }
             }
         }
 
-        val updatedGear = gearItems.map { gear ->
-            if (!gear.unlocked) {
-                if (gear.equippedByOperatorId != null) gear.copy(equippedByOperatorId = null) else gear
-            } else if (gear.equippedByOperatorId in deployedOpIds) {
-                gear
-            } else if (gear.id in assignedOwnerByGearId) {
-                val nextOwner = assignedOwnerByGearId[gear.id]
-                if (gear.equippedByOperatorId != nextOwner) {
-                    gear.copy(equippedByOperatorId = nextOwner)
-                } else {
-                    gear
-                }
-            } else {
-                gear
-            }
-        }
-
-        val changedItems = updatedGear.zip(gearItems)
-            .filter { (after, before) -> after != before }
-            .map { it.first }
-
-        val targetIds = targetOps.map { it.id }.toSet()
-        val equippedForTargets = updatedGear.filter { it.unlocked && it.equippedByOperatorId in targetIds }
-        val outfittedOpCount = equippedForTargets.mapNotNull { it.equippedByOperatorId }.distinct().size
+        val beforeById = operators.associateBy { it.id }
+        val changedOperators = updatedOperators.filter { it != beforeById[it.id] }
+        val targets = updatedOperators.filter { it.id in targetIds }
 
         return AutoGearDistributionResult(
-            updatedGear = updatedGear,
-            changedItems = changedItems,
-            targetOperatorCount = targetOps.size,
-            outfittedOperatorCount = outfittedOpCount,
-            totalEquippedCount = equippedForTargets.size,
+            updatedOperators = updatedOperators,
+            changedOperators = changedOperators,
+            targetOperatorCount = targetIds.size,
+            outfittedOperatorCount = targets.count { it.equippedGearIds.isNotEmpty() },
+            totalEquippedCount = targets.sumOf { it.equippedGearIds.size },
             skippedDeployedCount = skippedDeployedCount
         )
+    }
+
+    /**
+     * Why [operator] has nothing in [slot], or null when something they qualify for is unlocked.
+     */
+    fun emptySlotReason(operator: Operator, slot: GearSlot, gearItems: List<GearItem>): String? {
+        val inSlot = gearItems.filter { it.slot == slot }
+        val unlocked = inSlot.filter { it.unlocked }
+        if (unlocked.any { TacticalCalculator.evaluateGearEquipEligibility(it, operator).eligible }) return null
+        if (unlocked.isEmpty()) {
+            return if (inSlot.isEmpty()) "No ${slot.label} in the catalog" else "No ${slot.label} unlocked in the Armory yet"
+        }
+        val needs = unlocked.mapNotNull { gear ->
+            TacticalCalculator.evaluateGearEquipEligibility(gear, operator).missingRequirements.firstOrNull()
+        }.distinct()
+        return "Not qualified for any unlocked ${slot.label}: " + needs.joinToString(" or ")
     }
 
     private fun intrinsicSkillProfile(
@@ -240,7 +183,7 @@ object GearAutoDistributor {
         score *= (readinessMult * rankMult * trainingDepthMult)
 
         // Idempotent stability epsilon so identical soldiers do not swap equal kit on repeat taps.
-        val stabilityTieBreaker = if (gear.equippedByOperatorId == operator.id) 2L else 0L
+        val stabilityTieBreaker = if (operator.equippedGearIds[gear.slot] == gear.id) 2L else 0L
 
         return score.roundToLong().coerceAtLeast(10L) + stabilityTieBreaker
     }
@@ -336,75 +279,5 @@ object GearAutoDistributor {
                 else -> 0.0
             }
         }
-    }
-
-    /**
-     * Exact O(N^3) Kuhn-Munkres / Hungarian algorithm solving maximum-weight bipartite matching.
-     * Returns array `rowToCol` where `rowToCol[i]` is the matched column index for row `i`.
-     */
-    private fun solveMaxWeightMatching(weights: Array<LongArray>, n: Int): IntArray {
-        var maxWeight = 0L
-        for (i in 0 until n) {
-            for (j in 0 until n) {
-                if (weights[i][j] > maxWeight) maxWeight = weights[i][j]
-            }
-        }
-        if (maxWeight == 0L) return IntArray(n) { -1 }
-
-        val u = LongArray(n + 1)
-        val v = LongArray(n + 1)
-        val p = IntArray(n + 1)
-        val way = IntArray(n + 1)
-        val inf = Long.MAX_VALUE / 4
-
-        for (i in 1..n) {
-            p[0] = i
-            var j0 = 0
-            val minv = LongArray(n + 1) { inf }
-            val used = BooleanArray(n + 1)
-            do {
-                used[j0] = true
-                val i0 = p[j0]
-                var delta = inf
-                var j1 = 0
-                for (j in 1..n) {
-                    if (!used[j]) {
-                        val cost = maxWeight - weights[i0 - 1][j - 1]
-                        val cur = cost - u[i0] - v[j]
-                        if (cur < minv[j]) {
-                            minv[j] = cur
-                            way[j] = j0
-                        }
-                        if (minv[j] < delta) {
-                            delta = minv[j]
-                            j1 = j
-                        }
-                    }
-                }
-                for (j in 0..n) {
-                    if (used[j]) {
-                        u[p[j]] += delta
-                        v[j] -= delta
-                    } else {
-                        minv[j] -= delta
-                    }
-                }
-                j0 = j1
-            } while (p[j0] != 0)
-
-            do {
-                val j1 = way[j0]
-                p[j0] = p[j1]
-                j0 = j1
-            } while (j0 != 0)
-        }
-
-        val rowToCol = IntArray(n) { -1 }
-        for (j in 1..n) {
-            if (p[j] in 1..n) {
-                rowToCol[p[j] - 1] = j - 1
-            }
-        }
-        return rowToCol
     }
 }

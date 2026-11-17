@@ -1131,7 +1131,7 @@ object TacticalCalculator {
         val rankBonus = rankIndex + operator.rank.tier.order * 2
         val gearMult = gearBonusMultiplier(facilities)
 
-        val equipped = gearItems.filter { it.equippedByOperatorId == operator.id }
+        val equipped = gearItems.equippedBy(operator)
         var gearFp = 0
         var gearSt = 0
         var gearTc = 0
@@ -1164,8 +1164,8 @@ object TacticalCalculator {
         )
     }
 
-    fun operatorLoadoutWeight(operatorId: String, gearItems: List<GearItem>): Double =
-        gearItems.filter { it.equippedByOperatorId == operatorId }.sumOf { it.weightKg }
+    fun operatorLoadoutWeight(operator: Operator, gearItems: List<GearItem>): Double =
+        gearItems.equippedBy(operator).sumOf { it.weightKg }
 
     fun operatorYieldBonusPct(operatorId: String, citations: List<AwardedMedal>): Int =
         citations.filter { it.operatorId == operatorId }
@@ -1183,7 +1183,7 @@ object TacticalCalculator {
     ): Int {
         if (mission.risk.isTraining) return 100
         val stats = operatorStats(operator, gearItems, citations, facilities)
-        val equipped = gearItems.filter { it.equippedByOperatorId == operator.id }
+        val equipped = gearItems.equippedBy(operator)
         val gearSurvival = equipped.sumOf { it.survivalBonusPct }
         val reconBonus = (facilityLevel(facilities, FacilityType.RECON_ARRAY) - 1) * 2
         val staffBonus = hqStaffSummary?.survivalBonusPct ?: (hqStaffCount.coerceAtLeast(0) * 2).coerceAtMost(10)

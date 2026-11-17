@@ -146,7 +146,7 @@ fun HonorsScreen(
                     val opMedals = uiState.citations.filter { it.operatorId == op.id }
                         .mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
                         .sortedBy { it.precedenceOrder }
-                    val opGear = uiState.gearItems.filter { it.equippedByOperatorId == op.id }
+                    val opGear = uiState.gearItems.equippedBy(op)
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -470,7 +470,7 @@ fun HonorsScreen(
         val opMedals = uiState.citations.filter { it.operatorId == opToInspect.id }
             .mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
             .sortedBy { it.precedenceOrder }
-        val opGear = uiState.gearItems.filter { it.equippedByOperatorId == opToInspect.id }
+        val opGear = uiState.gearItems.equippedBy(opToInspect)
         UniformInspectionDialog(
             operator = opToInspect,
             equippedGear = opGear,

@@ -795,7 +795,7 @@ internal fun HqStagingSheet(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 readyOperators.forEach { op ->
                     val isSelected = op.id in selectedOperatorIds
-                    val opGear = uiState.gearItems.filter { it.equippedByOperatorId == op.id }
+                    val opGear = uiState.gearItems.equippedBy(op)
                     val opOdds = if (mission.risk.isTraining) {
                         TacticalCalculator.schoolPassOddsPct(
                             mission = mission,
