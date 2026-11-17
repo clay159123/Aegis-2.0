@@ -734,7 +734,8 @@ fun DressAwardsScreen(
                         medal = medal,
                         operator = selectedOp,
                         ownedMedalIds = ownedMedalIds,
-                        allCitations = uiState.citations
+                        allCitations = uiState.citations,
+                        heroismCited = true
                     )
                     val canAfford = uiState.resources.prestige >= medal.prestigeCost
                     TacticalPanelCard(
@@ -848,7 +849,8 @@ fun DressAwardsScreen(
                 medal = medal,
                 operator = selectedOp,
                 ownedMedalIds = ownedMedalIds,
-                allCitations = uiState.citations
+                allCitations = uiState.citations,
+                heroismCited = hasDeed
             )
             val canAfford = uiState.resources.prestige >= medal.prestigeCost
             val perSoldierCap = TacticalCalculator.perSoldierCapForAward(medal.id)

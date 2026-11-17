@@ -15,6 +15,56 @@ object TacticalCalculator {
 
     // Per-soldier uniqueness cap: Sovereign Star of Aegis is limited to 1 per soldier (multiple soldiers may earn it)
     const val MAX_SOVEREIGN_STAR_PER_SOLDIER = 1
+
+    // Heroism roll for the Sovereign Star, per soldier per eligible mission (fraction, 0.01 = 1%)
+    const val HEROISM_ODDS_LOW = 0.005
+    const val HEROISM_ODDS_MODERATE = 0.01
+    const val HEROISM_ODDS_HIGH = 0.025
+    const val HEROISM_ODDS_EXTREME = 0.05
+    const val HEROISM_FALLEN_MULTIPLIER = 2.0
+    const val SOVEREIGN_STAR_ID = "medal_sovereign_star"
+
+    /** Mission scopes that can ever roll for heroism. Schools and training never roll. */
+    val HEROISM_ROLL_SCOPES: Set<MissionScope> = setOf(MissionScope.FIELD_COMBAT, MissionScope.STAFF_DIPLOMATIC)
+
+    /**
+     * Odds that one soldier earns a Sovereign Star heroism citation on this mission, or 0.0 when the
+     * mission can't roll. Field combat always rolls. Diplomatic and staff missions roll only at Moderate
+     * risk or higher, and only when someone was wounded or killed or the mission failed. Fallen soldiers
+     * roll at double odds.
+     */
+    fun heroismOdds(
+        mission: MissionTemplate,
+        outcome: OperatorOutcomeType,
+        missionSucceeded: Boolean,
+        anyCasualty: Boolean
+    ): Double {
+        if (mission.scope !in HEROISM_ROLL_SCOPES || mission.risk.isTraining) return 0.0
+        if (outcome == OperatorOutcomeType.STAFF_SUPPORT ||
+            outcome == OperatorOutcomeType.TRAINING_PASSED ||
+            outcome == OperatorOutcomeType.TRAINING_FAILED
+        ) return 0.0
+        if (mission.scope == MissionScope.STAFF_DIPLOMATIC) {
+            if (mission.risk.baseDangerPenalty < MissionRisk.MODERATE.baseDangerPenalty) return 0.0
+            if (!anyCasualty && missionSucceeded) return 0.0
+        }
+        val base = when (mission.risk) {
+            MissionRisk.LOW -> HEROISM_ODDS_LOW
+            MissionRisk.MODERATE -> HEROISM_ODDS_MODERATE
+            MissionRisk.HIGH -> HEROISM_ODDS_HIGH
+            MissionRisk.EXTREME -> HEROISM_ODDS_EXTREME
+            else -> 0.0
+        }
+        return if (outcome == OperatorOutcomeType.FALLEN) base * HEROISM_FALLEN_MULTIPLIER else base
+    }
+
+    /** Short citation text for a heroism roll hit. */
+    fun heroismDeedText(mission: MissionTemplate, outcome: OperatorOutcomeType): String =
+        if (outcome == OperatorOutcomeType.FALLEN) {
+            "Gave the last full measure of devotion during ${mission.title}, shielding the team at the cost of their own life. Recommended for the Sovereign Star."
+        } else {
+            "Acted with conspicuous gallantry above and beyond the call of duty during ${mission.title}, turning the fight at great personal risk. Recommended for the Sovereign Star."
+        }
     const val SCHOOL_BASELINE_PASS_BONUS = 4
     const val STANDALONE_ROTATION_INTERVAL_MILLIS = 4L * 60_000L // 4 minutes
     const val ROTATION_REFRESH_INTEL_COST = 15.0
@@ -1614,7 +1664,8 @@ object TacticalCalculator {
         medal: MedalDefinition,
         operator: Operator,
         ownedMedalIds: Set<String>,
-        allCitations: List<AwardedMedal> = emptyList()
+        allCitations: List<AwardedMedal> = emptyList(),
+        heroismCited: Boolean = false
     ): EligibilityResult {
         val missing = mutableListOf<String>()
         if (operator.rank.tier.order < medal.minTierRequired.order) {
@@ -1658,16 +1709,9 @@ object TacticalCalculator {
 
         when (medal.id) {
             "medal_sovereign_star" -> {
-                if (!isFallen) {
-                    if (operator.highestRiskSurvived != MissionRisk.EXTREME) {
-                        missing += "Survive Extreme-Hazard Combat Op (or Fallen)"
-                    }
-                    if (combatOps < medal.minMissionsRequired) {
-                        missing += "Complete ${medal.minMissionsRequired}+ Combat Ops ($combatOps/${medal.minMissionsRequired})"
-                    }
-                    if ("medal_distinguished_cross" !in ownedMedalIds && "medal_silver_vanguard" !in ownedMedalIds) {
-                        missing += "Hold Service Cross or Silver Vanguard Star"
-                    }
+                // Earned only through a heroism roll on a mission, never by meeting a checklist
+                if (!heroismCited) {
+                    missing += "Needs a heroism citation from a combat op"
                 }
             }
             "medal_distinguished_cross" -> {
@@ -1923,7 +1967,8 @@ object TacticalCalculator {
         existingCitationMedalIds: Set<String>,
         missionSucceeded: Boolean = true,
         rollSeedPct: Int = 0,
-        allCampaignCitations: List<AwardedMedal> = emptyList()
+        allCampaignCitations: List<AwardedMedal> = emptyList(),
+        ownedMedalIds: Set<String>? = null
     ): Pair<String?, String> {
         if (outcome == OperatorOutcomeType.TRAINING_FAILED) {
             return null to "Did not pass evaluation standards in ${mission.title}. Partial XP logged toward rank progression (no graduation award)."
@@ -1974,7 +2019,12 @@ object TacticalCalculator {
 
         fun firstEligibleUnowned(candidates: List<String>, includeGeneralFallback: Boolean = true): String? {
             val primary = candidates.firstOrNull { id ->
-                if (id in existingCitationMedalIds) return@firstOrNull false
+                if (id in existingCitationMedalIds) {
+                    // Repeatable awards come back when a mission earns them again; one-time awards and
+                    // anything already waiting in Pending Awards are skipped
+                    val owned = ownedMedalIds ?: return@firstOrNull false
+                    if (id !in owned || perSoldierCapForAward(id) == 1) return@firstOrNull false
+                }
                 val def = GameCatalog.medals.find { it.id == id } ?: return@firstOrNull false
                 evaluateAwardEligibility(def, effectiveOp, existingCitationMedalIds, allCampaignCitations).eligible
             }
@@ -1995,7 +2045,7 @@ object TacticalCalculator {
         return when (outcome) {
             OperatorOutcomeType.FALLEN -> {
                 val medalId = firstEligibleUnowned(
-                    listOf("medal_sovereign_star", "medal_distinguished_cross", "medal_purple_shield")
+                    listOf("medal_distinguished_cross", "medal_purple_shield")
                 )
                 medalId to "Gave the last full measure of devotion holding the objective during ${mission.title}."
             }
@@ -2231,7 +2281,6 @@ object TacticalCalculator {
                     }
                     MissionRisk.EXTREME -> {
                         val milestoneCandidates = listOf(
-                            "medal_sovereign_star",
                             "medal_distinguished_cross",
                             "medal_silver_vanguard",
                             "cord_valor_fourragere"

@@ -936,7 +936,7 @@ object GameCatalog {
             precedenceOrder = 1,
             isNeckMedallion = true,
             description = "Highest Army honor, equivalent to the Medal of Honor. Worn suspended from a light-blue neck ribbon.",
-            qualificationRule = "1 per Soldier • Survive Extreme Combat Op, 8+ Combat Ops & Silver/Cross (or Fallen).",
+            qualificationRule = "1 per Soldier • Heroism roll on combat ops (Low 0.5%, Moderate 1%, High 2.5%, Extreme 5%; double if Fallen).",
             ribbonStripeHexes = listOf(0xFF2B60A8, 0xFFF2D272, 0xFF2B60A8, 0xFFF2D272, 0xFF2B60A8),
             prestigeCost = 45,
             minMissionsRequired = 8,

@@ -400,6 +400,30 @@ fun AegisCommandApp() {
         }
     }
 
+    // Newly earned awards, one card at a time, after the debrief and any rifle results are closed
+    val awardQueue by viewModel.awardQueue.collectAsStateWithLifecycle()
+    val awardQueueTotal by viewModel.awardQueueTotal.collectAsStateWithLifecycle()
+    if (uiState.lastDebrief == null && rifleQueue.isEmpty()) {
+        awardQueue.firstOrNull()?.let { deed ->
+            val medal = com.example.data.catalog.GameCatalog.medals.find { it.id == deed.recommendedMedalId }
+            val op = uiState.operators.find { it.id == deed.operatorId }
+            if (medal == null || op == null) {
+                LaunchedEffect(deed.id) { viewModel.skipAwardPrompt() }
+            } else {
+                com.example.ui.components.AwardPromptDialog(
+                    deed = deed,
+                    medal = medal,
+                    soldierLabel = "${op.rank.code} ${op.callsign}",
+                    position = (awardQueueTotal - awardQueue.size + 1).coerceAtLeast(1),
+                    total = maxOf(awardQueueTotal, awardQueue.size),
+                    canAfford = uiState.resources.prestige >= medal.prestigeCost,
+                    onAward = viewModel::awardFromQueue,
+                    onSkip = viewModel::skipAwardPrompt
+                )
+            }
+        }
+    }
+
     uiState.offlineReport?.let { report ->
         OfflineReportDialog(
             report = report,
