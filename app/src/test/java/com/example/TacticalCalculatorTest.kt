@@ -2954,4 +2954,35 @@ class TacticalCalculatorTest {
         // Valor medals alone no longer show it
         assertFalse(UniformRegaliaRules.hasUnitCitation(ops[0], emptyList()))
     }
+
+    @Test
+    fun squadStandardAppliesLiveToMembersWithManualOverrideAndFallback() {
+        val a = GameCatalog.createPostBasicRecruit("op_sa", OperatorSpecialty.ASSAULT, emptySet(), 1).copy(id = "op_sa")
+        val b = GameCatalog.createPostBasicRecruit("op_sb", OperatorSpecialty.ASSAULT, emptySet(), 2).copy(id = "op_sb")
+        val squad = TacticalSquad(
+            "sq_std", "Alpha", listOf(a.id, b.id), a.id,
+            standardCamo = CamoPattern.ARID_SAND,
+            standardBravosHeadgear = HeadgearStyle.MAROON_BERET
+        )
+        // Members wear the standard camo; a soldier outside the squad keeps their own
+        assertEquals(CamoPattern.ARID_SAND, TacticalCalculator.resolveKitAppearance(a, WardrobeKit.FIELD, listOf(squad)).camoPattern)
+        val leaver = TacticalCalculator.resolveKitAppearance(a, WardrobeKit.FIELD, listOf(squad.copy(memberIds = listOf(b.id))))
+        assertEquals(a.camoPattern, leaver.camoPattern)
+        // A manual Tailor pick overrides the standard
+        val manual = a.copy(wardrobe = a.wardrobe.withKit(WardrobeKit.FIELD, a.wardrobe.field.copy(camoPattern = CamoPattern.ALPINE_FROST)))
+        assertEquals(CamoPattern.ALPINE_FROST, TacticalCalculator.resolveKitAppearance(manual, WardrobeKit.FIELD, listOf(squad)).camoPattern)
+        // Unqualified for the maroon beret: falls back to Auto and is flagged
+        val bravos = TacticalCalculator.resolveKitAppearance(a, WardrobeKit.BRAVOS, listOf(squad))
+        assertEquals(HeadgearStyle.OBSIDIAN_BERET, bravos.headgearStyle)
+        val flags = TacticalCalculator.squadStandardFallbacks(a, listOf(squad), WardrobeKit.BRAVOS, emptySet())
+        assertEquals(1, flags.size)
+        assertTrue(flags.first(), flags.first().contains("Black") || flags.first().contains("Obsidian") || flags.first().contains(HeadgearStyle.OBSIDIAN_BERET.label))
+        // Once qualified, the standard beret shows with no flag
+        val airborne = a.copy(completedMissionIds = a.completedMissionIds + "msn_night_qual")
+        assertEquals(HeadgearStyle.MAROON_BERET, TacticalCalculator.resolveKitAppearance(airborne, WardrobeKit.BRAVOS, listOf(squad)).headgearStyle)
+        assertTrue(TacticalCalculator.squadStandardFallbacks(airborne, listOf(squad), WardrobeKit.BRAVOS, emptySet()).isEmpty())
+        // HQ staff don't follow a field squad standard
+        val hq = a.copy(status = OperatorStatus.HQ_STAFF)
+        assertNull(TacticalCalculator.standardSquadFor(hq, listOf(squad)))
+    }
 }

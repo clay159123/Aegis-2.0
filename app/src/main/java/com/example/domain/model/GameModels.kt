@@ -976,6 +976,12 @@ data class UniformTailorRequest(
     val headgearTouched: Boolean = false,
     /** True when the player picked "Auto" headgear, clearing a saved manual pick */
     val headgearAuto: Boolean = false,
+    /** True only when the player picked these by hand; untouched fields keep Auto or the squad standard */
+    val dressTouched: Boolean = false,
+    val camoTouched: Boolean = false,
+    val glovesTouched: Boolean = false,
+    /** Clears this kit's manual coat, headgear, camo and gloves so the squad standard applies again */
+    val followSquadStandard: Boolean = false,
     /** Appearance overrides; null = Auto (derived from the soldier id) */
     val skinToneOverride: SkinTone? = null,
     val bodyBuildOverride: BodyBuild? = null

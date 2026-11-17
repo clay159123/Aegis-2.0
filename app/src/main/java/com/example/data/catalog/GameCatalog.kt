@@ -42,25 +42,18 @@ object GameCatalog {
             wardrobe = OperatorWardrobe(
                 field = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.CLEAN,
-                    camoPattern = CamoPattern.WOODLAND_OLIVE,
                     headgearStyle = HeadgearStyle.TAN_BERET
                 ),
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
-                    hasWhiteGloves = false,
                     hasDressSash = false
                 ),
                 alphas = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
-                    hasWhiteGloves = true,
                     hasDressSash = true
                 ),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.OFFICER_MESS_BLUES,
-                    hasWhiteGloves = true,
                     hasDressSash = false
                 )
             ),
@@ -99,24 +92,17 @@ object GameCatalog {
             wardrobe = OperatorWardrobe(
                 field = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.CLEAN,
-                    camoPattern = CamoPattern.NIGHT_CHARCOAL,
                     headgearStyle = HeadgearStyle.MAROON_BERET
                 ),
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
-                    hasWhiteGloves = false,
                     hasDressSash = false
                 ),
                 alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 ),
                 mess = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.ENLISTED_MESS_BLUES,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
             ),
             missionsCompleted = 3,
@@ -154,21 +140,16 @@ object GameCatalog {
             wardrobe = OperatorWardrobe(
                 field = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.CLEAN,
-                    camoPattern = CamoPattern.RANGER_GREEN,
                     headgearStyle = HeadgearStyle.OBSIDIAN_BERET
                 ),
                 bravos = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN
+                    dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
                 alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 ),
                 mess = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.ENLISTED_MESS_BLUES,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
             ),
             missionsCompleted = 0,
@@ -206,22 +187,16 @@ object GameCatalog {
             wardrobe = OperatorWardrobe(
                 field = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.CLEAN,
-                    camoPattern = CamoPattern.ARID_SAND,
                     headgearStyle = HeadgearStyle.OBSIDIAN_BERET
                 ),
                 bravos = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.NCO_PARADE_BLUES
+                    dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
                 alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 ),
                 mess = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.ENLISTED_MESS_BLUES,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
             ),
             missionsCompleted = 2,
@@ -259,22 +234,16 @@ object GameCatalog {
             wardrobe = OperatorWardrobe(
                 field = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.CLEAN,
-                    camoPattern = CamoPattern.ALPINE_FROST,
                     headgearStyle = HeadgearStyle.OBSIDIAN_BERET
                 ),
                 bravos = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES
+                    dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
                 alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 ),
                 mess = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.OFFICER_MESS_BLUES,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
             ),
             missionsCompleted = 2,
@@ -312,22 +281,16 @@ object GameCatalog {
             wardrobe = OperatorWardrobe(
                 field = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.CLEAN,
-                    camoPattern = CamoPattern.NIGHT_CHARCOAL,
                     headgearStyle = HeadgearStyle.EMERALD_BERET
                 ),
                 bravos = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.FLAG_STAFF_FORMAL
+                    dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
                 alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.FLAG_STAFF_FORMAL,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 ),
                 mess = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.FLAG_MESS_FORMAL,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
             ),
             missionsCompleted = 4,
@@ -402,21 +365,16 @@ object GameCatalog {
             wardrobe = OperatorWardrobe(
                 field = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.CLEAN,
-                    camoPattern = CamoPattern.WOODLAND_OLIVE,
                     headgearStyle = HeadgearStyle.OBSIDIAN_BERET
                 ),
                 bravos = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN
+                    dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
                 alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 ),
                 mess = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.ENLISTED_MESS_BLUES,
-                    hasWhiteGloves = true
+                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
             ),
             missionsCompleted = 0,

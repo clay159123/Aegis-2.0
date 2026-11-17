@@ -30,7 +30,6 @@ fun FieldSquadsSection(
     smartWardrobeEnabled: Boolean = true,
     onCreateSquadClick: () -> Unit,
     onEditSquadClick: (TacticalSquad) -> Unit,
-    onApplySquadStandard: (String) -> Unit = {},
     onConductSquadInspection: (String) -> Unit = {},
     onSwitchSquadKit: (String, WardrobeKit) -> Unit = { _, _ -> }
 ) {
@@ -324,18 +323,6 @@ fun FieldSquadsSection(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            OutlinedButton(
-                                onClick = { onApplySquadStandard(squad.id) },
-                                modifier = Modifier
-                                    .weight(1.1f)
-                                    .defaultMinSize(minHeight = 48.dp)
-                                    .testTag("apply_squad_standard_${squad.id}"),
-                                contentPadding = PaddingValues(horizontal = 8.dp)
-                            ) {
-                                Icon(Icons.Filled.Checkroom, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Dress Standard", style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                            }
                             OutlinedButton(
                                 onClick = { onConductSquadInspection(squad.id) },
                                 modifier = Modifier
