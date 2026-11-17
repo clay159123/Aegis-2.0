@@ -1,0 +1,792 @@
+package com.example.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import com.example.data.catalog.GameCatalog
+import com.example.domain.TacticalCalculator
+import com.example.domain.UniformRegaliaRules
+import com.example.domain.model.*
+import com.example.ui.theme.LocalAegisColors
+
+data class DropdownOptionItem<T>(
+    val value: T,
+    val title: String,
+    val subtitle: String? = null,
+    val primaryColor: Color? = null,
+    val trimColor: Color? = null,
+    val enabled: Boolean = true,
+    val testTag: String? = null
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> SingleChoiceDropdown(
+    label: String,
+    selectedText: String,
+    selectedPrimaryColor: Color? = null,
+    selectedTrimColor: Color? = null,
+    supportingHint: String? = null,
+    options: List<DropdownOptionItem<T>>,
+    selectedValue: T,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    fieldTestTag: String? = null
+) {
+    val extra = LocalAegisColors.current
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = selectedText,
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                label = { Text(label) },
+                leadingIcon = if (selectedPrimaryColor != null) {
+                    {
+                        ColorSwatchDot(
+                            primaryColor = selectedPrimaryColor,
+                            trimColor = selectedTrimColor ?: extra.borderSubtle
+                        )
+                    }
+                } else null,
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = extra.brassBright,
+                    unfocusedBorderColor = extra.borderSubtle,
+                    focusedLabelColor = extra.brassBright,
+                    unfocusedLabelColor = extra.textMuted
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp)
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                    .let { base -> if (fieldTestTag != null) base.testTag(fieldTestTag) else base }
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                options.forEach { item ->
+                    val isSelected = item.value == selectedValue
+                    DropdownMenuItem(
+                        enabled = item.enabled,
+                        onClick = {
+                            expanded = false
+                            if (item.enabled) onSelect(item.value)
+                        },
+                        leadingIcon = if (item.primaryColor != null) {
+                            {
+                                ColorSwatchDot(
+                                    primaryColor = item.primaryColor,
+                                    trimColor = item.trimColor ?: extra.borderSubtle,
+                                    modifier = Modifier.alpha(if (item.enabled) 1f else 0.45f)
+                                )
+                            }
+                        } else null,
+                        trailingIcon = if (isSelected) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = "Selected",
+                                    tint = extra.brassBright,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        } else null,
+                        text = {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = when {
+                                        isSelected -> extra.brassBright
+                                        item.enabled -> MaterialTheme.colorScheme.onSurface
+                                        else -> extra.textMuted
+                                    }
+                                )
+                                if (!item.subtitle.isNullOrBlank()) {
+                                    Text(
+                                        text = item.subtitle,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (item.enabled) extra.textMuted else MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 48.dp)
+                            .let { base -> if (item.testTag != null) base.testTag(item.testTag) else base }
+                    )
+                }
+            }
+        }
+        if (!supportingHint.isNullOrBlank()) {
+            Text(
+                text = supportingHint,
+                style = MaterialTheme.typography.labelSmall,
+                color = extra.textMuted,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColorSwatchDot(
+    primaryColor: Color,
+    trimColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(20.dp)
+            .clip(CircleShape)
+            .background(primaryColor)
+            .border(1.5.dp, trimColor, CircleShape)
+    )
+}
+
+@Composable
+fun CamoPatternDropdown(
+    selectedPattern: CamoPattern,
+    onSelect: (CamoPattern) -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "dropdown_camo_pattern"
+) {
+    val options = remember {
+        CamoPattern.entries.map { pattern ->
+            DropdownOptionItem(
+                value = pattern,
+                title = pattern.label,
+                subtitle = "Field ACU / Combat Shirt camouflage",
+                primaryColor = Color(pattern.primaryHex),
+                trimColor = Color(pattern.accentHex)
+            )
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Field ACU Camo Pattern",
+        selectedText = selectedPattern.label,
+        selectedPrimaryColor = Color(selectedPattern.primaryHex),
+        selectedTrimColor = Color(selectedPattern.accentHex),
+        options = options,
+        selectedValue = selectedPattern,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun DressStyleDropdown(
+    operator: Operator,
+    ownedMedalIds: Set<String>,
+    onSelect: (DressUniformStyle) -> Unit,
+    modifier: Modifier = Modifier,
+    freeCustomOverride: Boolean = false,
+    wardrobeKit: WardrobeKit? = null,
+    testTag: String = "dropdown_dress_style"
+) {
+    val options = remember(operator, ownedMedalIds, freeCustomOverride, wardrobeKit) {
+        DressUniformStyle.entries.map { style ->
+            val elig = TacticalCalculator.evaluateDressStyleEligibility(style, operator, ownedMedalIds, wardrobeKit)
+            val isEnabled = elig.eligible || freeCustomOverride
+            DropdownOptionItem(
+                value = style,
+                title = if (!elig.eligible && freeCustomOverride) "★ ${style.label} (Override)" else style.label,
+                subtitle = when {
+                    elig.eligible -> "${style.subtitle} • ${style.requirementHint}"
+                    freeCustomOverride -> "Override unlocked • Reg: ${elig.missingRequirements.firstOrNull() ?: style.requirementHint}"
+                    else -> "Locked: ${elig.missingRequirements.firstOrNull() ?: style.requirementHint}"
+                },
+                primaryColor = Color(style.tunicHex),
+                trimColor = Color(style.trimHex),
+                enabled = isEnabled,
+                testTag = "dress_style_${style.name.lowercase()}"
+            )
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Dress Uniform Cut",
+        selectedText = operator.dressStyle.label,
+        selectedPrimaryColor = Color(operator.dressStyle.tunicHex),
+        selectedTrimColor = Color(operator.dressStyle.trimHex),
+        supportingHint = "${operator.dressStyle.subtitle} • ${operator.specialty.label} Collar Brass",
+        options = options,
+        selectedValue = operator.dressStyle,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun HeadgearStyleDropdown(
+    operator: Operator,
+    ownedMedalIds: Set<String>,
+    onSelect: (HeadgearStyle) -> Unit,
+    modifier: Modifier = Modifier,
+    freeCustomOverride: Boolean = false,
+    wardrobeKit: WardrobeKit? = null,
+    testTag: String = "dropdown_headgear_style"
+) {
+    val options = remember(operator, ownedMedalIds, freeCustomOverride, wardrobeKit) {
+        HeadgearStyle.entries.map { hg ->
+            val elig = TacticalCalculator.evaluateHeadgearEligibility(hg, operator, ownedMedalIds, wardrobeKit)
+            val isEnabled = elig.eligible || freeCustomOverride
+            DropdownOptionItem(
+                value = hg,
+                title = if (!elig.eligible && freeCustomOverride) "★ ${hg.label} (Override)" else hg.label,
+                subtitle = when {
+                    elig.eligible -> hg.requirementHint
+                    freeCustomOverride -> "Override unlocked • Reg: ${elig.missingRequirements.firstOrNull() ?: hg.requirementHint}"
+                    else -> "Locked: ${elig.missingRequirements.firstOrNull() ?: hg.requirementHint}"
+                },
+                primaryColor = Color(hg.colorHex),
+                trimColor = Color(operator.dressStyle.trimHex),
+                enabled = isEnabled
+            )
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Army Headgear",
+        selectedText = operator.headgearStyle.label,
+        selectedPrimaryColor = Color(operator.headgearStyle.colorHex),
+        selectedTrimColor = Color(operator.dressStyle.trimHex),
+        supportingHint = operator.headgearStyle.requirementHint,
+        options = options,
+        selectedValue = operator.headgearStyle,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun ShoulderCordDropdown(
+    label: String,
+    isRightShoulder: Boolean,
+    specialty: OperatorSpecialty,
+    selectedCordId: String?,
+    ownedMedalIds: Set<String>,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+    otherShoulderCordId: String? = null,
+    freeCustomOverride: Boolean = false,
+    testTag: String
+) {
+    val extra = LocalAegisColors.current
+    val shoulderSlot = if (isRightShoulder) CordShoulderSlot.RIGHT_STAFF_VALOR else CordShoulderSlot.LEFT_BRANCH
+    val allowedCords = remember(isRightShoulder, specialty, freeCustomOverride) {
+        if (freeCustomOverride) {
+            val reg = UniformRegaliaRules.cordsForShoulder(GameCatalog.medals, isRightShoulder, specialty)
+            val other = UniformRegaliaRules.cordsForShoulder(GameCatalog.medals, !isRightShoulder, specialty)
+            reg + other
+        } else {
+            UniformRegaliaRules.cordsForShoulder(
+                medals = GameCatalog.medals,
+                isRightShoulder = isRightShoulder,
+                specialty = specialty
+            )
+        }
+    }
+    val selectedCord = allowedCords.find { it.id == selectedCordId }
+
+    val options = remember(allowedCords, ownedMedalIds, otherShoulderCordId, isRightShoulder, specialty) {
+        buildList {
+            add(
+                DropdownOptionItem<String?>(
+                    value = null,
+                    title = "None Worn",
+                    subtitle = "Leave ${if (isRightShoulder) "right" else "left"} shoulder plain",
+                    primaryColor = Color.Transparent,
+                    trimColor = extra.borderSubtle,
+                    enabled = true
+                )
+            )
+            allowedCords.forEach { cord ->
+                val owned = cord.id in ownedMedalIds
+                val onOtherSide = otherShoulderCordId != null && cord.id == otherShoulderCordId
+                val canEquip = owned && !onOtherSide
+                val isMosTop = UniformRegaliaRules.isPrimaryMosCord(specialty, cord.id)
+                val titleText = if (isMosTop) "★ ${cord.shortName}" else cord.shortName
+                add(
+                    DropdownOptionItem<String?>(
+                        value = cord.id,
+                        title = titleText,
+                        subtitle = when {
+                            onOtherSide -> "Equipped on opposite shoulder"
+                            owned && isMosTop -> "MOS Signature (${specialty.roleTag}) • ${cord.name}"
+                            owned -> cord.name
+                            isMosTop -> "MOS Signature (${specialty.roleTag}) • Locked: ${cord.qualificationRule}"
+                            else -> "Locked (Award): ${cord.qualificationRule}"
+                        },
+                        primaryColor = Color(cord.cordHex ?: 0xFF2C6FB8),
+                        trimColor = Color(0xFFF2D272),
+                        enabled = canEquip,
+                        testTag = "${testTag}_opt_${cord.id}"
+                    )
+                )
+            }
+        }
+    }
+
+    SingleChoiceDropdown(
+        label = label,
+        selectedText = selectedCord?.shortName ?: "None Worn",
+        selectedPrimaryColor = selectedCord?.cordHex?.let { Color(it) } ?: Color.Transparent,
+        selectedTrimColor = if (selectedCord != null) Color(0xFFF2D272) else extra.borderSubtle,
+        supportingHint = if (selectedCord != null) {
+            "${shoulderSlot.ruleHint} • ${selectedCord.name}"
+        } else {
+            val ownedCount = allowedCords.count { it.id in ownedMedalIds }
+            "${shoulderSlot.ruleHint} • $ownedCount/${allowedCords.size} earned"
+        },
+        options = options,
+        selectedValue = selectedCord?.id,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun UnitPatchDropdown(
+    selectedPatch: UnitPatchStyle,
+    specialty: OperatorSpecialty,
+    onSelect: (UnitPatchStyle) -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "dropdown_unit_patch"
+) {
+    val options = remember(specialty) {
+        UnitPatchStyle.entries.map { patch ->
+            DropdownOptionItem(
+                value = patch,
+                title = if (patch == UnitPatchStyle.AUTO_MOS) {
+                    "Auto (${specialty.label} MOS Shield)"
+                } else {
+                    patch.label
+                },
+                subtitle = patch.subtitle,
+                primaryColor = Color(patch.primaryHex),
+                trimColor = Color(patch.accentHex),
+                enabled = true,
+                testTag = "unit_patch_${patch.name.lowercase()}"
+            )
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Unit Shoulder Patch (SSI)",
+        selectedText = if (selectedPatch == UnitPatchStyle.AUTO_MOS) {
+            "Auto (${specialty.label} MOS Shield)"
+        } else {
+            selectedPatch.label
+        },
+        selectedPrimaryColor = Color(selectedPatch.primaryHex),
+        selectedTrimColor = Color(selectedPatch.accentHex),
+        supportingHint = selectedPatch.subtitle,
+        options = options,
+        selectedValue = selectedPatch,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun RegaliaSlotDropdown(
+    label: String,
+    slotValue: String,
+    candidateMedals: List<MedalDefinition>,
+    ownedMedalIds: Set<String>,
+    autoHint: String,
+    noneSubtitle: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    otherSelectedIds: Set<String> = emptySet(),
+    autoTitle: String = "Auto (Highest Precedence)",
+    recommendedIds: Set<String> = emptySet(),
+    testTag: String
+) {
+    val extra = LocalAegisColors.current
+    val selectedMedal = candidateMedals.find { it.id == slotValue }
+
+    val options = remember(
+        candidateMedals,
+        ownedMedalIds,
+        otherSelectedIds,
+        autoTitle,
+        autoHint,
+        noneSubtitle,
+        recommendedIds
+    ) {
+        buildList {
+            add(
+                DropdownOptionItem(
+                    value = UniformTailorOverrides.SLOT_AUTO,
+                    title = autoTitle,
+                    subtitle = autoHint,
+                    primaryColor = extra.signalsCyan,
+                    trimColor = extra.brassBright,
+                    enabled = true,
+                    testTag = "${testTag}_opt_auto"
+                )
+            )
+            add(
+                DropdownOptionItem(
+                    value = UniformTailorOverrides.SLOT_NONE,
+                    title = "None Worn (Empty Slot)",
+                    subtitle = noneSubtitle,
+                    primaryColor = Color.Transparent,
+                    trimColor = extra.borderSubtle,
+                    enabled = true,
+                    testTag = "${testTag}_opt_none"
+                )
+            )
+            candidateMedals.forEach { medal ->
+                val owned = medal.id in ownedMedalIds
+                val inOtherSlot = medal.id in otherSelectedIds
+                val isRecommended = medal.id in recommendedIds
+                val swatchHex = medal.cordHex
+                    ?: medal.ribbonStripeHexes.firstOrNull()
+                    ?: medal.insigniaColorHex
+                val trimHex = medal.ribbonStripeHexes.getOrNull(1) ?: medal.insigniaColorHex
+                add(
+                    DropdownOptionItem(
+                        value = medal.id,
+                        title = if (isRecommended) "★ ${medal.shortName}" else medal.shortName,
+                        subtitle = when {
+                            inOtherSlot -> "Selected in another slot"
+                            owned && isRecommended -> "MOS Primary • ${medal.name}"
+                            owned -> medal.name
+                            isRecommended -> "MOS Primary • Locked: ${medal.qualificationRule}"
+                            else -> "Locked: ${medal.qualificationRule}"
+                        },
+                        primaryColor = Color(swatchHex),
+                        trimColor = Color(trimHex),
+                        enabled = owned && !inOtherSlot,
+                        testTag = "${testTag}_opt_${medal.id}"
+                    )
+                )
+            }
+        }
+    }
+
+    val selectedText = when (slotValue) {
+        UniformTailorOverrides.SLOT_AUTO -> autoTitle
+        UniformTailorOverrides.SLOT_NONE -> "None Worn (Empty Slot)"
+        else -> selectedMedal?.shortName ?: autoTitle
+    }
+    val selectedPrimary = when (slotValue) {
+        UniformTailorOverrides.SLOT_AUTO -> extra.signalsCyan
+        UniformTailorOverrides.SLOT_NONE -> Color.Transparent
+        else -> selectedMedal?.let {
+            Color(it.cordHex ?: it.ribbonStripeHexes.firstOrNull() ?: it.insigniaColorHex)
+        } ?: extra.signalsCyan
+    }
+    val selectedTrim = when (slotValue) {
+        UniformTailorOverrides.SLOT_NONE -> extra.borderSubtle
+        else -> extra.brassBright
+    }
+    val ownedCount = candidateMedals.count { it.id in ownedMedalIds }
+
+    SingleChoiceDropdown(
+        label = label,
+        selectedText = selectedText,
+        selectedPrimaryColor = selectedPrimary,
+        selectedTrimColor = selectedTrim,
+        supportingHint = selectedMedal?.name ?: "$autoHint • $ownedCount/${candidateMedals.size} earned",
+        options = options,
+        selectedValue = if (selectedMedal != null || slotValue == UniformTailorOverrides.SLOT_NONE) {
+            slotValue
+        } else {
+            UniformTailorOverrides.SLOT_AUTO
+        },
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun BooleanChoiceDropdown(
+    label: String,
+    selectedValue: Boolean,
+    trueTitle: String,
+    trueSubtitle: String,
+    falseTitle: String,
+    falseSubtitle: String,
+    primaryTrueColor: Color,
+    onSelect: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabledTrue: Boolean = true,
+    lockedTrueReason: String? = null,
+    testTag: String
+) {
+    val extra = LocalAegisColors.current
+    val options = remember(
+        trueTitle,
+        trueSubtitle,
+        falseTitle,
+        falseSubtitle,
+        primaryTrueColor,
+        enabledTrue,
+        lockedTrueReason
+    ) {
+        listOf(
+            DropdownOptionItem(
+                value = true,
+                title = trueTitle,
+                subtitle = if (enabledTrue) trueSubtitle else "Locked: ${lockedTrueReason ?: trueSubtitle}",
+                primaryColor = primaryTrueColor,
+                trimColor = extra.brassBright,
+                enabled = enabledTrue
+            ),
+            DropdownOptionItem(
+                value = false,
+                title = falseTitle,
+                subtitle = falseSubtitle,
+                primaryColor = Color.Transparent,
+                trimColor = extra.borderSubtle,
+                enabled = true
+            )
+        )
+    }
+    SingleChoiceDropdown(
+        label = label,
+        selectedText = if (selectedValue) trueTitle else falseTitle,
+        selectedPrimaryColor = if (selectedValue) primaryTrueColor else Color.Transparent,
+        selectedTrimColor = if (selectedValue) extra.brassBright else extra.borderSubtle,
+        supportingHint = if (selectedValue) {
+            trueSubtitle
+        } else if (!enabledTrue && !lockedTrueReason.isNullOrBlank()) {
+            "$falseSubtitle • Unlock: $lockedTrueReason"
+        } else {
+            falseSubtitle
+        },
+        options = options,
+        selectedValue = selectedValue,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun RecruitMosDropdown(
+    selectedMos: OperatorSpecialty,
+    onSelect: (OperatorSpecialty) -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "dropdown_recruit_mos"
+) {
+    val extra = LocalAegisColors.current
+    val options = remember {
+        OperatorSpecialty.entries.map { mos ->
+            DropdownOptionItem(
+                value = mos,
+                title = "${mos.roleTag} • ${mos.label}",
+                subtitle = mos.recruitSummary,
+                primaryColor = extra.signalsCyan,
+                trimColor = extra.brassBright,
+                enabled = true,
+                testTag = "mos_option_${mos.name.lowercase()}"
+            )
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Army MOS Specialty",
+        selectedText = "${selectedMos.roleTag} • ${selectedMos.label}",
+        selectedPrimaryColor = extra.signalsCyan,
+        selectedTrimColor = extra.brassBright,
+        supportingHint = selectedMos.recruitSummary,
+        options = options,
+        selectedValue = selectedMos,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun CombatPatchDropdown(
+    selectedPatch: UnitPatchStyle,
+    specialty: OperatorSpecialty,
+    onSelect: (UnitPatchStyle) -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "dropdown_combat_patch"
+) {
+    val options = remember(specialty) {
+        UnitPatchStyle.entries.map { patch ->
+            DropdownOptionItem(
+                value = patch,
+                title = if (patch == UnitPatchStyle.AUTO_MOS) {
+                    "Auto (Combat-Qualified ${specialty.roleTag})"
+                } else {
+                    patch.label
+                },
+                subtitle = if (patch == UnitPatchStyle.AUTO_MOS) {
+                    "Auto-displays right-sleeve patch once operator survives Moderate+ combat"
+                } else {
+                    patch.subtitle
+                },
+                primaryColor = Color(patch.primaryHex),
+                trimColor = Color(patch.accentHex),
+                enabled = true,
+                testTag = "combat_patch_${patch.name.lowercase()}"
+            )
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Wartime Combat Patch (Right Sleeve)",
+        selectedText = if (selectedPatch == UnitPatchStyle.AUTO_MOS) {
+            "Auto (Combat-Qualified ${specialty.roleTag})"
+        } else {
+            selectedPatch.label
+        },
+        selectedPrimaryColor = Color(selectedPatch.primaryHex),
+        selectedTrimColor = Color(selectedPatch.accentHex),
+        supportingHint = "SSI-FWTS former wartime service patch on wearer's right sleeve",
+        options = options,
+        selectedValue = selectedPatch,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun MarksmanshipBadgeDropdown(
+    selectedTier: MarksmanshipBadgeTier,
+    resolvedTier: MarksmanshipBadgeTier,
+    onSelect: (MarksmanshipBadgeTier) -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "dropdown_marksmanship"
+) {
+    val options = remember(resolvedTier) {
+        MarksmanshipBadgeTier.entries.map { tier ->
+            DropdownOptionItem(
+                value = tier,
+                title = if (tier == MarksmanshipBadgeTier.AUTO) {
+                    "Auto (Current Qual: ${resolvedTier.shortLabel})"
+                } else {
+                    tier.label
+                },
+                subtitle = tier.subtitle,
+                primaryColor = Color(tier.badgeColorHex),
+                trimColor = Color(0xFF14181F),
+                enabled = true,
+                testTag = "marksmanship_${tier.name.lowercase()}"
+            )
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Marksmanship Qualification Badge",
+        selectedText = if (selectedTier == MarksmanshipBadgeTier.AUTO) {
+            "Auto (${resolvedTier.shortLabel})"
+        } else {
+            selectedTier.label
+        },
+        selectedPrimaryColor = Color(selectedTier.badgeColorHex),
+        selectedTrimColor = Color(0xFF14181F),
+        supportingHint = "Silver/Gold Maltese Cross & Rifle/Pistol clasps worn on the left breast pocket",
+        options = options,
+        selectedValue = selectedTier,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+@Composable
+fun LeaderPinDropdown(
+    selectedOverride: Boolean?,
+    autoIsLeader: Boolean,
+    onSelect: (Boolean?) -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "dropdown_leader_pin"
+) {
+    val extra = LocalAegisColors.current
+    val options = remember(autoIsLeader) {
+        listOf(
+            DropdownOptionItem<Boolean?>(
+                value = null,
+                title = if (autoIsLeader) "Auto (Shown — Squad Leader)" else "Auto (Hidden — Not Leader)",
+                subtitle = "Automatically shows miniature gold leader pin above nameplate when Squad Leader",
+                primaryColor = if (autoIsLeader) Color(0xFF8C2525) else Color.Transparent,
+                trimColor = extra.brassBright,
+                enabled = true,
+                testTag = "${testTag}_auto"
+            ),
+            DropdownOptionItem<Boolean?>(
+                value = true,
+                title = "Always Show Leader Pin",
+                subtitle = "Override to display Squad Leader pin above right-chest nameplate",
+                primaryColor = Color(0xFF8C2525),
+                trimColor = extra.brassBright,
+                enabled = true,
+                testTag = "${testTag}_show"
+            ),
+            DropdownOptionItem<Boolean?>(
+                value = false,
+                title = "Hidden",
+                subtitle = "Keep space above nameplate clear",
+                primaryColor = Color.Transparent,
+                trimColor = extra.borderSubtle,
+                enabled = true,
+                testTag = "${testTag}_hide"
+            )
+        )
+    }
+    val selectedText = when (selectedOverride) {
+        null -> if (autoIsLeader) "Auto (Shown — Leader)" else "Auto (Hidden)"
+        true -> "Always Show Leader Pin"
+        false -> "Hidden"
+    }
+    SingleChoiceDropdown(
+        label = "Squad Leader Nameplate Pin",
+        selectedText = selectedText,
+        selectedPrimaryColor = when (selectedOverride) {
+            true -> Color(0xFF8C2525)
+            false -> Color.Transparent
+            null -> if (autoIsLeader) Color(0xFF8C2525) else Color.Transparent
+        },
+        selectedTrimColor = extra.brassBright,
+        supportingHint = "Small crimson-and-brass command crest pinned directly above nameplate",
+        options = options,
+        selectedValue = selectedOverride,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}

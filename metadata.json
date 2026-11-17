@@ -1,0 +1,8 @@
+{
+  "name": "Aegis Ops 2.0",
+  "description": "A tactical special forces idle command game featuring base resource management, real-time deployments, realistic gear customization, medal awards, and dress uniforms.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

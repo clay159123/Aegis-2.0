@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Aegis Ops</string>
+    <string name="nav_ops">Ops</string>
+    <string name="nav_hq">HQ</string>
+    <string name="nav_squad">Squad</string>
+    <string name="nav_dress">Uniforms</string>
+    <string name="nav_honors">Honors</string>
+    <string name="cd_fob_banner">Forward Operating Base headquarters command post illustration</string>
+    <string name="cd_parade_banner">Ceremonial command honor hall illustration</string>
+    <string name="cd_operator_avatar">Operator ceremonial dress and tactical uniform preview</string>
+</resources>

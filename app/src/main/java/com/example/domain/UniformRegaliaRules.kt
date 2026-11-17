@@ -1,0 +1,578 @@
+package com.example.domain
+
+import com.example.domain.model.*
+
+/**
+ * Enforces authentic uniform placement rules for shoulder cords and the three
+ * chest badge positions, plus MOS-driven display priority when slots are set
+ * to Auto or sorted in Tailor dropdowns.
+ */
+object UniformRegaliaRules {
+
+    private val preferredCordOrderBySpecialty: Map<OperatorSpecialty, List<String>> = mapOf(
+        OperatorSpecialty.ASSAULT to listOf(
+            "cord_infantry_blue",
+            "cord_sf_emerald",
+            "cord_airborne_crimson",
+            "cord_engineer_scarlet",
+            "cord_intel_teal",
+            "cord_medical_maroon",
+            "cord_signals_orange",
+            "cord_logistics_buff"
+        ),
+        OperatorSpecialty.RECON to listOf(
+            "cord_airborne_crimson",
+            "cord_intel_teal",
+            "cord_sf_emerald",
+            "cord_infantry_blue",
+            "cord_signals_orange",
+            "cord_engineer_scarlet",
+            "cord_medical_maroon",
+            "cord_logistics_buff"
+        ),
+        OperatorSpecialty.SIGNALS to listOf(
+            "cord_signals_orange",
+            "cord_intel_teal",
+            "cord_airborne_crimson",
+            "cord_logistics_buff",
+            "cord_engineer_scarlet",
+            "cord_infantry_blue",
+            "cord_sf_emerald",
+            "cord_medical_maroon"
+        ),
+        OperatorSpecialty.BREACHER to listOf(
+            "cord_engineer_scarlet",
+            "cord_infantry_blue",
+            "cord_sf_emerald",
+            "cord_airborne_crimson",
+            "cord_logistics_buff",
+            "cord_signals_orange",
+            "cord_intel_teal",
+            "cord_medical_maroon"
+        ),
+        OperatorSpecialty.MEDIC to listOf(
+            "cord_medical_maroon",
+            "cord_airborne_crimson",
+            "cord_infantry_blue",
+            "cord_logistics_buff",
+            "cord_sf_emerald",
+            "cord_intel_teal",
+            "cord_engineer_scarlet",
+            "cord_signals_orange"
+        ),
+        OperatorSpecialty.COMMAND to listOf(
+            "cord_infantry_blue",
+            "cord_logistics_buff",
+            "cord_intel_teal",
+            "cord_sf_emerald",
+            "cord_airborne_crimson",
+            "cord_signals_orange",
+            "cord_engineer_scarlet",
+            "cord_medical_maroon"
+        )
+    )
+
+    private val preferredRightCordBySpecialty: Map<OperatorSpecialty, List<String>> = mapOf(
+        OperatorSpecialty.COMMAND to listOf("cord_general_aiguillette", "cord_valor_fourragere")
+    )
+
+    private val preferredBadgesBySpecialtyAndSlot: Map<OperatorSpecialty, Map<ChestBadgeSlot, List<String>>> = mapOf(
+        OperatorSpecialty.ASSAULT to mapOf(
+            ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_eib_rifle",
+                "insig_master_para",
+                "insig_air_assault",
+                "insig_parachutist",
+                "insig_eod_badge",
+                "insig_pathfinder",
+                "insig_cmb_medic"
+            ),
+            ChestBadgeSlot.LEFT_POCKET to listOf(
+                "insig_master_para",
+                "insig_air_assault",
+                "insig_parachutist",
+                "insig_pathfinder",
+                "insig_eod_badge",
+                "insig_intel_crest",
+                "insig_cyber_crest"
+            ),
+            ChestBadgeSlot.RIGHT_POCKET to listOf(
+                "insig_staff_crest",
+                "insig_logistics_crest",
+                "insig_intel_crest",
+                "insig_cyber_crest"
+            )
+        ),
+        OperatorSpecialty.MEDIC to mapOf(
+            ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_cmb_medic",
+                "insig_air_assault",
+                "insig_master_para",
+                "insig_parachutist",
+                "insig_eib_rifle",
+                "insig_pathfinder",
+                "insig_eod_badge"
+            ),
+            ChestBadgeSlot.LEFT_POCKET to listOf(
+                "insig_air_assault",
+                "insig_master_para",
+                "insig_parachutist",
+                "insig_pathfinder",
+                "insig_intel_crest",
+                "insig_eod_badge",
+                "insig_cyber_crest"
+            ),
+            ChestBadgeSlot.RIGHT_POCKET to listOf(
+                "insig_staff_crest",
+                "insig_logistics_crest",
+                "insig_intel_crest",
+                "insig_cyber_crest"
+            )
+        ),
+        OperatorSpecialty.BREACHER to mapOf(
+            ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_eod_badge",
+                "insig_eib_rifle",
+                "insig_master_para",
+                "insig_air_assault",
+                "insig_parachutist",
+                "insig_pathfinder",
+                "insig_cmb_medic"
+            ),
+            ChestBadgeSlot.LEFT_POCKET to listOf(
+                "insig_eod_badge",
+                "insig_pathfinder",
+                "insig_air_assault",
+                "insig_master_para",
+                "insig_parachutist",
+                "insig_cyber_crest",
+                "insig_intel_crest"
+            ),
+            ChestBadgeSlot.RIGHT_POCKET to listOf(
+                "insig_logistics_crest",
+                "insig_staff_crest",
+                "insig_cyber_crest",
+                "insig_intel_crest"
+            )
+        ),
+        OperatorSpecialty.RECON to mapOf(
+            ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_master_para",
+                "insig_pathfinder",
+                "insig_parachutist",
+                "insig_air_assault",
+                "insig_eib_rifle",
+                "insig_eod_badge",
+                "insig_cmb_medic"
+            ),
+            ChestBadgeSlot.LEFT_POCKET to listOf(
+                "insig_pathfinder",
+                "insig_intel_crest",
+                "insig_master_para",
+                "insig_parachutist",
+                "insig_air_assault",
+                "insig_cyber_crest",
+                "insig_eod_badge"
+            ),
+            ChestBadgeSlot.RIGHT_POCKET to listOf(
+                "insig_intel_crest",
+                "insig_staff_crest",
+                "insig_cyber_crest",
+                "insig_logistics_crest"
+            )
+        ),
+        OperatorSpecialty.SIGNALS to mapOf(
+            ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_pathfinder",
+                "insig_eod_badge",
+                "insig_master_para",
+                "insig_air_assault",
+                "insig_parachutist",
+                "insig_eib_rifle",
+                "insig_cmb_medic"
+            ),
+            ChestBadgeSlot.LEFT_POCKET to listOf(
+                "insig_cyber_crest",
+                "insig_intel_crest",
+                "insig_pathfinder",
+                "insig_eod_badge",
+                "insig_air_assault",
+                "insig_master_para",
+                "insig_parachutist"
+            ),
+            ChestBadgeSlot.RIGHT_POCKET to listOf(
+                "insig_cyber_crest",
+                "insig_intel_crest",
+                "insig_staff_crest",
+                "insig_logistics_crest"
+            )
+        ),
+        OperatorSpecialty.COMMAND to mapOf(
+            ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_eib_rifle",
+                "insig_master_para",
+                "insig_air_assault",
+                "insig_eod_badge",
+                "insig_pathfinder",
+                "insig_parachutist",
+                "insig_cmb_medic"
+            ),
+            ChestBadgeSlot.LEFT_POCKET to listOf(
+                "insig_intel_crest",
+                "insig_pathfinder",
+                "insig_cyber_crest",
+                "insig_master_para",
+                "insig_air_assault",
+                "insig_parachutist",
+                "insig_eod_badge"
+            ),
+            ChestBadgeSlot.RIGHT_POCKET to listOf(
+                "insig_staff_crest",
+                "insig_logistics_crest",
+                "insig_intel_crest",
+                "insig_cyber_crest"
+            )
+        )
+    )
+
+    private val preferredTabOrderBySpecialty: Map<OperatorSpecialty, List<String>> = mapOf(
+        OperatorSpecialty.BREACHER to listOf("insig_sapper_tab", "insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab"),
+        OperatorSpecialty.RECON to listOf("insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab", "insig_sapper_tab"),
+        OperatorSpecialty.ASSAULT to listOf("insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab", "insig_sapper_tab")
+    )
+
+    fun isCordAllowedOnShoulder(medal: MedalDefinition, isRightShoulder: Boolean): Boolean =
+        medal.category == AwardCategory.SHOULDER_CORD && medal.isRightShoulder == isRightShoulder
+
+    fun mosCordPriority(specialty: OperatorSpecialty, medalId: String): Int {
+        val leftIdx = preferredCordOrderBySpecialty[specialty]?.indexOf(medalId) ?: -1
+        if (leftIdx >= 0) return leftIdx
+        val rightList = preferredRightCordBySpecialty[specialty]
+            ?: listOf("cord_valor_fourragere", "cord_general_aiguillette")
+        val rightIdx = rightList.indexOf(medalId)
+        return if (rightIdx >= 0) rightIdx else 999
+    }
+
+    fun isPrimaryMosCord(specialty: OperatorSpecialty, medalId: String): Boolean {
+        val leftTop = preferredCordOrderBySpecialty[specialty]?.firstOrNull()
+        val rightTop = (preferredRightCordBySpecialty[specialty]
+            ?: listOf("cord_valor_fourragere", "cord_general_aiguillette")).firstOrNull()
+        return medalId == leftTop || medalId == rightTop
+    }
+
+    fun cordsForShoulder(
+        medals: List<MedalDefinition>,
+        isRightShoulder: Boolean,
+        specialty: OperatorSpecialty
+    ): List<MedalDefinition> = medals
+        .filter { isCordAllowedOnShoulder(it, isRightShoulder) }
+        .sortedWith(
+            compareBy<MedalDefinition> { mosCordPriority(specialty, it.id) }
+                .thenBy { it.precedenceOrder }
+        )
+
+    fun mosBadgePriority(
+        specialty: OperatorSpecialty,
+        medalId: String,
+        slot: ChestBadgeSlot
+    ): Int {
+        val idx = preferredBadgesBySpecialtyAndSlot[specialty]?.get(slot)?.indexOf(medalId) ?: -1
+        return if (idx >= 0) idx else 999
+    }
+
+    fun primaryBadgeIdsForSlot(specialty: OperatorSpecialty, slot: ChestBadgeSlot): Set<String> =
+        preferredBadgesBySpecialtyAndSlot[specialty]?.get(slot)?.firstOrNull()?.let { setOf(it) } ?: emptySet()
+
+    fun chestBadgesForSlot(
+        medals: List<MedalDefinition>,
+        slot: ChestBadgeSlot,
+        specialty: OperatorSpecialty
+    ): List<MedalDefinition> = medals
+        .filter { it.isAllowedInChestSlot(slot) }
+        .sortedWith(
+            compareBy<MedalDefinition> { mosBadgePriority(specialty, it.id, slot) }
+                .thenBy { it.precedenceOrder }
+        )
+
+    fun mosTabPriority(specialty: OperatorSpecialty, medalId: String): Int {
+        val idx = preferredTabOrderBySpecialty[specialty]?.indexOf(medalId) ?: -1
+        return if (idx >= 0) idx else 999
+    }
+
+    fun primaryTabIdsForSpecialty(specialty: OperatorSpecialty): Set<String> =
+        preferredTabOrderBySpecialty[specialty]?.firstOrNull()?.let { setOf(it) } ?: emptySet()
+
+    fun tabsForSpecialty(
+        medals: List<MedalDefinition>,
+        specialty: OperatorSpecialty
+    ): List<MedalDefinition> = medals
+        .filter { it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape == InsigniaShape.TAB }
+        .sortedWith(
+            compareBy<MedalDefinition> { mosTabPriority(specialty, it.id) }
+                .thenBy { it.precedenceOrder }
+        )
+
+    /**
+     * Resolves the 3 distinct chest badge slots (ABOVE_RACK, LEFT_POCKET, RIGHT_POCKET):
+     * 1. Explicit legal overrides claim their badge first so AUTO slots never duplicate them.
+     * 2. Remaining AUTO slots (or invalid legacy overrides) select the top unused legal badge
+     *    ranked by MOS priority first, then catalog precedence.
+     */
+    fun resolveChestBadgeSlots(
+        operator: Operator,
+        ownedBadgeMedals: List<MedalDefinition>,
+        overrides: UniformTailorOverrides
+    ): List<MedalDefinition?> {
+        val slots = listOf(
+            ChestBadgeSlot.ABOVE_RACK to overrides.pinSlot1,
+            ChestBadgeSlot.LEFT_POCKET to overrides.pinSlot2,
+            ChestBadgeSlot.RIGHT_POCKET to overrides.pinSlot3
+        )
+        val ownedById = ownedBadgeMedals.associateBy { it.id }
+        val usedIds = mutableSetOf<String>()
+        val result = arrayOfNulls<MedalDefinition?>(slots.size)
+        val needsAuto = BooleanArray(slots.size)
+
+        slots.forEachIndexed { idx, (slot, raw) ->
+            when (raw) {
+                UniformTailorOverrides.SLOT_NONE -> Unit
+                UniformTailorOverrides.SLOT_AUTO -> needsAuto[idx] = true
+                else -> {
+                    val match = ownedById[raw]?.takeIf {
+                        (overrides.freeTailorOverride || it.isAllowedInChestSlot(slot)) && it.id !in usedIds
+                    }
+                    if (match != null) {
+                        result[idx] = match
+                        usedIds += match.id
+                    } else {
+                        needsAuto[idx] = true
+                    }
+                }
+            }
+        }
+
+        slots.forEachIndexed { idx, (slot, _) ->
+            if (needsAuto[idx]) {
+                val pick = chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
+                    .firstOrNull { it.id !in usedIds }
+                if (pick != null) {
+                    result[idx] = pick
+                    usedIds += pick.id
+                }
+            }
+        }
+
+        return result.toList()
+    }
+
+    fun resolveCombatPatch(operator: Operator): UnitPatchStyle {
+        val chosen = operator.tailorOverrides.combatPatch
+        if (chosen == UnitPatchStyle.NONE) return UnitPatchStyle.NONE
+        if (chosen != UnitPatchStyle.AUTO_MOS) return chosen
+        val combatQualified = (operator.highestRiskSurvived?.baseDangerPenalty ?: 0) >= MissionRisk.MODERATE.baseDangerPenalty
+        if (!combatQualified) return UnitPatchStyle.NONE
+        return when (operator.specialty) {
+            OperatorSpecialty.ASSAULT -> UnitPatchStyle.AEGIS_VANGUARD
+            OperatorSpecialty.RECON -> UnitPatchStyle.SKYWARD_AIRBORNE
+            OperatorSpecialty.SIGNALS -> UnitPatchStyle.SIGNAL_DIRECTORATE
+            OperatorSpecialty.BREACHER -> UnitPatchStyle.SAPPER_CITADEL
+            OperatorSpecialty.MEDIC -> UnitPatchStyle.MEDICAL_COMMAND
+            OperatorSpecialty.COMMAND -> UnitPatchStyle.SUPREME_HQ
+        }
+    }
+
+    fun resolveMarksmanshipTier(
+        operator: Operator,
+        equippedGear: List<GearItem>
+    ): MarksmanshipBadgeTier {
+        val overrideTier = operator.tailorOverrides.marksmanshipBadge
+        if (overrideTier != MarksmanshipBadgeTier.AUTO) return overrideTier
+        val weaponTier = equippedGear.firstOrNull { it.slot == GearSlot.WEAPON }?.tier ?: 0
+        val fpScore = operator.baseFirepower + weaponTier * 4 +
+            (if ("msn_basic_qual" in operator.completedMissionIds) 3 else 0) +
+            (if ("msn_night_qual" in operator.completedMissionIds) 3 else 0)
+        return when {
+            fpScore >= 24 -> MarksmanshipBadgeTier.EXPERT
+            fpScore >= 16 -> MarksmanshipBadgeTier.SHARPSHOOTER
+            else -> MarksmanshipBadgeTier.MARKSMAN
+        }
+    }
+
+    fun resolveOverseasBars(operator: Operator): Int {
+        if (!operator.tailorOverrides.showOverseasBars) return 0
+        val highest = operator.highestRiskSurvived ?: return 0
+        if (highest.baseDangerPenalty < MissionRisk.LOW.baseDangerPenalty) return 0
+        return ((operator.missionsCompleted + 1) / 3).coerceIn(1, 5)
+    }
+
+    fun isLeaderPinShown(operator: Operator, squads: List<TacticalSquad>): Boolean {
+        return operator.tailorOverrides.leaderPinOverride ?: squads.any { it.leaderId == operator.id }
+    }
+
+    data class AwardDeviceInfo(
+        val awardCount: Int,
+        val bronzeOakLeaves: Int,
+        val silverOakLeaves: Int,
+        val hasValorV: Boolean
+    ) {
+        val hasAnyDevice: Boolean
+            get() = bronzeOakLeaves > 0 || silverOakLeaves > 0 || hasValorV
+
+        val summaryLabel: String?
+            get() = buildList {
+                if (hasValorV) add("\"V\" Valor")
+                if (silverOakLeaves > 0) add("$silverOakLeaves Silver OLC")
+                if (bronzeOakLeaves > 0) add("$bronzeOakLeaves Bronze OLC")
+            }.joinToString(" + ").ifEmpty { null }
+    }
+
+    fun resolveAwardDevices(
+        operator: Operator,
+        medalId: String,
+        allCitations: List<AwardedMedal>
+    ): AwardDeviceInfo {
+        val matching = allCitations.filter { it.operatorId == operator.id && it.medalId == medalId }
+        val count = matching.size.coerceAtLeast(1)
+        val additional = (count - 1).coerceAtLeast(0)
+        val silverLeaves = additional / 5
+        val bronzeLeaves = additional % 5
+        val valorEligibleIds = setOf(
+            "medal_bronze_valor",
+            "medal_army_commendation",
+            "medal_meritorious"
+        )
+        val hasValor = medalId in valorEligibleIds && (
+            operator.highestRiskSurvived == MissionRisk.HIGH ||
+                operator.highestRiskSurvived == MissionRisk.EXTREME ||
+                matching.any {
+                    it.citationNote.contains("valor", ignoreCase = true) ||
+                        it.citationNote.contains("hero", ignoreCase = true) ||
+                        it.citationNote.contains("under fire", ignoreCase = true)
+                }
+            )
+        return AwardDeviceInfo(
+            awardCount = count,
+            bronzeOakLeaves = bronzeLeaves,
+            silverOakLeaves = silverLeaves,
+            hasValorV = hasValor
+        )
+    }
+
+    fun evaluateUniformInspection(
+        operators: List<Operator>,
+        citations: List<AwardedMedal>,
+        gearItems: List<GearItem>,
+        squads: List<TacticalSquad>,
+        subjectSquad: TacticalSquad? = null,
+        inspectedKit: WardrobeKit? = null
+    ): UniformInspectionReport {
+        val activeSubjects = operators.ifEmpty { return UniformInspectionReport("None", "C", 50, 5, 60, listOf("No personnel inspected."), emptyList()) }
+        var totalScore = 0
+        val highlights = mutableListOf<String>()
+        val findings = mutableListOf<String>()
+
+        activeSubjects.forEach { rawOp ->
+            val ownedIds = citations.filter { it.operatorId == rawOp.id }.map { it.medalId }.toSet()
+            val kit = inspectedKit ?: if (rawOp.uniformMode == UniformMode.FIELD_TACTICAL) WardrobeKit.FIELD else rawOp.activeWardrobeKit
+            val op = if (inspectedKit != null) {
+                TacticalCalculator.resolveKitAppearance(rawOp, kit, squads, ownedIds)
+            } else {
+                rawOp
+            }
+            var opScore = 35
+            val opMedals = citations.filter { it.operatorId == op.id }
+                .mapNotNull { c -> com.example.data.catalog.GameCatalog.medals.find { it.id == c.medalId } }
+                .distinctBy { it.id }
+
+            when (kit) {
+                WardrobeKit.ALPHAS, WardrobeKit.MESS -> {
+                    opScore += 15
+                    if (kit == WardrobeKit.MESS) {
+                        highlights += "${op.rank.code} ${op.callsign}: Evening Mess Cutaway & Miniature Medals inspected"
+                    }
+                }
+                WardrobeKit.BRAVOS -> {
+                    opScore += 12
+                    highlights += "${op.rank.code} ${op.callsign}: Daily Garrison Bravos short-sleeve turn-out verified"
+                }
+                WardrobeKit.FIELD -> {
+                    findings += "${op.callsign}: Standing in Field ACU rather than Dress Uniform (-15 pts)"
+                }
+            }
+
+            if (op.dressStyle.requiredTier == op.rank.tier || (op.rank.tier.isOfficer && op.dressStyle.requiredTier.isOfficer)) {
+                opScore += 15
+            } else {
+                opScore += 8
+                findings += "${op.callsign}: Upgrade to ${op.rank.tier.shortLabel} Coat Cut for full formal turn-out"
+            }
+
+            if (op.dressDisplayMode != DressDisplayMode.CLEAN && opMedals.isNotEmpty()) {
+                opScore += 15
+                highlights += "${op.rank.code} ${op.callsign}: Full honors & precedence rack displayed (${opMedals.size} awards)"
+            } else if (opMedals.isEmpty()) {
+                opScore += 10
+            } else {
+                findings += "${op.callsign}: Chest rack hidden (Clean mode)"
+            }
+
+            if (kit == WardrobeKit.BRAVOS || op.hasWhiteGloves) opScore += 5
+            val sashAllowed = TacticalCalculator.evaluateDressSashEligibility(op, squads).eligible
+            if (kit == WardrobeKit.BRAVOS || kit == WardrobeKit.MESS || op.hasDressSash || !sashAllowed) {
+                opScore += 5
+            }
+
+            val opGear = gearItems.filter { it.equippedByOperatorId == op.id }
+            val markTier = resolveMarksmanshipTier(op, opGear)
+            if (kit == WardrobeKit.MESS || markTier != MarksmanshipBadgeTier.NONE) {
+                opScore += 5
+            }
+            if (isLeaderPinShown(op, squads)) {
+                opScore += 5
+                highlights += "${op.rank.code} ${op.callsign}: Designated Squad Leader Crest verified above nameplate"
+            } else if (subjectSquad == null) {
+                opScore += 5
+            }
+            if (kit == WardrobeKit.MESS) opScore += 3
+            totalScore += opScore.coerceIn(0, 100)
+        }
+
+        var avgScore = (totalScore / activeSubjects.size).coerceIn(0, 100)
+        if (subjectSquad != null) {
+            val targetPatch = subjectSquad.standardPatch
+            val alignedPatchCount = activeSubjects.count {
+                targetPatch == UnitPatchStyle.AUTO_MOS || it.tailorOverrides.unitPatch == targetPatch
+            }
+            val alignedCamoCount = if (subjectSquad.standardCamo == null) activeSubjects.size else {
+                activeSubjects.count { it.camoPattern == subjectSquad.standardCamo }
+            }
+            if (alignedPatchCount == activeSubjects.size && alignedCamoCount == activeSubjects.size) {
+                avgScore = (avgScore + 8).coerceAtMost(100)
+                highlights += "${subjectSquad.name}: 100% Squad Uniform Standard alignment (+8 Cohesion Turn-out)"
+            } else {
+                findings += "${subjectSquad.name}: Use 'Dress Squad in Standard' in Squad Editor to align patches/camo"
+            }
+        }
+
+        val gradeLetter = when {
+            avgScore >= 94 -> "S (Distinguished)"
+            avgScore >= 85 -> "A+"
+            avgScore >= 75 -> "A"
+            avgScore >= 62 -> "B"
+            else -> "C"
+        }
+        val basePrestige = if (subjectSquad != null) 22 else if (inspectedKit == WardrobeKit.MESS) 16 else 12
+        val prestigeEarned = (basePrestige + (avgScore / 5)).coerceIn(10, 52)
+        val label = subjectSquad?.name ?: "${activeSubjects.first().rank.code} ${activeSubjects.first().callsign}"
+
+        return UniformInspectionReport(
+            subjectLabel = label,
+            gradeLetter = gradeLetter,
+            scorePct = avgScore,
+            prestigeEarned = prestigeEarned,
+            buffDurationSec = 180,
+            findings = findings.distinct().take(4),
+            highlights = highlights.distinct().take(4)
+        )
+    }
+}

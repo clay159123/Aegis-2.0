@@ -1,0 +1,973 @@
+package com.example.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.R
+import com.example.data.catalog.GameCatalog
+import com.example.domain.SquadCohesionRules
+import com.example.domain.TacticalCalculator
+import com.example.domain.model.*
+import com.example.ui.components.*
+import com.example.ui.theme.LocalAegisColors
+import com.example.ui.viewmodel.CommandUiState
+import kotlin.math.roundToInt
+
+private enum class OpsBoardTab(val label: String) {
+    ALL("All"),
+    CAMPAIGNS("Campaigns"),
+    COMBAT("Combat"),
+    SCHOOLS("Schools"),
+    STAFF("Staff")
+}
+
+private data class OpsMissionGroup(
+    val id: String,
+    val title: String,
+    val scope: MissionScope,
+    val missions: List<MissionTemplate>
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HqOpsScreen(
+    uiState: CommandUiState,
+    onReadinessDrill: () -> Unit,
+    onUpgradeFacility: (FacilityType) -> Unit,
+    onStartDeployment: (MissionTemplate, List<String>) -> Unit,
+    onStartDeploymentWithSquad: ((MissionTemplate, List<String>, String?) -> Unit)? = null,
+    onClaimDeployment: (String) -> Unit,
+    onTreatWounded: (String) -> Unit,
+    onNavigateToDress: () -> Unit,
+    onNavigateToSquad: () -> Unit,
+    onSwitchOperatorsToKit: (List<String>, WardrobeKit) -> Unit = { _, _ -> },
+    onRefreshRotatingMissions: () -> Unit = {},
+    onOpenCommandGuide: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val extra = LocalAegisColors.current
+    var showFacilities by remember { mutableStateOf(false) }
+    var showActiveOps by remember { mutableStateOf(true) }
+    var selectedTab by remember { mutableStateOf(OpsBoardTab.ALL) }
+    var readyOnly by remember { mutableStateOf(false) }
+    var collapsedGroupIds by remember { mutableStateOf(setOf("campaigns")) }
+    var expandedMissionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedCampaignIds by remember { mutableStateOf(setOf("camp_veridian")) }
+    var stagingMission by remember { mutableStateOf<MissionTemplate?>(null) }
+    var selectedOperatorIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedSquadId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(uiState.completedCampaignIds) {
+        val nextActive = GameCatalog.campaigns.firstOrNull {
+            TacticalCalculator.isCampaignUnlocked(it, uiState.completedCampaignIds) &&
+                it.id !in uiState.completedCampaignIds
+        }
+        if (nextActive != null && nextActive.id !in expandedCampaignIds) {
+            expandedCampaignIds = expandedCampaignIds + nextActive.id
+        }
+    }
+
+    if (stagingMission != null) {
+        BackHandler {
+            stagingMission = null
+            selectedOperatorIds = emptyList()
+            selectedSquadId = null
+        }
+    }
+
+    val deployedOpIds = remember(uiState.deployments) {
+        uiState.deployments.flatMap { it.operatorIds }.toSet()
+    }
+    val woundedOps = remember(uiState.operators) {
+        uiState.operators.filter { it.unlocked && it.status == OperatorStatus.RECOVERING }
+    }
+    val durationMult = TacticalCalculator.durationMultiplier(uiState.facilities, uiState.hqStaffSummary)
+    val supplyMult = TacticalCalculator.supplyCostMultiplier(
+        facilities = uiState.facilities,
+        hqStaffSummary = uiState.hqStaffSummary,
+        completedCampaignIds = uiState.completedCampaignIds
+    )
+
+    val qualifiedByMissionId = remember(
+        uiState.operators,
+        deployedOpIds,
+        uiState.gearItems,
+        uiState.citations,
+        uiState.facilities
+    ) {
+        GameCatalog.missions.associate { mission ->
+            val count = uiState.operators.count { op ->
+                TacticalCalculator.canOperatorDeployOnMission(
+                    operator = op,
+                    mission = mission,
+                    deployedOpIds = deployedOpIds,
+                    gearItems = uiState.gearItems,
+                    citations = uiState.citations,
+                    facilities = uiState.facilities
+                ).eligible
+            }
+            mission.id to count
+        }
+    }
+
+    val activeRotatingSet = remember(uiState.rotatingMissionIds) {
+        val ids = uiState.rotatingMissionIds
+        if (ids.isNotEmpty()) {
+            ids.toSet()
+        } else {
+            GameCatalog.rotatingStandalonePool.take(4).map { it.id }.toSet()
+        }
+    }
+
+    val orderedGroups = remember(activeRotatingSet) {
+        listOf(
+            OpsMissionGroup(
+                id = "combat",
+                title = "Field Combat Ops",
+                scope = MissionScope.FIELD_COMBAT,
+                missions = GameCatalog.missions.filter {
+                    it.scope == MissionScope.FIELD_COMBAT &&
+                        it.campaignId == null &&
+                        (it.isEvergreenStandalone || it.id in activeRotatingSet)
+                }
+            ),
+            OpsMissionGroup(
+                id = "schools",
+                title = "Specialty Schools",
+                scope = MissionScope.TRAINING,
+                missions = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
+            ),
+            OpsMissionGroup(
+                id = "staff",
+                title = "Diplomatic & Staff Ops",
+                scope = MissionScope.STAFF_DIPLOMATIC,
+                missions = GameCatalog.missions.filter {
+                    it.scope == MissionScope.STAFF_DIPLOMATIC &&
+                        it.campaignId == null &&
+                        (it.isEvergreenStandalone || it.id in activeRotatingSet)
+                }
+            )
+        )
+    }
+
+    val visibleCampaigns = remember(readyOnly, qualifiedByMissionId, uiState.completedCampaignStageIds, uiState.completedCampaignIds) {
+        if (!readyOnly) {
+            GameCatalog.campaigns
+        } else {
+            GameCatalog.campaigns.filter { camp ->
+                camp.stageMissionIds.any { stageId ->
+                    val mission = GameCatalog.campaignMissionsById[stageId] ?: return@any false
+                    TacticalCalculator.isCampaignStageUnlocked(
+                        mission = mission,
+                        completedStageIds = uiState.completedCampaignStageIds,
+                        completedCampaignIds = uiState.completedCampaignIds
+                    ) && (qualifiedByMissionId[stageId] ?: 0) >= mission.minOperators
+                }
+            }
+        }
+    }
+
+    val visibleGroups = remember(selectedTab, readyOnly, qualifiedByMissionId, orderedGroups) {
+        val scoped = when (selectedTab) {
+            OpsBoardTab.ALL -> orderedGroups
+            OpsBoardTab.CAMPAIGNS -> emptyList()
+            OpsBoardTab.COMBAT -> orderedGroups.filter { it.scope == MissionScope.FIELD_COMBAT }
+            OpsBoardTab.SCHOOLS -> orderedGroups.filter { it.scope == MissionScope.TRAINING }
+            OpsBoardTab.STAFF -> orderedGroups.filter { it.scope == MissionScope.STAFF_DIPLOMATIC }
+        }
+        if (!readyOnly) {
+            scoped
+        } else {
+            scoped.mapNotNull { group ->
+                val readyMissions = group.missions.filter { m ->
+                    (qualifiedByMissionId[m.id] ?: 0) >= m.minOperators
+                }
+                if (readyMissions.isEmpty()) null else group.copy(missions = readyMissions)
+            }
+        }
+    }
+
+    val openMissionStaging: (MissionTemplate) -> Unit = { mission ->
+        stagingMission = mission
+        val readyOps = uiState.operators.filter {
+            TacticalCalculator.canOperatorDeployOnMission(
+                operator = it,
+                mission = mission,
+                deployedOpIds = deployedOpIds,
+                gearItems = uiState.gearItems,
+                citations = uiState.citations,
+                facilities = uiState.facilities
+            ).eligible
+        }
+        val readyIds = readyOps.map { it.id }.toSet()
+        val matchingSquad = uiState.squads.firstOrNull { sq ->
+            SquadCohesionRules.orderedMembersForDeployment(
+                squad = sq,
+                eligibleOperatorIds = readyIds,
+                maxCount = mission.maxOperators
+            ).size >= mission.minOperators
+        }
+        if (matchingSquad != null && !mission.risk.isTraining) {
+            selectedSquadId = matchingSquad.id
+            selectedOperatorIds = SquadCohesionRules.orderedMembersForDeployment(
+                squad = matchingSquad,
+                eligibleOperatorIds = readyIds,
+                maxCount = mission.maxOperators
+            )
+        } else {
+            selectedSquadId = null
+            selectedOperatorIds = readyOps.take(mission.minOperators).map { it.id }
+        }
+    }
+
+    val returnedCount = uiState.deployments.count { it.isComplete(uiState.nowMillis) }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .testTag("ops_board_list"),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Compact HQ Command Header
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                border = BorderStroke(1.dp, extra.borderSubtle),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(132.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.img_fob_banner),
+                        contentDescription = stringResource(id = R.string.cd_fob_banner),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0.96f)
+                                    )
+                                )
+                            )
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
+                            ) {
+                                Text(
+                                    text = buildString {
+                                        append("AEGIS HQ • ${uiState.deployments.size}/${uiState.maxDeploymentSlots} OPS")
+                                        if (uiState.hqStaffCount > 0) {
+                                            append(" • STAFF ${uiState.hqStaffCount}/${uiState.maxHqStaffSlots}")
+                                        }
+                                        if (uiState.veteranLegacyBps > 0) {
+                                            append(" • LEGACY ${uiState.veteranLegacyPctText}")
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showFacilities = !showFacilities },
+                                    modifier = Modifier
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .testTag("toggle_hq_facilities"),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.AccountBalance,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        if (showFacilities) "Hide HQ" else "HQ Upgrades",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                    border = BorderStroke(1.dp, extra.borderSubtle)
+                                ) {
+                                    IconButton(
+                                        onClick = onOpenCommandGuide,
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .testTag("open_command_guide")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                                            contentDescription = "Command Guide and Reset Save",
+                                            tint = extra.brassBright
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "HEADQUARTERS OPS",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                                Text(
+                                    text = "Filter combat missions, specialty schools & staff ops",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Button(
+                                onClick = onReadinessDrill,
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .testTag("readiness_drill_button"),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Drill")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Collapsible HQ Facilities Panel
+        item {
+            AnimatedVisibility(visible = showFacilities) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    uiState.facilities.forEach { fac ->
+                        val creditCost = fac.type.upgradeCreditCost(fac.level)
+                        val supplyCost = fac.type.upgradeSupplyCost(fac.level)
+                        val canAfford = uiState.resources.credits >= creditCost && uiState.resources.supplies >= supplyCost
+                        TacticalPanelCard {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${fac.type.title} (Lv.${fac.level})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "${formatRate(fac.type.productionPerSec(fac.level))} ${fac.type.primaryResource.shortCode} • ${fac.type.perkDescription}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Cost: ${creditCost.toInt()} CR • ${supplyCost.toInt()} SUP",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (canAfford) extra.brassBright else MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = { onUpgradeFacility(fac.type) },
+                                    enabled = canAfford,
+                                    modifier = Modifier
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .testTag("upgrade_facility_${fac.type.id}")
+                                ) {
+                                    Text("Upgrade")
+                                }
+                            }
+                        }
+                    }
+
+                    TacticalPanelCard(
+                        containerColor = extra.signalsContainer.copy(alpha = 0.25f),
+                        borderColor = extra.signalsCyan.copy(alpha = 0.5f)
+                    ) {
+                        val nextPreviewCooldownSec = if (uiState.lastRetirementAtMillis <= 0L) 0L else {
+                            val elapsed = (uiState.nowMillis - uiState.lastRetirementAtMillis).coerceAtLeast(0L)
+                            ((TacticalCalculator.RETIREMENT_FULL_COOLDOWN_MILLIS - elapsed).coerceAtLeast(0L) + 999L) / 1000L
+                        }
+                        Column {
+                            Text(
+                                text = "VETERAN LEGACY • BASE OPS ENDOWMENT",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = extra.signalsCyan
+                            )
+                            Text(
+                                text = "${uiState.veteranLegacyPctText} CR / SUP / INT (${uiState.retiredVeteransCount} Retired • Cap ${TacticalCalculator.formatBpsPercent(TacticalCalculator.MAX_VETERAN_LEGACY_BPS)})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = extra.brassBright
+                            )
+                            if (nextPreviewCooldownSec > 0L && uiState.veteranLegacyBps < TacticalCalculator.MAX_VETERAN_LEGACY_BPS) {
+                                Text(
+                                    text = "Retirement spacing cooldown: ${formatCountdown(nextPreviewCooldownSec)} to 100%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = extra.amberTelemetry
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Pending Medal Recommendations Alert
+        if (uiState.pendingDeeds.isNotEmpty()) {
+            item {
+                TacticalPanelCard(
+                    containerColor = extra.brassContainer.copy(alpha = 0.5f),
+                    borderColor = extra.brass
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${uiState.pendingDeeds.size} AWARD RECOMMENDATION(S)",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = extra.brassBright
+                            )
+                            Text(
+                                text = "Operators earned mission deeds awaiting medal presentation.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Button(
+                            onClick = onNavigateToDress,
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("go_to_pending_awards"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = extra.brass,
+                                contentColor = MaterialTheme.colorScheme.onSecondary
+                            )
+                        ) {
+                            Text("Present")
+                        }
+                    }
+                }
+            }
+        }
+
+        // Medbay Recovery Bay
+        if (woundedOps.isNotEmpty()) {
+            item {
+                TacticalPanelCard(borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.65f)) {
+                    Text(
+                        text = "HQ MEDEVAC RECOVERY BAY",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    woundedOps.forEach { op ->
+                        val remSec = ((op.recoveryUntilMillis - uiState.nowMillis) / 1000L).coerceAtLeast(0L)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${op.rank.code} ${op.callsign}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Recovering • ${formatCountdown(remSec)} remaining",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = extra.amberTelemetry
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { onTreatWounded(op.id) },
+                                enabled = uiState.resources.supplies >= 20.0,
+                                modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                            ) {
+                                Text("Treat (20 SUP)")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Collapsible Active Deployments
+        if (uiState.deployments.isNotEmpty()) {
+            item {
+                OpsSectionBanner(
+                    title = "Active Missions (${uiState.deployments.size}/${uiState.maxDeploymentSlots})",
+                    badgeText = if (returnedCount > 0) "$returnedCount RETURNED" else "LIVE TIMERS",
+                    badgeAccent = if (returnedCount > 0) extra.brassBright else extra.signalsCyan,
+                    expanded = showActiveOps,
+                    onClick = { showActiveOps = !showActiveOps },
+                    testTag = "ops_section_active"
+                )
+            }
+            if (showActiveOps) {
+                items(uiState.deployments, key = { it.id }) { deployment ->
+                    ActiveHqDeploymentCard(
+                        deployment = deployment,
+                        operators = uiState.operators,
+                        squads = uiState.squads,
+                        nowMillis = uiState.nowMillis,
+                        onClaim = { onClaimDeployment(deployment.id) }
+                    )
+                }
+            }
+        }
+
+        // Mission Board Category Tabs & Quick Filter Controls
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader(
+                    title = "Campaigns, Rotating Ops & Schools",
+                    subtitle = "Advance Campaigns I–IV in sequence or deploy on 4m rotating standalone contracts"
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OpsBoardTab.entries.forEach { tab ->
+                        val tabCount = when (tab) {
+                            OpsBoardTab.ALL -> orderedGroups.sumOf { it.missions.size } + GameCatalog.campaigns.size
+                            OpsBoardTab.CAMPAIGNS -> GameCatalog.campaigns.size
+                            OpsBoardTab.COMBAT -> orderedGroups.first { it.scope == MissionScope.FIELD_COMBAT }.missions.size
+                            OpsBoardTab.SCHOOLS -> orderedGroups.first { it.scope == MissionScope.TRAINING }.missions.size
+                            OpsBoardTab.STAFF -> orderedGroups.first { it.scope == MissionScope.STAFF_DIPLOMATIC }.missions.size
+                        }
+                        val tabIcon = when (tab) {
+                            OpsBoardTab.ALL -> Icons.Filled.GridView
+                            OpsBoardTab.CAMPAIGNS -> Icons.Filled.Flag
+                            OpsBoardTab.COMBAT -> Icons.Filled.GpsFixed
+                            OpsBoardTab.SCHOOLS -> Icons.Filled.School
+                            OpsBoardTab.STAFF -> Icons.Filled.Public
+                        }
+                        FilterChip(
+                            selected = selectedTab == tab,
+                            onClick = { selectedTab = tab },
+                            label = { Text("${tab.label} ($tabCount)") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = tabIcon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("ops_tab_${tab.name.lowercase()}")
+                        )
+                    }
+
+                    FilterChip(
+                        selected = readyOnly,
+                        onClick = { readyOnly = !readyOnly },
+                        label = { Text("Ready Only") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            selectedLeadingIconColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("ops_filter_ready")
+                    )
+                }
+            }
+        }
+
+        val showCampaignsSection = selectedTab == OpsBoardTab.ALL || selectedTab == OpsBoardTab.CAMPAIGNS
+        val showRotationBanner = selectedTab == OpsBoardTab.ALL || selectedTab == OpsBoardTab.COMBAT || selectedTab == OpsBoardTab.STAFF
+
+        if (showCampaignsSection) {
+            val isCampaignsExpanded = selectedTab == OpsBoardTab.CAMPAIGNS || "campaigns" !in collapsedGroupIds
+            if (selectedTab == OpsBoardTab.ALL) {
+                item(key = "header_campaigns") {
+                    OpsSectionBanner(
+                        title = "Theater Campaigns (${uiState.completedCampaignIds.size}/${GameCatalog.campaigns.size})",
+                        badgeText = if (uiState.allCampaignsCleared) "ALL UNLOCKED" else "SEQUENTIAL",
+                        badgeAccent = if (uiState.allCampaignsCleared) extra.brassBright else extra.signalsCyan,
+                        expanded = isCampaignsExpanded,
+                        onClick = {
+                            collapsedGroupIds = if ("campaigns" in collapsedGroupIds) {
+                                collapsedGroupIds - "campaigns"
+                            } else {
+                                collapsedGroupIds + "campaigns"
+                            }
+                        },
+                        testTag = "ops_section_campaigns"
+                    )
+                }
+            }
+
+            if (isCampaignsExpanded) {
+                item(key = "campaigns_summary_banner") {
+                    TacticalPanelCard(
+                        containerColor = if (uiState.allCampaignsCleared) {
+                            extra.brassContainer.copy(alpha = 0.38f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        borderColor = if (uiState.allCampaignsCleared) extra.brass else extra.borderSubtle
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = if (uiState.allCampaignsCleared) {
+                                    "ALL 4 CAMPAIGNS CLEARED — FULL FREE REPLAY ACTIVE"
+                                } else {
+                                    "SEQUENTIAL THEATER CAMPAIGNS (${uiState.completedCampaignIds.size}/${GameCatalog.campaigns.size})"
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (uiState.allCampaignsCleared) extra.brassBright else extra.signalsCyan
+                            )
+                            Text(
+                                text = if (uiState.allCampaignsCleared) {
+                                    "Every stage across Campaigns I–IV is now open for unrestricted replay, plus all 4 Theater Mastery buffs."
+                                } else {
+                                    "Clear Campaigns I → II → III → IV in ascending difficulty to earn permanent Theater Perks & unlock all stages for replay."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                items(visibleCampaigns, key = { it.id }) { campaign ->
+                    val stageMissions = campaign.stageMissionIds.mapNotNull { id ->
+                        GameCatalog.campaignMissionsById[id]
+                    }
+                    TheaterCampaignCard(
+                        campaign = campaign,
+                        stageMissions = stageMissions,
+                        completedStageIds = uiState.completedCampaignStageIds,
+                        completedCampaignIds = uiState.completedCampaignIds,
+                        allCampaignsCleared = uiState.allCampaignsCleared,
+                        expanded = campaign.id in expandedCampaignIds,
+                        onToggleExpand = {
+                            expandedCampaignIds = if (campaign.id in expandedCampaignIds) {
+                                expandedCampaignIds - campaign.id
+                            } else {
+                                expandedCampaignIds + campaign.id
+                            }
+                        },
+                        qualifiedByMissionId = qualifiedByMissionId,
+                        durationMult = durationMult,
+                        supplyMult = supplyMult,
+                        currentSupplies = uiState.resources.supplies,
+                        slotsFull = uiState.deployments.size >= uiState.maxDeploymentSlots,
+                        expandedMissionIds = expandedMissionIds,
+                        onToggleMissionDetails = { mId ->
+                            expandedMissionIds = if (mId in expandedMissionIds) {
+                                expandedMissionIds - mId
+                            } else {
+                                expandedMissionIds + mId
+                            }
+                        },
+                        onAssembleMission = openMissionStaging
+                    )
+                }
+            }
+        }
+
+        if (showRotationBanner) {
+            item(key = "rotating_contracts_banner") {
+                RotatingContractsBanner(
+                    remainingSec = uiState.rotationRemainingSec,
+                    currentIntel = uiState.resources.intel,
+                    activeRotatingCount = activeRotatingSet.size,
+                    onRefresh = onRefreshRotatingMissions
+                )
+            }
+        }
+
+        if (visibleGroups.isEmpty() && (!showCampaignsSection || visibleCampaigns.isEmpty())) {
+            item {
+                TacticalPanelCard {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "No ops currently have qualified personnel available.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                readyOnly = false
+                                selectedTab = OpsBoardTab.ALL
+                            },
+                            modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                        ) {
+                            Text("Show All Ops")
+                        }
+                    }
+                }
+            }
+        } else {
+            visibleGroups.forEach { group ->
+                val isGroupExpanded = selectedTab != OpsBoardTab.ALL || group.id !in collapsedGroupIds
+                val readyInGroup = group.missions.count { m ->
+                    (qualifiedByMissionId[m.id] ?: 0) >= m.minOperators
+                }
+
+                if (selectedTab == OpsBoardTab.ALL) {
+                    item(key = "header_${group.id}") {
+                        OpsSectionBanner(
+                            title = "${group.title} (${group.missions.size})",
+                            badgeText = "$readyInGroup READY",
+                            badgeAccent = if (readyInGroup > 0) MaterialTheme.colorScheme.primary else extra.amberTelemetry,
+                            expanded = isGroupExpanded,
+                            onClick = {
+                                collapsedGroupIds = if (group.id in collapsedGroupIds) {
+                                    collapsedGroupIds - group.id
+                                } else {
+                                    collapsedGroupIds + group.id
+                                }
+                            },
+                            testTag = "ops_section_${group.id}"
+                        )
+                    }
+                }
+
+                if (isGroupExpanded) {
+                    items(group.missions, key = { it.id }) { mission ->
+                        val adjustedSec = (mission.durationSeconds * durationMult).roundToInt()
+                        val adjustedSup = (mission.supplyCost * supplyMult).roundToInt()
+                        val slotsFull = uiState.deployments.size >= uiState.maxDeploymentSlots
+                        val qualifiedCount = qualifiedByMissionId[mission.id] ?: 0
+                        val isExpanded = mission.id in expandedMissionIds
+
+                        CompactHqMissionCard(
+                            mission = mission,
+                            adjustedDurationSec = adjustedSec,
+                            adjustedSupplyCost = adjustedSup,
+                            canAffordSupply = uiState.resources.supplies >= adjustedSup,
+                            slotsFull = slotsFull,
+                            qualifiedCount = qualifiedCount,
+                            expanded = isExpanded,
+                            onToggleExpand = {
+                                expandedMissionIds = if (isExpanded) {
+                                    expandedMissionIds - mission.id
+                                } else {
+                                    expandedMissionIds + mission.id
+                                }
+                            },
+                            onAssemble = { openMissionStaging(mission) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    val missionToStage = stagingMission
+    if (missionToStage != null) {
+        val stagingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = {
+                stagingMission = null
+                selectedOperatorIds = emptyList()
+                selectedSquadId = null
+            },
+            sheetState = stagingSheetState,
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            HqStagingSheet(
+                mission = missionToStage,
+                uiState = uiState,
+                deployedOpIds = deployedOpIds,
+                selectedOperatorIds = selectedOperatorIds,
+                selectedSquadId = selectedSquadId,
+                onSelectSquad = { squad ->
+                    val readyIds = uiState.operators.filter {
+                        TacticalCalculator.canOperatorDeployOnMission(
+                            operator = it,
+                            mission = missionToStage,
+                            deployedOpIds = deployedOpIds,
+                            gearItems = uiState.gearItems,
+                            citations = uiState.citations,
+                            facilities = uiState.facilities
+                        ).eligible
+                    }.map { it.id }.toSet()
+                    selectedOperatorIds = SquadCohesionRules.orderedMembersForDeployment(
+                        squad = squad,
+                        eligibleOperatorIds = readyIds,
+                        maxCount = missionToStage.maxOperators
+                    )
+                    selectedSquadId = squad.id
+                },
+                onToggleOperator = { opId ->
+                    selectedSquadId = null
+                    selectedOperatorIds = if (opId in selectedOperatorIds) {
+                        selectedOperatorIds - opId
+                    } else if (selectedOperatorIds.size < missionToStage.maxOperators) {
+                        selectedOperatorIds + opId
+                    } else {
+                        selectedOperatorIds
+                    }
+                },
+                onSwitchOperatorsToKit = onSwitchOperatorsToKit,
+                onEditKits = {
+                    stagingMission = null
+                    selectedOperatorIds = emptyList()
+                    selectedSquadId = null
+                    onNavigateToSquad()
+                },
+                onLaunch = {
+                    val launchWithSquad = onStartDeploymentWithSquad
+                    if (launchWithSquad != null) {
+                        launchWithSquad(missionToStage, selectedOperatorIds, selectedSquadId)
+                    } else {
+                        onStartDeployment(missionToStage, selectedOperatorIds)
+                    }
+                    stagingMission = null
+                    selectedOperatorIds = emptyList()
+                    selectedSquadId = null
+                },
+                onCancel = {
+                    stagingMission = null
+                    selectedOperatorIds = emptyList()
+                    selectedSquadId = null
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun OpsSectionBanner(
+    title: String,
+    badgeText: String,
+    badgeAccent: Color,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    val extra = LocalAegisColors.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .clickable(onClick = onClick)
+            .testTag(testTag),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, extra.borderSubtle)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = title.uppercase(),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Surface(
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = badgeAccent.copy(alpha = 0.16f)
+                ) {
+                    Text(
+                        text = badgeText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = badgeAccent,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse section" else "Expand section",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
