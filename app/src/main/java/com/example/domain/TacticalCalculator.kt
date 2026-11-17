@@ -1105,6 +1105,16 @@ object TacticalCalculator {
         return 1.0 + (armoryLevel - 1) * 0.05
     }
 
+    /**
+     * Supplies to dispatch [mission] with [soldierCount] soldiers. Schools charge per soldier;
+     * field and diplomatic missions charge one flat fee for the team.
+     */
+    fun dispatchSupplyCost(mission: MissionTemplate, soldierCount: Int, multiplier: Double): Int {
+        val perUnit = mission.supplyCost * multiplier
+        val units = if (mission.hasClassCap) 1 else soldierCount.coerceAtLeast(1)
+        return (perUnit * units).roundToInt()
+    }
+
     fun supplyCostMultiplier(
         facilities: List<FacilityState>,
         hqStaffSummary: HqStaffSummary? = null,

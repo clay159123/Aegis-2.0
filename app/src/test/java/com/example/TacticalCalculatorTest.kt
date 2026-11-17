@@ -2818,4 +2818,16 @@ class TacticalCalculatorTest {
         val medicCo = base.copy(specialty = OperatorSpecialty.MEDIC, status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.CO_COMMANDING_OFFICER)
         assertEquals("cord_medical_maroon", left(medicCo, cords("cord_infantry_blue", "cord_medical_maroon", "cord_intel_teal")))
     }
+
+    @Test
+    fun schoolsChargeSuppliesPerSoldierAndMissionsPerTeam() {
+        val school = GameCatalog.missions.first { it.id == "msn_ranger_school" }
+        val mission = GameCatalog.missions.first { it.scope != MissionScope.TRAINING }
+        val one = TacticalCalculator.dispatchSupplyCost(school, 1, 1.0)
+        assertEquals(one * 15, TacticalCalculator.dispatchSupplyCost(school, 15, 1.0))
+        assertEquals(
+            TacticalCalculator.dispatchSupplyCost(mission, 1, 1.0),
+            TacticalCalculator.dispatchSupplyCost(mission, 4, 1.0)
+        )
+    }
 }

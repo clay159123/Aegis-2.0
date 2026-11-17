@@ -623,11 +623,15 @@ class CommandViewModel(
             showBanner(msg)
             return
         }
-        val effectiveSupplyCost = (mission.supplyCost * TacticalCalculator.supplyCostMultiplier(
-            facilities = state.facilities,
-            hqStaffSummary = state.hqStaffSummary,
-            completedCampaignIds = state.completedCampaignIds
-        )).roundToInt().toDouble()
+        val effectiveSupplyCost = TacticalCalculator.dispatchSupplyCost(
+            mission = mission,
+            soldierCount = chosenOps.size,
+            multiplier = TacticalCalculator.supplyCostMultiplier(
+                facilities = state.facilities,
+                hqStaffSummary = state.hqStaffSummary,
+                completedCampaignIds = state.completedCampaignIds
+            )
+        ).toDouble()
         if (state.resources.supplies < effectiveSupplyCost) {
             showBanner("Need ${effectiveSupplyCost.toInt()} SUP to deploy.")
             return
