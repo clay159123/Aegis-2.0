@@ -853,114 +853,19 @@ fun DressAwardsScreen(
             val canAfford = uiState.resources.prestige >= medal.prestigeCost
             val perSoldierCap = TacticalCalculator.perSoldierCapForAward(medal.id)
 
-            TacticalPanelCard(
-                borderColor = when {
-                    alreadyHeld -> MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
-                    hasDeed && eligibility.eligible -> extra.brass
-                    else -> extra.borderSubtle
-                }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable { inspectedAward = medal }
-                            .padding(4.dp)
-                    ) {
-                        AwardVisualThumbnail(medal = medal)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "${medal.prestigeCost} PRS • Case",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = extra.brassBright
-                        )
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = medal.category.label.uppercase(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = extra.signalsCyan
-                            )
-                            if (heldCount > 0) {
-                                Text(
-                                    text = if (heldCount > 1) "• HELD ×$heldCount (OLC)" else "• HELD",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = extra.brassBright
-                                )
-                            }
-                            if (medal.minTierRequired != RankTier.SOLDIER) {
-                                Text(
-                                    text = "• ${medal.minTierRequired.shortLabel}+",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = extra.brassBright
-                                )
-                            }
-                            if (perSoldierCap != null) {
-                                Text(
-                                    text = "• $perSoldierCap MAX / SOLDIER",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (alreadyHeld) extra.signalsCyan else extra.brassBright
-                                )
-                            }
-                        }
-                        Text(
-                            text = medal.name,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = medal.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "Req: ${medal.qualificationRule}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (alreadyHeld || eligibility.eligible) extra.brassBright else MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = "FP+${medal.firepowerBonus} ST+${medal.stealthBonus} TC+${medal.techBonus} RS+${medal.resilienceBonus} • +${medal.yieldBonusPct}% Yield",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = { citationModalMedal = medal to opDeeds.firstOrNull { it.recommendedMedalId == medal.id } },
-                    enabled = (!alreadyHeld || isRepeatable) && eligibility.eligible && canAfford,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("confer_${medal.id}"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (medal.tier == MedalTier.SUPREME) extra.brass else MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Text(
-                        when {
-                            alreadyHeld && !isRepeatable -> "Awarded on ${selectedOp.callsign}'s Uniform"
-                            !eligibility.eligible -> "Locked: ${eligibility.missingRequirements.firstOrNull() ?: medal.qualificationRule}"
-                            !canAfford -> "Need ${medal.prestigeCost} PRS"
-                            alreadyHeld && isRepeatable -> "Award Again ×${heldCount + 1} (Oak Leaf Cluster • ${medal.prestigeCost} PRS)"
-                            else -> "Award ${medal.category.label} to ${selectedOp.callsign}"
-                        },
-                        maxLines = 1
-                    )
-                }
-            }
+            AwardCatalogCard(
+                medal = medal,
+                selectedOp = selectedOp,
+                alreadyHeld = alreadyHeld,
+                isRepeatable = isRepeatable,
+                heldCount = heldCount,
+                hasDeed = hasDeed,
+                eligibility = eligibility,
+                canAfford = canAfford,
+                perSoldierCap = perSoldierCap,
+                onInspect = { inspectedAward = medal },
+                onConfer = { citationModalMedal = medal to opDeeds.firstOrNull { it.recommendedMedalId == medal.id } }
+            )
         }
     }
 
@@ -1088,5 +993,142 @@ fun DressAwardsScreen(
             },
             onDismiss = { showPromotionBoard = false }
         )
+    }
+}
+
+/** One award in the Dress & Awards catalog list. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun AwardCatalogCard(
+    medal: MedalDefinition,
+    selectedOp: Operator,
+    alreadyHeld: Boolean,
+    isRepeatable: Boolean,
+    heldCount: Int,
+    hasDeed: Boolean,
+    eligibility: TacticalCalculator.EligibilityResult,
+    canAfford: Boolean,
+    perSoldierCap: Int?,
+    onInspect: () -> Unit,
+    onConfer: () -> Unit
+) {
+    val extra = LocalAegisColors.current
+    TacticalPanelCard(
+        borderColor = when {
+            alreadyHeld -> MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+            hasDeed && eligibility.eligible -> extra.brass
+            else -> extra.borderSubtle
+        }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable(onClick = onInspect)
+                    .padding(4.dp)
+            ) {
+                AwardVisualThumbnail(medal = medal)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${medal.prestigeCost} PRS • Case",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = extra.brassBright
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                // Tags wrap whole onto a new line instead of squeezing the last one into a column
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.testTag("award_tags_${medal.id}")
+                ) {
+                    Text(
+                        text = medal.category.label.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        softWrap = false,
+                        color = extra.signalsCyan
+                    )
+                    if (heldCount > 0) {
+                        Text(
+                            text = if (heldCount > 1) "• HELD ×$heldCount (OLC)" else "• HELD",
+                            style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        softWrap = false,
+                            color = extra.brassBright
+                        )
+                    }
+                    if (medal.minTierRequired != RankTier.SOLDIER) {
+                        Text(
+                            text = "• ${medal.minTierRequired.shortLabel}+",
+                            style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        softWrap = false,
+                            color = extra.brassBright
+                        )
+                    }
+                    if (perSoldierCap != null) {
+                        Text(
+                            text = "• $perSoldierCap MAX / SOLDIER",
+                            style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        softWrap = false,
+                            color = if (alreadyHeld) extra.signalsCyan else extra.brassBright
+                        )
+                    }
+                }
+                Text(
+                    text = medal.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = medal.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Req: ${medal.qualificationRule}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (alreadyHeld || eligibility.eligible) extra.brassBright else MaterialTheme.colorScheme.error
+                )
+                Text(
+                    text = "FP+${medal.firepowerBonus} ST+${medal.stealthBonus} TC+${medal.techBonus} RS+${medal.resilienceBonus} • +${medal.yieldBonusPct}% Yield",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = onConfer,
+            enabled = (!alreadyHeld || isRepeatable) && eligibility.eligible && canAfford,
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("confer_${medal.id}"),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (medal.tier == MedalTier.SUPREME) extra.brass else MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            Text(
+                when {
+                    alreadyHeld && !isRepeatable -> "Awarded on ${selectedOp.callsign}'s Uniform"
+                    !eligibility.eligible -> "Locked: ${eligibility.missingRequirements.firstOrNull() ?: medal.qualificationRule}"
+                    !canAfford -> "Need ${medal.prestigeCost} PRS"
+                    alreadyHeld && isRepeatable -> "Award Again ×${heldCount + 1} (Oak Leaf Cluster • ${medal.prestigeCost} PRS)"
+                    else -> "Award ${medal.category.label} to ${selectedOp.callsign}"
+                },
+                maxLines = 1
+            )
+        }
     }
 }

@@ -1379,10 +1379,9 @@ class TacticalCalculatorTest {
             TacticalCalculator.layoutRibbonRackRows(sample.take(9))
         )
 
-        val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }.copy(
+        val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
+            .withManualCords("cord_infantry_blue", "cord_valor_fourragere").copy(
             dressDisplayMode = DressDisplayMode.RIBBONS,
-            equippedLeftCordId = "cord_infantry_blue",
-            equippedRightCordId = "cord_valor_fourragere",
             tailorOverrides = UniformTailorOverrides(
                 unitPatch = UnitPatchStyle.DIVISION_2,
                 neckSlot = UniformTailorOverrides.SLOT_NONE,
@@ -1437,7 +1436,7 @@ class TacticalCalculatorTest {
         assertTrue("cord_infantry_blue" in leftOptions)
         assertFalse("cord_general_aiguillette" in leftOptions)
         assertFalse("cord_valor_fourragere" in leftOptions)
-        assertEquals("cord_infantry_blue", leftOptions.first())
+        assertEquals("cord_sf_emerald", leftOptions.first())
 
         val rightOptions = UniformRegaliaRules.cordsForShoulder(
             medals = GameCatalog.medals,
@@ -2778,5 +2777,45 @@ class TacticalCalculatorTest {
         val squad = TacticalSquad(id = "sq", name = "Big", memberIds = fifteen, leaderId = "op_1")
         val sf = GameCatalog.missions.first { it.id == "msn_sf_school" }
         assertEquals(15, SquadCohesionRules.orderedMembersForDeployment(squad, fifteen.toSet(), sf.maxOperators).size)
+    }
+
+    @Test
+    fun leftCordAutoOrderPutsSfFirstAndFollowsMosAndBillet() {
+        val medals = GameCatalog.medals.associateBy { it.id }
+        fun cords(vararg ids: String) = ids.map { medals.getValue(it) }
+        val base = GameCatalog.initialOperators.first { it.id == "op_kestrel" }.copy(status = OperatorStatus.READY, hqRole = null)
+        fun left(op: Operator, owned: List<MedalDefinition>) = TacticalCalculator.resolveWornRegalia(op, owned).leftCord?.id
+
+        // 11B keeps Infantry Blue over other school cords, until SF
+        val assault = base.copy(specialty = OperatorSpecialty.ASSAULT)
+        val schoolCords = cords("cord_infantry_blue", "cord_engineer_scarlet", "cord_intel_teal")
+        assertEquals("cord_infantry_blue", left(assault, schoolCords))
+        assertEquals("cord_sf_emerald", left(assault, schoolCords + cords("cord_sf_emerald")))
+
+        // Other MOSs show a school cord before Infantry Blue; their own branch cord leads
+        assertEquals("cord_intel_teal", left(base.copy(specialty = OperatorSpecialty.BREACHER), cords("cord_infantry_blue", "cord_intel_teal")))
+        assertEquals("cord_engineer_scarlet", left(base.copy(specialty = OperatorSpecialty.BREACHER), schoolCords))
+        assertEquals("cord_sf_emerald", left(base.copy(specialty = OperatorSpecialty.RECON), cords("cord_airborne_crimson", "cord_sf_emerald")))
+        assertEquals("cord_infantry_blue", left(base.copy(specialty = OperatorSpecialty.MEDIC), cords("cord_infantry_blue")))
+
+        // Command: no billet takes the highest command-related cord (Intel, Logistics, Infantry)
+        val command = base.copy(specialty = OperatorSpecialty.COMMAND)
+        val commandCords = cords("cord_infantry_blue", "cord_logistics_buff", "cord_intel_teal", "cord_airborne_crimson")
+        assertEquals("cord_intel_teal", left(command, commandCords))
+        assertEquals("cord_logistics_buff", left(command, cords("cord_infantry_blue", "cord_logistics_buff")))
+        // Billets: S-3 Infantry, S-4 Logistics, S-2 Intel; S-1, CO and XO use the no-billet order
+        fun inBillet(role: HqStaffRole) = command.copy(status = OperatorStatus.HQ_STAFF, hqRole = role)
+        assertEquals("cord_infantry_blue", left(inBillet(HqStaffRole.S3_OPS_DIRECTOR), commandCords))
+        assertEquals("cord_logistics_buff", left(inBillet(HqStaffRole.S4_LOGISTICS_MEDEVAC), commandCords))
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.S2_INTEL_OVERWATCH), commandCords))
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.S1_PERSONNEL_HONORS), commandCords))
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.CO_COMMANDING_OFFICER), commandCords))
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.XO_CHIEF_OF_STAFF), commandCords))
+        // Billet cord not earned yet falls back to the no-billet order; SF still wins
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.S3_OPS_DIRECTOR), cords("cord_intel_teal", "cord_airborne_crimson")))
+        assertEquals("cord_sf_emerald", left(inBillet(HqStaffRole.S4_LOGISTICS_MEDEVAC), commandCords + cords("cord_sf_emerald")))
+        // A CO from another MOS keeps their MOS cord
+        val medicCo = base.copy(specialty = OperatorSpecialty.MEDIC, status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.CO_COMMANDING_OFFICER)
+        assertEquals("cord_medical_maroon", left(medicCo, cords("cord_infantry_blue", "cord_medical_maroon", "cord_intel_teal")))
     }
 }
