@@ -70,9 +70,6 @@ fun UniformTailorStudioCard(
     val resolvedMarksmanship = remember(operator, equippedGear) {
         UniformRegaliaRules.resolveMarksmanshipTier(operator, equippedGear)
     }
-    val autoIsLeader = remember(operator.id, squads) {
-        squads.any { it.leaderId == operator.id }
-    }
 
     val tabCatalog = remember {
         UniformRegaliaRules.tabsInPrecedenceOrder(GameCatalog.medals)
@@ -813,9 +810,11 @@ fun UniformTailorStudioCard(
                     testTag = "dropdown_sash"
                 )
                 LeaderPinDropdown(
-                    selectedOverride = overrides.leaderPinOverride,
-                    autoIsLeader = autoIsLeader,
-                    onSelect = { v -> updateOverrides { it.copy(leaderPinOverride = v) } },
+                    selectedOverride = overrides.leaderRoleOverride,
+                    autoRole = UniformRegaliaRules.resolveLeaderRole(
+                        operator.copy(tailorOverrides = overrides.copy(leaderRoleOverride = null)), squads
+                    ),
+                    onSelect = { v -> updateOverrides { it.copy(leaderRoleOverride = v) } },
                     testTag = "dropdown_leader_pin"
                 )
                 BooleanChoiceDropdown(

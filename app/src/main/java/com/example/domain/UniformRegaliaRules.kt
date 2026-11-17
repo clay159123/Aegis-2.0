@@ -436,9 +436,18 @@ object UniformRegaliaRules {
         return ((operator.missionsCompleted + 1) / 3).coerceIn(1, 5)
     }
 
-    fun isLeaderPinShown(operator: Operator, squads: List<TacticalSquad>): Boolean {
-        return operator.tailorOverrides.leaderPinOverride ?: squads.any { it.leaderId == operator.id }
+    /** The leader role a soldier's uniform shows: the Tailor override, else their role in their squad. */
+    fun resolveLeaderRole(operator: Operator, squads: List<TacticalSquad>): LeaderRole {
+        operator.tailorOverrides.leaderRoleOverride?.let { return it }
+        return when {
+            squads.any { it.leaderId == operator.id } -> LeaderRole.SQUAD_LEADER
+            squads.any { it.teamLeaderId == operator.id } -> LeaderRole.TEAM_LEADER
+            else -> LeaderRole.NONE
+        }
     }
+
+    fun isLeaderPinShown(operator: Operator, squads: List<TacticalSquad>): Boolean =
+        resolveLeaderRole(operator, squads) != LeaderRole.NONE
 
     data class AwardDeviceInfo(
         val awardCount: Int,

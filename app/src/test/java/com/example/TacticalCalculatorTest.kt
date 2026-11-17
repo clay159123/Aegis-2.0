@@ -2319,7 +2319,7 @@ class TacticalCalculatorTest {
         assertTrue(UniformRegaliaRules.isLeaderPinShown(baseOp.copy(id = "op_kestrel"), listOf(squad)))
         assertTrue(
             UniformRegaliaRules.isLeaderPinShown(
-                baseOp.copy(tailorOverrides = UniformTailorOverrides(leaderPinOverride = true)),
+                baseOp.copy(tailorOverrides = UniformTailorOverrides(leaderRoleOverride = LeaderRole.SQUAD_LEADER)),
                 listOf(squad)
             )
         )
@@ -2885,5 +2885,32 @@ class TacticalCalculatorTest {
         assertEquals(60, SquadCohesionRules.cohesionHeadcountXp(4))
         assertEquals(70, SquadCohesionRules.cohesionHeadcountXp(6))
         assertEquals(30, SquadCohesionRules.cohesionHeadcountXp(2))
+    }
+
+    @Test
+    fun teamLeaderNeedsFivePlusSergeantAndNotTheSquadLeader() {
+        fun soldier(i: Int, rank: OperatorRank) = GameCatalog.createPostBasicRecruit("op_tl$i", OperatorSpecialty.ASSAULT, emptySet(), i)
+            .copy(id = "op_tl$i", xp = rank.xpRequired, authorizedTier = rank.tier)
+        val ops = listOf(soldier(1, OperatorRank.SSG), soldier(2, OperatorRank.SGT), soldier(3, OperatorRank.SPC), soldier(4, OperatorRank.PFC), soldier(5, OperatorRank.PFC))
+        val five = TacticalSquad("sq_tl", "Alpha", ops.map { it.id }, ops[0].id, teamLeaderId = ops[1].id)
+        assertEquals(ops[1].id, SquadCohesionRules.validTeamLeaderId(five, ops))
+        // Under SGT, the squad leader, or a squad of 4 all fail
+        assertNull(SquadCohesionRules.validTeamLeaderId(five.copy(teamLeaderId = ops[2].id), ops))
+        assertNull(SquadCohesionRules.validTeamLeaderId(five.copy(teamLeaderId = ops[0].id), ops))
+        assertNull(SquadCohesionRules.validTeamLeaderId(five.copy(memberIds = ops.take(4).map { it.id }), ops))
+        // Dropping below 5 clears it automatically
+        val pruned = SquadCohesionRules.pruneUnavailableMembers(listOf(five), ops.take(4)).first()
+        assertNull(pruned.teamLeaderId)
+        // Uniform roles and the Tailor override
+        assertEquals(LeaderRole.SQUAD_LEADER, UniformRegaliaRules.resolveLeaderRole(ops[0], listOf(five)))
+        assertEquals(LeaderRole.TEAM_LEADER, UniformRegaliaRules.resolveLeaderRole(ops[1], listOf(five)))
+        assertEquals(LeaderRole.NONE, UniformRegaliaRules.resolveLeaderRole(ops[2], listOf(five)))
+        val hidden = ops[1].copy(tailorOverrides = UniformTailorOverrides(leaderRoleOverride = LeaderRole.NONE))
+        assertEquals(LeaderRole.NONE, UniformRegaliaRules.resolveLeaderRole(hidden, listOf(five)))
+        // Team leader adds cohesion when present
+        val mission = GameCatalog.missions.first { it.id == "msn_convoy_escort" }
+        val withTl = SquadCohesionRules.calculateCohesionGain(five, ops, mission, true)!!.gainedXp
+        val withoutTl = SquadCohesionRules.calculateCohesionGain(five.copy(teamLeaderId = null), ops, mission, true)!!.gainedXp
+        assertEquals(SquadCohesionRules.TEAM_LEADER_COHESION_XP, withTl - withoutTl)
     }
 }

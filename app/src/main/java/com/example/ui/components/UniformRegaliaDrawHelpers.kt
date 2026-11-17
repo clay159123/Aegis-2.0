@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import com.example.domain.model.LeaderRole
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -48,9 +49,10 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     trimCol: Color,
     callsign: String,
     hasUnitCitation: Boolean,
-    showLeaderPin: Boolean,
+    leaderRole: LeaderRole,
     textMeasurer: TextMeasurer
 ) {
+    val showLeaderPin = leaderRole != LeaderRole.NONE
     // 1. Unit Citation Bar shifted cleanly higher if Leader Pin is present so all 3 items breathe
     if (hasUnitCitation) {
         val citTop = if (showLeaderPin) h * (0.514f - CHEST_LIFT) else h * (0.526f - CHEST_LIFT)
@@ -67,32 +69,39 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
         )
     }
 
-    // 2. Small Brass/Enamel Squad Leader Pin directly above the nameplate
+    // 2. Leader pin directly above the nameplate: Squad Leader crimson with a gold star,
+    //    Team Leader slightly smaller in dark blue with a silver border and chevron
     if (showLeaderPin) {
+        val isTeamLeader = leaderRole == LeaderRole.TEAM_LEADER
+        val scale = if (isTeamLeader) 0.85f else 1f
         val pinCenterY = h * (0.552f - CHEST_LIFT)
-        val pinHalfW = (w * 0.024f).coerceAtLeast(3.5f)
-        val pinHalfH = (h * 0.0085f).coerceAtLeast(1.8f)
-        // Shield bar backing in command crimson & antique brass
+        val pinHalfW = (w * 0.024f * scale).coerceAtLeast(3.0f)
+        val pinHalfH = (h * 0.0085f * scale).coerceAtLeast(1.6f)
+        val enamel = if (isTeamLeader) Color(0xFF1E3A6E) else Color(0xFF8C2525)
+        val border = if (isTeamLeader) Color(0xFFD8DEE8) else Color(0xFFF5D576)
         drawRoundRect(
-            color = Color(0xFF8C2525),
+            color = enamel,
             topLeft = Offset(rightChestCenterX - pinHalfW, pinCenterY - pinHalfH),
             size = Size(pinHalfW * 2f, pinHalfH * 2f),
             cornerRadius = CornerRadius(2f, 2f)
         )
         drawRoundRect(
-            color = Color(0xFFF5D576),
+            color = border,
             topLeft = Offset(rightChestCenterX - pinHalfW, pinCenterY - pinHalfH),
             size = Size(pinHalfW * 2f, pinHalfH * 2f),
             cornerRadius = CornerRadius(2f, 2f),
             style = Stroke(width = 1.1f)
         )
-        // Miniature 5-point command star & chevron wings inside the pin
-        drawMiniStar(
-            center = Offset(rightChestCenterX, pinCenterY),
-            outerR = (pinHalfH * 0.78f).coerceAtLeast(1.4f),
-            innerR = (pinHalfH * 0.36f).coerceAtLeast(0.6f),
-            color = Color(0xFFF8E18A)
-        )
+        if (isTeamLeader) {
+            drawLeaderChevron(Offset(rightChestCenterX, pinCenterY), pinHalfH * 1.1f, pinHalfH * 0.9f, Color(0xFFE6EBF2))
+        } else {
+            drawMiniStar(
+                center = Offset(rightChestCenterX, pinCenterY),
+                outerR = (pinHalfH * 0.78f).coerceAtLeast(1.4f),
+                innerR = (pinHalfH * 0.36f).coerceAtLeast(0.6f),
+                color = Color(0xFFF8E18A)
+            )
+        }
     }
 
     // 3. Engraved Callsign Nameplate
@@ -412,7 +421,7 @@ internal fun DrawScope.drawEnhancedFieldWeapon(
     }
 }
 
-private fun DrawScope.drawMiniStar(
+internal fun DrawScope.drawMiniStar(
     center: Offset,
     outerR: Float,
     innerR: Float,
@@ -633,4 +642,14 @@ internal fun DrawScope.drawUnitPatchEmblem(
 
         UnitPatchStyle.AUTO_MOS, UnitPatchStyle.NONE -> Unit
     }
+}
+
+/** A single chevron (point up) for Team Leader pins and tabs. */
+internal fun DrawScope.drawLeaderChevron(center: Offset, halfW: Float, halfH: Float, color: Color) {
+    val p = Path().apply {
+        moveTo(center.x - halfW, center.y + halfH * 0.55f)
+        lineTo(center.x, center.y - halfH * 0.45f)
+        lineTo(center.x + halfW, center.y + halfH * 0.55f)
+    }
+    drawPath(p, color = color, style = Stroke(width = (halfH * 0.55f).coerceAtLeast(1.1f), cap = StrokeCap.Round, join = StrokeJoin.Round))
 }

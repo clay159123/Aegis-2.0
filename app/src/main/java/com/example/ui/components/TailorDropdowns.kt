@@ -781,59 +781,65 @@ fun MarksmanshipBadgeDropdown(
 
 @Composable
 fun LeaderPinDropdown(
-    selectedOverride: Boolean?,
-    autoIsLeader: Boolean,
-    onSelect: (Boolean?) -> Unit,
+    selectedOverride: LeaderRole?,
+    autoRole: LeaderRole,
+    onSelect: (LeaderRole?) -> Unit,
     modifier: Modifier = Modifier,
     testTag: String = "dropdown_leader_pin"
 ) {
     val extra = LocalAegisColors.current
-    val options = remember(autoIsLeader) {
+    fun colorFor(role: LeaderRole): Color = when (role) {
+        LeaderRole.SQUAD_LEADER -> Color(0xFF8C2525)
+        LeaderRole.TEAM_LEADER -> Color(0xFF1E3A6E)
+        LeaderRole.NONE -> Color.Transparent
+    }
+    val options = remember(autoRole) {
         listOf(
-            DropdownOptionItem<Boolean?>(
+            DropdownOptionItem<LeaderRole?>(
                 value = null,
-                title = if (autoIsLeader) "Auto (Shown — Squad Leader)" else "Auto (Hidden — Not Leader)",
-                subtitle = "Automatically shows miniature gold leader pin above nameplate when Squad Leader",
-                primaryColor = if (autoIsLeader) Color(0xFF8C2525) else Color.Transparent,
+                title = "Auto (${autoRole.label})",
+                subtitle = "Follows the soldier's role in their squad",
+                primaryColor = colorFor(autoRole),
                 trimColor = extra.brassBright,
-                enabled = true,
                 testTag = "${testTag}_auto"
             ),
-            DropdownOptionItem<Boolean?>(
-                value = true,
-                title = "Always Show Leader Pin",
-                subtitle = "Override to display Squad Leader pin above right-chest nameplate",
-                primaryColor = Color(0xFF8C2525),
+            DropdownOptionItem<LeaderRole?>(
+                value = LeaderRole.SQUAD_LEADER,
+                title = "Squad Leader Pin",
+                subtitle = "Crimson pin with a gold star; green and brass tab in the field",
+                primaryColor = colorFor(LeaderRole.SQUAD_LEADER),
                 trimColor = extra.brassBright,
-                enabled = true,
                 testTag = "${testTag}_show"
             ),
-            DropdownOptionItem<Boolean?>(
-                value = false,
+            DropdownOptionItem<LeaderRole?>(
+                value = LeaderRole.TEAM_LEADER,
+                title = "Team Leader Pin",
+                subtitle = "Blue pin with a silver chevron; green and silver tab in the field",
+                primaryColor = colorFor(LeaderRole.TEAM_LEADER),
+                trimColor = Color(0xFFD8DEE8),
+                testTag = "${testTag}_team"
+            ),
+            DropdownOptionItem<LeaderRole?>(
+                value = LeaderRole.NONE,
                 title = "Hidden",
                 subtitle = "Keep space above nameplate clear",
                 primaryColor = Color.Transparent,
                 trimColor = extra.borderSubtle,
-                enabled = true,
                 testTag = "${testTag}_hide"
             )
         )
     }
-    val selectedText = when (selectedOverride) {
-        null -> if (autoIsLeader) "Auto (Shown — Leader)" else "Auto (Hidden)"
-        true -> "Always Show Leader Pin"
-        false -> "Hidden"
-    }
+    val shown = selectedOverride ?: autoRole
     SingleChoiceDropdown(
-        label = "Squad Leader Nameplate Pin",
-        selectedText = selectedText,
-        selectedPrimaryColor = when (selectedOverride) {
-            true -> Color(0xFF8C2525)
-            false -> Color.Transparent
-            null -> if (autoIsLeader) Color(0xFF8C2525) else Color.Transparent
+        label = "Leader Pin",
+        selectedText = when (selectedOverride) {
+            null -> "Auto (${autoRole.label})"
+            LeaderRole.SQUAD_LEADER -> "Squad Leader Pin"
+            LeaderRole.TEAM_LEADER -> "Team Leader Pin"
+            LeaderRole.NONE -> "Hidden"
         },
+        selectedPrimaryColor = colorFor(shown),
         selectedTrimColor = extra.brassBright,
-        supportingHint = "Small crimson-and-brass command crest pinned directly above nameplate",
         options = options,
         selectedValue = selectedOverride,
         onSelect = onSelect,

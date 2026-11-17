@@ -519,7 +519,8 @@ data class UniformTailorOverrides(
     val showUnitCitation: Boolean = true,
     val showServiceStripes: Boolean = true,
     val showOverseasBars: Boolean = true,
-    val leaderPinOverride: Boolean? = null,
+    /** Tailor Studio override for the leader pin and tab; null = Auto from squad roles */
+    val leaderRoleOverride: LeaderRole? = null,
     val freeTailorOverride: Boolean = false
 ) {
     companion object {
@@ -1104,6 +1105,16 @@ data class MissionTemplate(
     }
 }
 
+/** Leadership a soldier's uniform shows: a pin above the nameplate on dress uniforms, a chest tab in the field. */
+enum class LeaderRole(val label: String) {
+    NONE("None"),
+    TEAM_LEADER("Team Leader"),
+    SQUAD_LEADER("Squad Leader")
+}
+
+/** A squad can name a Team Leader once it has this many members. */
+const val TEAM_LEADER_MIN_SQUAD_SIZE = 5
+
 const val MAX_SQUAD_SIZE = 6
 const val MIN_SQUAD_SIZE = 2
 /** A squad with at least this many members fights at Full Strength (small survival and odds boost). */
@@ -1151,6 +1162,8 @@ data class TacticalSquad(
     val missionsTogether: Int = 0,
     val createdAtMillis: Long = 0L,
     val standardPatch: UnitPatchStyle = UnitPatchStyle.DIVISION_1,
+    /** Second-in-command for squads of 5+: SGT or above, never the squad leader. */
+    val teamLeaderId: String? = null,
     val standardCamo: CamoPattern? = null,
     val standardHeadgear: HeadgearStyle? = null,
     val standardDressStyle: DressUniformStyle? = null,

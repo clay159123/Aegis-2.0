@@ -52,7 +52,7 @@ fun OperatorUniformPreview(
     modifier: Modifier = Modifier,
     allCitations: List<AwardedMedal> = emptyList(),
     squads: List<TacticalSquad> = emptyList(),
-    isSquadLeader: Boolean = UniformRegaliaRules.isLeaderPinShown(operator, squads),
+    leaderRole: LeaderRole = UniformRegaliaRules.resolveLeaderRole(operator, squads),
     kitOverride: WardrobeKit? = null
 ) {
     val extra = LocalAegisColors.current
@@ -161,7 +161,7 @@ fun OperatorUniformPreview(
                     operator = renderOperator,
                     wornRegalia = wornRegalia,
                     combatPatch = combatPatch,
-                    isSquadLeader = isSquadLeader,
+                    leaderRole = leaderRole,
                     equippedWeaponId = equippedWeaponId,
                     skinTone = skinTone,
                     skinShadow = skinShadow,
@@ -188,7 +188,7 @@ fun OperatorUniformPreview(
                     rightCordDef = rightCordDef,
                     hasUnitCitation = hasUnitCitation,
                     marksmanshipTier = marksmanshipTier,
-                    showLeaderPin = isSquadLeader,
+                    leaderRole = leaderRole,
                     awardDevices = awardDevices,
                     textMeasurer = textMeasurer
                 )
@@ -210,7 +210,7 @@ fun OperatorUniformPreview(
                     combatPatch = combatPatch,
                     marksmanshipTier = marksmanshipTier,
                     overseasBars = overseasBars,
-                    showLeaderPin = isSquadLeader,
+                    leaderRole = leaderRole,
                     awardDevices = awardDevices,
                     textMeasurer = textMeasurer,
                     squads = squads,
@@ -246,7 +246,7 @@ private fun DrawScope.drawDressUniformFigure(
     combatPatch: UnitPatchStyle,
     marksmanshipTier: MarksmanshipBadgeTier,
     overseasBars: Int,
-    showLeaderPin: Boolean,
+    leaderRole: LeaderRole,
     awardDevices: Map<String, UniformRegaliaRules.AwardDeviceInfo>,
     textMeasurer: TextMeasurer,
     squads: List<TacticalSquad> = emptyList(),
@@ -707,7 +707,7 @@ private fun DrawScope.drawDressUniformFigure(
         trimCol = trimCol,
         callsign = operator.callsign,
         hasUnitCitation = hasUnitCitation,
-        showLeaderPin = showLeaderPin,
+        leaderRole = leaderRole,
         textMeasurer = textMeasurer
     )
 
@@ -1902,7 +1902,7 @@ private fun DrawScope.drawFieldTacticalFigure(
     operator: Operator,
     wornRegalia: TacticalCalculator.WornRegaliaSummary,
     combatPatch: UnitPatchStyle,
-    isSquadLeader: Boolean,
+    leaderRole: LeaderRole,
     equippedWeaponId: String?,
     skinTone: Color,
     skinShadow: Color,
@@ -2126,14 +2126,22 @@ private fun DrawScope.drawFieldTacticalFigure(
         }
     }
 
-    // Leader tab below the rank for squad leaders (team leaders join in the squads session)
-    if (isSquadLeader) {
-        val leadW = rankTabW
-        val leadH = h * 0.014f
+    // Leader tab below the rank: Squad Leader green with brass border and gold star,
+    // Team Leader green with silver border and silver chevron
+    if (leaderRole != LeaderRole.NONE) {
+        val isTeamLeader = leaderRole == LeaderRole.TEAM_LEADER
+        val leadW = rankTabW * if (isTeamLeader) 0.9f else 1f
+        val leadH = h * 0.016f
         val leadTop = rankTabTop + rankTabH + h * 0.004f
-        drawRoundRect(primaryCamo, Offset(cx - leadW / 2f, leadTop), Size(leadW, leadH), CornerRadius(2f, 2f))
-        drawRoundRect(threadCol, Offset(cx - leadW / 2f, leadTop), Size(leadW, leadH), CornerRadius(2f, 2f), style = Stroke(width = 1.0f))
-        drawFieldTapeText("LEADER", Offset(cx, leadTop + leadH / 2f), leadW, leadH, threadCol, textMeasurer)
+        val leadBorder = if (isTeamLeader) Color(0xFFD8DEE8) else Color(0xFFF2D272)
+        drawRoundRect(Color(0xFF285938), Offset(cx - leadW / 2f, leadTop), Size(leadW, leadH), CornerRadius(2f, 2f))
+        drawRoundRect(leadBorder, Offset(cx - leadW / 2f, leadTop), Size(leadW, leadH), CornerRadius(2f, 2f), style = Stroke(width = 1.0f))
+        val leadCenter = Offset(cx, leadTop + leadH / 2f)
+        if (isTeamLeader) {
+            drawLeaderChevron(leadCenter, leadH * 0.55f, leadH * 0.45f, Color(0xFFE6EBF2))
+        } else {
+            drawMiniStar(leadCenter, (leadH * 0.40f).coerceAtLeast(1.3f), (leadH * 0.18f).coerceAtLeast(0.6f), Color(0xFFF5D576))
+        }
     }
 
     // Name tape (wearer's right) and AEGIS branch tape (wearer's left), both camo with thread lettering

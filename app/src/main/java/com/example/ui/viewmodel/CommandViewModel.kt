@@ -2223,7 +2223,8 @@ class CommandViewModel(
         memberIds: List<String>,
         leaderId: String?,
         standard: SquadUniformStandard,
-        applyImmediately: Boolean = false
+        applyImmediately: Boolean = false,
+        teamLeaderId: String? = null
     ) {
         val state = uiState.value
         val validIds = memberIds
@@ -2241,6 +2242,8 @@ class CommandViewModel(
             ?: SquadCohesionRules.pickDefaultLeaderId(validIds, state.operators)
 
         val existing = squadId?.let { id -> state.squads.find { it.id == id } }
+        val teamLeaderCandidate = TacticalSquad("check", "", validIds, resolvedLeaderId, teamLeaderId = teamLeaderId)
+        val resolvedTeamLeaderId = SquadCohesionRules.validTeamLeaderId(teamLeaderCandidate, state.operators)
         val resolvedName = name.trim().take(24).ifBlank {
             existing?.name ?: SquadCohesionRules.nextDefaultSquadName(state.squads)
         }
@@ -2254,6 +2257,7 @@ class CommandViewModel(
                 name = resolvedName,
                 memberIds = validIds,
                 leaderId = resolvedLeaderId,
+                teamLeaderId = resolvedTeamLeaderId,
                 standardPatch = resolvedPatch,
                 standardCamo = standard.camo,
                 standardHeadgear = standard.alphasHeadgear,
@@ -2271,6 +2275,7 @@ class CommandViewModel(
                 name = resolvedName,
                 memberIds = validIds,
                 leaderId = resolvedLeaderId,
+                teamLeaderId = resolvedTeamLeaderId,
                 cohesionXp = 0,
                 missionsTogether = 0,
                 createdAtMillis = now,
@@ -2294,7 +2299,8 @@ class CommandViewModel(
                 val remaining = other.memberIds.filter { it !in validIds }
                 val nextLeader = other.leaderId?.takeIf { it in remaining }
                     ?: SquadCohesionRules.pickDefaultLeaderId(remaining, state.operators)
-                other.copy(memberIds = remaining, leaderId = nextLeader)
+                val trimmed = other.copy(memberIds = remaining, leaderId = nextLeader)
+                trimmed.copy(teamLeaderId = SquadCohesionRules.validTeamLeaderId(trimmed, state.operators))
             }
 
         val updatedMembers = if (applyImmediately) {

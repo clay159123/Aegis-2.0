@@ -49,6 +49,24 @@ object SquadCohesionRules {
             .firstOrNull()
     }
 
+    /** Cohesion XP a Team Leader adds when present on a mission (a smaller version of the squad leader's bonus). */
+    const val TEAM_LEADER_COHESION_XP = 8
+
+    /** Why [candidate] can't be this squad's Team Leader, or null when they can. */
+    fun teamLeaderBlocker(squad: TacticalSquad, candidate: Operator?): String? = when {
+        squad.memberIds.size < TEAM_LEADER_MIN_SQUAD_SIZE -> "Squad needs $TEAM_LEADER_MIN_SQUAD_SIZE+ members"
+        candidate == null || candidate.id !in squad.memberIds -> "Not a squad member"
+        candidate.id == squad.leaderId -> "Already the Squad Leader"
+        candidate.rank.ordinal < OperatorRank.SGT.ordinal -> "Requires SGT or above"
+        else -> null
+    }
+
+    /** The squad's Team Leader if still valid; clears when the squad drops below 5 or the soldier leaves. */
+    fun validTeamLeaderId(squad: TacticalSquad, operators: List<Operator>): String? {
+        val id = squad.teamLeaderId ?: return null
+        return id.takeIf { teamLeaderBlocker(squad, operators.find { it.id == id }) == null }
+    }
+
     fun isOperatorEligibleForFieldSquad(operator: Operator): Boolean =
         operator.unlocked &&
             !operator.status.isOutOfActiveService &&
@@ -159,7 +177,9 @@ object SquadCohesionRules {
         } else {
             0
         }
-        val rawGain = baseXp + hazardBonus + leaderBonus
+        val teamLeaderPresent = squad.teamLeaderId != null && participating.any { it.id == squad.teamLeaderId }
+        val teamLeaderBonus = if (teamLeaderPresent) TEAM_LEADER_COHESION_XP else 0
+        val rawGain = baseXp + hazardBonus + leaderBonus + teamLeaderBonus
         val finalGain = if (missionSucceeded) rawGain else (rawGain / 2).coerceAtLeast(10)
 
         val previousScore = squad.cohesionScore
@@ -195,10 +215,14 @@ object SquadCohesionRules {
                 .take(MAX_SQUAD_SIZE)
             val validLeader = squad.leaderId?.takeIf { it in validMembers }
                 ?: pickDefaultLeaderId(validMembers, operators)
-            if (validMembers == squad.memberIds && validLeader == squad.leaderId) {
+            val validTeamLeader = validTeamLeaderId(
+                squad.copy(memberIds = validMembers, leaderId = validLeader),
+                operators
+            )
+            if (validMembers == squad.memberIds && validLeader == squad.leaderId && validTeamLeader == squad.teamLeaderId) {
                 squad
             } else {
-                squad.copy(memberIds = validMembers, leaderId = validLeader)
+                squad.copy(memberIds = validMembers, leaderId = validLeader, teamLeaderId = validTeamLeader)
             }
         }
     }

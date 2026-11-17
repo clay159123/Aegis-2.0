@@ -484,9 +484,10 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
 
 private fun encodeTailorOverridesCsv(o: UniformTailorOverrides): String {
     if (o == UniformTailorOverrides()) return ""
-    val leaderPinToken = when (o.leaderPinOverride) {
-        true -> "1"
-        false -> "0"
+    val leaderPinToken = when (o.leaderRoleOverride) {
+        LeaderRole.SQUAD_LEADER -> "1"
+        LeaderRole.TEAM_LEADER -> "T"
+        LeaderRole.NONE -> "0"
         null -> "A"
     }
     return listOf(
@@ -541,9 +542,10 @@ private fun decodeTailorOverridesCsv(csv: String): UniformTailorOverrides {
         showUnitCitation = map["cit"] != "0",
         showServiceStripes = map["str"] != "0",
         showOverseasBars = map["obars"] != "0",
-        leaderPinOverride = when (map["lpin"]) {
-            "1" -> true
-            "0" -> false
+        leaderRoleOverride = when (map["lpin"]) {
+            "1" -> LeaderRole.SQUAD_LEADER
+            "T" -> LeaderRole.TEAM_LEADER
+            "0" -> LeaderRole.NONE
             else -> null
         },
         freeTailorOverride = map["free"] == "1"
@@ -716,6 +718,7 @@ private fun SquadEntity.toDomain(): TacticalSquad {
         name = name,
         memberIds = members,
         leaderId = leaderId?.takeIf { it in members } ?: members.firstOrNull(),
+        teamLeaderId = teamLeaderId?.takeIf { it in members && members.size >= TEAM_LEADER_MIN_SQUAD_SIZE },
         cohesionXp = cohesionXp,
         missionsTogether = missionsTogether,
         createdAtMillis = createdAtMillis,
@@ -740,6 +743,7 @@ private fun TacticalSquad.toEntity(): SquadEntity {
         name = name,
         memberIdsCsv = members.joinToString(","),
         leaderId = leaderId?.takeIf { it in members } ?: members.firstOrNull(),
+        teamLeaderId = teamLeaderId?.takeIf { it in members },
         cohesionXp = cohesionXp.coerceIn(0, MAX_SQUAD_COHESION_XP),
         missionsTogether = missionsTogether.coerceAtLeast(0),
         createdAtMillis = createdAtMillis,
