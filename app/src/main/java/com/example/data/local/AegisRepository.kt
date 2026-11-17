@@ -3,12 +3,26 @@ package com.example.data.local
 import com.example.data.catalog.GameCatalog
 import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class AegisRepository(private val dao: AegisDao) {
+
+    companion object {
+        private const val TAG = "AegisRepository"
+
+        /**
+         * Bump this whenever game rules or saved data shapes change, even if no Room table
+         * changed (new award ids, gear ownership rules, renamed missions). Saves with a
+         * different value are replaced with a new game on launch.
+         */
+        const val SAVE_FORMAT_VERSION = 1
+    }
 
     private val commanderMutex = Mutex()
 
@@ -23,7 +37,7 @@ class AegisRepository(private val dao: AegisDao) {
     }
 
     val operators: Flow<List<Operator>> = dao.observeOperators().map { list ->
-        list.map { it.toDomain() }
+        list.mapSafely("operator") { it.toDomain() }
             .sortedWith(
                 compareBy<Operator> { it.status.isOutOfActiveService }
                     .thenByDescending { it.unlocked }
@@ -32,25 +46,83 @@ class AegisRepository(private val dao: AegisDao) {
     }
 
     val gearItems: Flow<List<GearItem>> = dao.observeGear().map { list ->
-        list.map { it.toDomain() }
+        list.mapSafely("gear") { it.toDomain() }
             .sortedWith(compareBy<GearItem> { it.slot.ordinal }.thenBy { it.baseCreditCost })
     }
 
     val activeDeployments: Flow<List<ActiveDeployment>> = dao.observeDeployments().map { list ->
-        list.map { it.toDomain() }
+        list.mapSafely("deployment") { it.toDomain() }
     }
 
     val citations: Flow<List<AwardedMedal>> = dao.observeCitations().map { list ->
-        list.map { it.toDomain() }
+        list.mapSafely("citation") { it.toDomain() }
     }
 
     val pendingDeeds: Flow<List<PendingDeed>> = dao.observePendingDeeds().map { list ->
-        list.map { it.toDomain() }
+        list.mapSafely("pending deed") { it.toDomain() }
     }
 
     val squads: Flow<List<TacticalSquad>> = dao.observeSquads().map { list ->
-        list.map { it.toDomain() }
+        list.mapSafely("squad") { it.toDomain() }
     }
+
+    /** Result of the startup load: the commander state and whether the old save was replaced. */
+    data class LoadResult(val state: CommanderStateEntity, val wasReset: Boolean)
+
+    /**
+     * Startup entry point. Loads the save if it matches the current game, otherwise
+     * wipes it and starts a new command. A save is replaced when Room had to rebuild the
+     * schema, when its saveFormatVersion differs from [SAVE_FORMAT_VERSION], or when any
+     * saved record fails to map to the current models.
+     */
+    suspend fun loadOrResetSave(nowMillis: Long = System.currentTimeMillis()): LoadResult {
+        val existing = try {
+            dao.getCommanderStateOnce()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Commander state failed to load; starting a new save", e)
+            return LoadResult(wipeAndSeed(nowMillis), wasReset = true)
+        }
+        val roomRebuiltSchema = AegisDatabase.consumeDestructiveResetFlag()
+        if (existing == null) {
+            return LoadResult(ensureSeeded(nowMillis), wasReset = roomRebuiltSchema)
+        }
+        if (existing.saveFormatVersion != SAVE_FORMAT_VERSION) {
+            Log.i(TAG, "Save format ${existing.saveFormatVersion} != $SAVE_FORMAT_VERSION; starting a new save")
+            return LoadResult(wipeAndSeed(nowMillis), wasReset = true)
+        }
+        if (!savedDataLoadsCleanly()) {
+            return LoadResult(wipeAndSeed(nowMillis), wasReset = true)
+        }
+        return LoadResult(ensureSeeded(nowMillis), wasReset = false)
+    }
+
+    /**
+     * Strict check used once at startup: every saved record must map to the current models.
+     * The public flows use [mapSafely] so a bad record can never crash the UI, but at startup
+     * we want to know about it and replace the save instead.
+     */
+    private suspend fun savedDataLoadsCleanly(): Boolean = try {
+        dao.observeOperators().first().forEach { it.toDomain() }
+        dao.observeGear().first().forEach { it.toDomain() }
+        dao.observeDeployments().first().forEach { it.toDomain() }
+        dao.observeCitations().first().forEach { it.toDomain() }
+        dao.observePendingDeeds().first().forEach { it.toDomain() }
+        dao.observeSquads().first().forEach { it.toDomain() }
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Saved data failed to map to current models; starting a new save", e)
+        false
+    }
+
+    private suspend fun wipeAndSeed(nowMillis: Long): CommanderStateEntity =
+        commanderMutex.withLock {
+            dao.clearAllData()
+            ensureSeeded(nowMillis)
+        }
 
     suspend fun ensureSeeded(nowMillis: Long = System.currentTimeMillis()): CommanderStateEntity {
         val existing = dao.getCommanderStateOnce()
@@ -72,7 +144,8 @@ class AegisRepository(private val dao: AegisDao) {
             retiredVeteransCount = 0,
             lastRetirementAtMillis = 0L,
             rotatingMissionIdsCsv = initialRotatingIds,
-            rotationUpdatedAtMillis = nowMillis
+            rotationUpdatedAtMillis = nowMillis,
+            saveFormatVersion = SAVE_FORMAT_VERSION
         )
         dao.upsertCommanderState(initialState)
 
@@ -269,6 +342,17 @@ class AegisRepository(private val dao: AegisDao) {
             ensureSeeded(nowMillis)
         }
 }
+
+/** Maps each saved record, skipping (and logging) any record that no longer fits the current models. */
+private inline fun <E, D> List<E>.mapSafely(label: String, transform: (E) -> D): List<D> =
+    mapNotNull { entity ->
+        try {
+            transform(entity)
+        } catch (e: Exception) {
+            Log.w("AegisRepository", "Skipping unreadable saved $label", e)
+            null
+        }
+    }
 
 private fun OperatorEntity.toDomain(): Operator = Operator(
     id = id,

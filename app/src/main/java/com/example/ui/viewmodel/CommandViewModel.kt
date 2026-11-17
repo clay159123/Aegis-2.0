@@ -194,7 +194,11 @@ class CommandViewModel(
     init {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            val initial = repository.ensureSeeded(now)
+            val loadResult = repository.loadOrResetSave(now)
+            val initial = loadResult.state
+            if (loadResult.wasReset) {
+                showBanner("This save was from an older version of Aegis Ops. A new command has been started.")
+            }
             val facs = repository.facilities.first()
             val ops = repository.operators.first()
             val deps = repository.activeDeployments.first()

@@ -79,130 +79,58 @@ class AegisOpsRobolectricTest {
     }
 
     @Test
-    fun `migration 7 to 8 adds retirement legacy and request columns with defaults`() {
+    fun `fresh install starts a new save stamped with the current save format`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val dbName = "migration_7_8_test.db"
-        context.deleteDatabase(dbName)
+        val database = Room.inMemoryDatabaseBuilder(context, AegisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+            .also { db = it }
+        val repo = AegisRepository(database.aegisDao())
 
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(dbName)
-                .callback(object : SupportSQLiteOpenHelper.Callback(7) {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS commander_state (
-                                id INTEGER NOT NULL PRIMARY KEY,
-                                credits REAL NOT NULL,
-                                supplies REAL NOT NULL,
-                                intel REAL NOT NULL,
-                                prestige REAL NOT NULL,
-                                totalMissionsCompleted INTEGER NOT NULL,
-                                lastSimulatedAtMillis INTEGER NOT NULL
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS operators (
-                                id TEXT NOT NULL PRIMARY KEY,
-                                name TEXT NOT NULL,
-                                callsign TEXT NOT NULL,
-                                branchName TEXT NOT NULL,
-                                xp INTEGER NOT NULL,
-                                specialtyName TEXT NOT NULL,
-                                statusName TEXT NOT NULL,
-                                recoveryUntilMillis INTEGER NOT NULL,
-                                transferRequested INTEGER NOT NULL,
-                                staffOpsSupported INTEGER NOT NULL,
-                                hqRoleName TEXT,
-                                baseFirepower INTEGER NOT NULL,
-                                baseStealth INTEGER NOT NULL,
-                                baseTech INTEGER NOT NULL,
-                                baseResilience INTEGER NOT NULL,
-                                uniformModeName TEXT NOT NULL,
-                                dressDisplayModeName TEXT NOT NULL,
-                                camoPatternName TEXT NOT NULL,
-                                dressStyleName TEXT NOT NULL,
-                                headgearStyleName TEXT NOT NULL,
-                                equippedLeftCordId TEXT,
-                                equippedRightCordId TEXT,
-                                hasWhiteGloves INTEGER NOT NULL,
-                                hasDressSash INTEGER NOT NULL,
-                                unlocked INTEGER NOT NULL,
-                                missionsCompleted INTEGER NOT NULL
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            "INSERT INTO commander_state VALUES (1, 100.0, 50.0, 20.0, 10.0, 4, 123456)"
-                        )
-                        db.execSQL(
-                            """
-                            INSERT INTO operators VALUES (
-                                'op_test', 'Test Soldier', 'Nomad', 'ARMY', 1000, 'ASSAULT',
-                                'READY', 0, 0, 0, NULL, 10, 10, 10, 10,
-                                'DRESS_UNIFORM', 'RIBBONS', 'WOODLAND_OLIVE', 'ARMY_SERVICE_GREEN',
-                                'BERET_BLACK', NULL, NULL, 0, 0, 1, 5
-                            )
-                            """.trimIndent()
-                        )
-                    }
+        val result = repo.loadOrResetSave(nowMillis = 5_000_000L)
 
-                    override fun onUpgrade(
-                        db: SupportSQLiteDatabase,
-                        oldVersion: Int,
-                        newVersion: Int
-                    ) {
-                    }
-                })
-                .build()
-        )
+        assertEquals(false, result.wasReset)
+        assertEquals(AegisRepository.SAVE_FORMAT_VERSION, result.state.saveFormatVersion)
+        assertTrue(repo.squads.first().any { it.id == "sq_alpha" })
+    }
 
-        helper.use { openHelper ->
-            val writableDb = openHelper.writableDatabase
-            writableDb.execSQL(
-                """
-                INSERT INTO operators VALUES (
-                    'op_gate', 'Gate NCO', 'GATE', 'ARMY', 800, 'ASSAULT',
-                    'READY', 0, 0, 0, NULL, 10, 10, 10, 10,
-                    'DRESS_UNIFORM', 'RIBBONS', 'WOODLAND_OLIVE', 'ARMY_SERVICE_GREEN',
-                    'BERET_BLACK', NULL, NULL, 0, 0, 1, 5
-                )
-                """.trimIndent()
-            )
-            AegisDatabase.MIGRATION_7_8.migrate(writableDb)
-            AegisDatabase.MIGRATION_8_9.migrate(writableDb)
-            AegisDatabase.MIGRATION_9_10.migrate(writableDb)
-            AegisDatabase.MIGRATION_10_11.migrate(writableDb)
+    @Test
+    fun `save with an older save format is replaced with a new command`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, AegisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+            .also { db = it }
+        val repo = AegisRepository(database.aegisDao())
 
-            writableDb.query(
-                "SELECT veteranLegacyBps, retiredVeteransCount, lastRetirementAtMillis FROM commander_state WHERE id = 1"
-            ).use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals(0, cursor.getInt(0))
-                assertEquals(0, cursor.getInt(1))
-                assertEquals(0L, cursor.getLong(2))
-            }
+        repo.ensureSeeded(nowMillis = 5_000_000L)
+        repo.updateCommanderState { it.copy(credits = 99_999.0, saveFormatVersion = 0) }
+        repo.deleteSquad("sq_alpha")
 
-            writableDb.query(
-                "SELECT retirementRequested, authorizedTierName, petitionCooldownUntilOps, tailorOverridesCsv FROM operators WHERE id = 'op_test'"
-            ).use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals(0, cursor.getInt(0))
-                assertEquals("SNCO", cursor.getString(1))
-                assertEquals(0, cursor.getInt(2))
-                assertEquals("", cursor.getString(3))
-            }
+        val result = repo.loadOrResetSave(nowMillis = 6_000_000L)
 
-            writableDb.query(
-                "SELECT authorizedTierName FROM operators WHERE id = 'op_gate'"
-            ).use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals("NCO", cursor.getString(0))
-            }
-        }
-        context.deleteDatabase(dbName)
+        assertEquals(true, result.wasReset)
+        assertEquals(AegisRepository.SAVE_FORMAT_VERSION, result.state.saveFormatVersion)
+        assertEquals(320.0, result.state.credits, 0.001)
+        assertTrue(repo.squads.first().any { it.id == "sq_alpha" })
+    }
+
+    @Test
+    fun `save with the current save format loads without a reset`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, AegisDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+            .also { db = it }
+        val repo = AegisRepository(database.aegisDao())
+
+        repo.ensureSeeded(nowMillis = 5_000_000L)
+        repo.updateCommanderState { it.copy(credits = 1_234.0) }
+
+        val result = repo.loadOrResetSave(nowMillis = 6_000_000L)
+
+        assertEquals(false, result.wasReset)
+        assertEquals(1_234.0, result.state.credits, 0.001)
     }
 
     @Test
@@ -563,69 +491,6 @@ class AegisOpsRobolectricTest {
     }
 
     @Test
-    fun `migration 11 to 12 creates squads table and adds deployment squadId column`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val dbName = "migration_11_12_test.db"
-        context.deleteDatabase(dbName)
-
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(dbName)
-                .callback(object : SupportSQLiteOpenHelper.Callback(11) {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS deployments (
-                                id TEXT NOT NULL PRIMARY KEY,
-                                missionId TEXT NOT NULL,
-                                operatorIdsCsv TEXT NOT NULL,
-                                startedAtMillis INTEGER NOT NULL,
-                                endsAtMillis INTEGER NOT NULL,
-                                efficiencyPct INTEGER NOT NULL,
-                                survivalEstimatePct INTEGER NOT NULL,
-                                successOddsPct INTEGER NOT NULL
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            "INSERT INTO deployments VALUES ('dep_1', 'msn_ridge_patrol', 'op_kestrel', 1000, 2000, 100, 95, 90)"
-                        )
-                    }
-
-                    override fun onUpgrade(
-                        db: SupportSQLiteDatabase,
-                        oldVersion: Int,
-                        newVersion: Int
-                    ) {
-                    }
-                })
-                .build()
-        )
-
-        helper.use { openHelper ->
-            val writableDb = openHelper.writableDatabase
-            AegisDatabase.MIGRATION_11_12.migrate(writableDb)
-
-            writableDb.execSQL(
-                "INSERT INTO squads (id, name, memberIdsCsv, leaderId, cohesionXp, missionsTogether, createdAtMillis) VALUES ('sq_bravo', 'Bravo Squad', 'op_kestrel,op_vesper', 'op_kestrel', 150, 3, 9999)"
-            )
-            writableDb.query("SELECT name, leaderId, cohesionXp, missionsTogether FROM squads WHERE id = 'sq_bravo'").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals("Bravo Squad", cursor.getString(0))
-                assertEquals("op_kestrel", cursor.getString(1))
-                assertEquals(150, cursor.getInt(2))
-                assertEquals(3, cursor.getInt(3))
-            }
-
-            writableDb.query("SELECT squadId FROM deployments WHERE id = 'dep_1'").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertTrue(cursor.isNull(0))
-            }
-        }
-        context.deleteDatabase(dbName)
-    }
-
-    @Test
     fun `repository seeds Alpha Squad with leader and persists squad updates and deletion`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val database = Room.inMemoryDatabaseBuilder(context, AegisDatabase::class.java)
@@ -769,75 +634,6 @@ class AegisOpsRobolectricTest {
     }
 
     @Test
-    fun `migration 12 to 13 adds inspection buff and squad uniform standard columns`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val dbName = "migration_12_13_test.db"
-        context.deleteDatabase(dbName)
-
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(dbName)
-                .callback(object : SupportSQLiteOpenHelper.Callback(12) {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS commander_state (
-                                id INTEGER NOT NULL PRIMARY KEY,
-                                credits REAL NOT NULL,
-                                supplies REAL NOT NULL,
-                                intel REAL NOT NULL,
-                                prestige REAL NOT NULL,
-                                campaignDay INTEGER NOT NULL,
-                                lastSimulatedAtMillis INTEGER NOT NULL,
-                                veteranLegacyBps INTEGER NOT NULL,
-                                retiredVeteransCount INTEGER NOT NULL,
-                                lastRetirementAtMillis INTEGER NOT NULL
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS squads (
-                                id TEXT NOT NULL PRIMARY KEY,
-                                name TEXT NOT NULL,
-                                memberIdsCsv TEXT NOT NULL,
-                                leaderId TEXT,
-                                cohesionXp INTEGER NOT NULL,
-                                missionsTogether INTEGER NOT NULL,
-                                createdAtMillis INTEGER NOT NULL
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL("INSERT INTO commander_state VALUES (1, 100.0, 50.0, 20.0, 10.0, 1, 1000, 0, 0, 0)")
-                        db.execSQL("INSERT INTO squads VALUES ('sq_alpha', 'Alpha Squad', 'op_kestrel', 'op_kestrel', 100, 1, 1000)")
-                    }
-
-                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
-                })
-                .build()
-        )
-
-        helper.use { openHelper ->
-            val writableDb = openHelper.writableDatabase
-            AegisDatabase.MIGRATION_12_13.migrate(writableDb)
-
-            writableDb.query("SELECT lastInspectionAtMillis, inspectionBuffUntilMillis FROM commander_state WHERE id = 1").use { c ->
-                assertTrue(c.moveToFirst())
-                assertEquals(0L, c.getLong(0))
-                assertEquals(0L, c.getLong(1))
-            }
-            writableDb.query("SELECT standardPatchName, standardCamoName, standardHeadgearName, standardDressStyleName FROM squads WHERE id = 'sq_alpha'").use { c ->
-                assertTrue(c.moveToFirst())
-                assertEquals("AUTO_MOS", c.getString(0))
-                assertTrue(c.isNull(1))
-                assertTrue(c.isNull(2))
-                assertTrue(c.isNull(3))
-            }
-        }
-        context.deleteDatabase(dbName)
-    }
-
-    @Test
     fun `dress awards screen triggers formal inspection and toggles free tailor override`() {
         val op = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
         var inspectedId: String? = null
@@ -912,121 +708,6 @@ class AegisOpsRobolectricTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("hotspot_detail_card").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("${medal.name} (×2)").performScrollTo().assertIsDisplayed()
-    }
-
-    @Test
-    fun `migration 13 to 14 adds smart wardrobe and per-operator wardrobe columns`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val dbName = "migration_13_14_test.db"
-        context.deleteDatabase(dbName)
-
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(dbName)
-                .callback(object : SupportSQLiteOpenHelper.Callback(13) {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS commander_state (
-                                id INTEGER NOT NULL PRIMARY KEY,
-                                credits REAL NOT NULL,
-                                supplies REAL NOT NULL,
-                                intel REAL NOT NULL,
-                                prestige REAL NOT NULL,
-                                totalMissionsCompleted INTEGER NOT NULL,
-                                lastSimulatedAtMillis INTEGER NOT NULL,
-                                veteranLegacyBps INTEGER NOT NULL,
-                                retiredVeteransCount INTEGER NOT NULL,
-                                lastRetirementAtMillis INTEGER NOT NULL,
-                                lastInspectionAtMillis INTEGER NOT NULL,
-                                inspectionBuffUntilMillis INTEGER NOT NULL
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS operators (
-                                id TEXT NOT NULL PRIMARY KEY,
-                                name TEXT NOT NULL,
-                                callsign TEXT NOT NULL,
-                                branchName TEXT NOT NULL,
-                                xp INTEGER NOT NULL,
-                                specialtyName TEXT NOT NULL,
-                                statusName TEXT NOT NULL,
-                                recoveryUntilMillis INTEGER NOT NULL,
-                                transferRequested INTEGER NOT NULL,
-                                retirementRequested INTEGER NOT NULL,
-                                petitionCooldownUntilOps INTEGER NOT NULL,
-                                staffOpsSupported INTEGER NOT NULL,
-                                hqRoleName TEXT,
-                                baseFirepower INTEGER NOT NULL,
-                                baseStealth INTEGER NOT NULL,
-                                baseTech INTEGER NOT NULL,
-                                baseResilience INTEGER NOT NULL,
-                                uniformModeName TEXT NOT NULL,
-                                dressDisplayModeName TEXT NOT NULL,
-                                camoPatternName TEXT NOT NULL,
-                                dressStyleName TEXT NOT NULL,
-                                headgearStyleName TEXT NOT NULL,
-                                equippedLeftCordId TEXT,
-                                equippedRightCordId TEXT,
-                                hasWhiteGloves INTEGER NOT NULL,
-                                hasDressSash INTEGER NOT NULL,
-                                tailorOverridesCsv TEXT NOT NULL,
-                                unlocked INTEGER NOT NULL,
-                                missionsCompleted INTEGER NOT NULL,
-                                authorizedTierName TEXT NOT NULL
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL("INSERT INTO commander_state VALUES (1, 100.0, 50.0, 20.0, 10.0, 3, 1000, 0, 0, 0, 0, 0)")
-                        db.execSQL(
-                            """
-                            INSERT INTO operators VALUES (
-                                'op_field', 'Field One', 'CIPHER', 'ARMY', 100, 'SIGNALS',
-                                'READY', 0, 0, 0, 0, 0, NULL, 10, 10, 10, 10,
-                                'FIELD_TACTICAL', 'RIBBONS', 'WOODLAND_OLIVE', 'ARMY_SERVICE_GREEN',
-                                'OBSIDIAN_BERET', NULL, NULL, 0, 0, '', 1, 2, 'SOLDIER'
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            """
-                            INSERT INTO operators VALUES (
-                                'op_hq', 'Staff One', 'KESTREL', 'ARMY', 3500, 'COMMAND',
-                                'HQ_STAFF', 0, 0, 0, 0, 4, 'CO_COMMANDING_OFFICER', 14, 12, 14, 14,
-                                'FIELD_TACTICAL', 'FULL_MEDALS', 'WOODLAND_OLIVE', 'OFFICER_SERVICE_BLUES',
-                                'OFFICER_PEAKED_CAP', NULL, NULL, 1, 1, '', 1, 6, 'OFFICER'
-                            )
-                            """.trimIndent()
-                        )
-                    }
-
-                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
-                })
-                .build()
-        )
-
-        helper.use { openHelper ->
-            val writableDb = openHelper.writableDatabase
-            AegisDatabase.MIGRATION_13_14.migrate(writableDb)
-
-            writableDb.query("SELECT smartWardrobeEnabled FROM commander_state WHERE id = 1").use { c ->
-                assertTrue(c.moveToFirst())
-                assertEquals(1, c.getInt(0))
-            }
-            writableDb.query("SELECT activeWardrobeKitName, wardrobeCsv FROM operators WHERE id = 'op_field'").use { c ->
-                assertTrue(c.moveToFirst())
-                assertEquals("FIELD", c.getString(0))
-                assertEquals("", c.getString(1))
-            }
-            writableDb.query("SELECT activeWardrobeKitName, wardrobeCsv FROM operators WHERE id = 'op_hq'").use { c ->
-                assertTrue(c.moveToFirst())
-                assertEquals("ALPHAS", c.getString(0))
-                assertEquals("", c.getString(1))
-            }
-        }
-        context.deleteDatabase(dbName)
     }
 
     @Test
@@ -1125,147 +806,6 @@ class AegisOpsRobolectricTest {
     }
 
     @Test
-    fun `migration 14 to 15 adds per-kit Bravos Mess and Gloves squad standard columns`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val dbName = "migration_14_15_test.db"
-        context.deleteDatabase(dbName)
-
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(dbName)
-                .callback(object : SupportSQLiteOpenHelper.Callback(14) {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS squads (
-                                id TEXT NOT NULL PRIMARY KEY,
-                                name TEXT NOT NULL,
-                                memberIdsCsv TEXT NOT NULL,
-                                leaderId TEXT,
-                                cohesionXp INTEGER NOT NULL,
-                                missionsTogether INTEGER NOT NULL,
-                                createdAtMillis INTEGER NOT NULL,
-                                standardPatchName TEXT NOT NULL,
-                                standardCamoName TEXT,
-                                standardHeadgearName TEXT,
-                                standardDressStyleName TEXT
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            "INSERT INTO squads VALUES ('sq_alpha', 'Alpha Squad', 'op_kestrel,op_vesper', 'op_kestrel', 120, 2, 1000, 'AUTO_MOS', 'WOODLAND_OLIVE', 'OFFICER_PEAKED_CAP', 'OFFICER_SERVICE_BLUES')"
-                        )
-                    }
-
-                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
-                })
-                .build()
-        )
-
-        helper.use { openHelper ->
-            val writableDb = openHelper.writableDatabase
-            AegisDatabase.MIGRATION_14_15.migrate(writableDb)
-
-            writableDb.query(
-                "SELECT standardBravosHeadgearName, standardBravosDressStyleName, standardMessDressStyleName, standardMessHeadgearName, standardWhiteGloves FROM squads WHERE id = 'sq_alpha'"
-            ).use { c ->
-                assertTrue(c.moveToFirst())
-                assertNull(c.getString(0))
-                assertNull(c.getString(1))
-                assertNull(c.getString(2))
-                assertNull(c.getString(3))
-                assertTrue(c.isNull(4))
-            }
-        }
-        context.deleteDatabase(dbName)
-    }
-
-    @Test
-    fun `migration 15 to 16 adds combatMissionsCompleted and backfills combat veterans`() {
-        val context: Context = ApplicationProvider.getApplicationContext()
-        val dbName = "migration_15_16_test.db"
-        context.deleteDatabase(dbName)
-
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(dbName)
-                .callback(object : SupportSQLiteOpenHelper.Callback(15) {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        db.execSQL(
-                            """
-                            CREATE TABLE operators (
-                                id TEXT NOT NULL PRIMARY KEY,
-                                name TEXT NOT NULL,
-                                callsign TEXT NOT NULL,
-                                branchName TEXT NOT NULL,
-                                xp INTEGER NOT NULL,
-                                authorizedTierName TEXT NOT NULL DEFAULT 'SOLDIER',
-                                specialtyName TEXT NOT NULL,
-                                statusName TEXT NOT NULL,
-                                recoveryUntilMillis INTEGER NOT NULL,
-                                transferRequested INTEGER NOT NULL DEFAULT 0,
-                                retirementRequested INTEGER NOT NULL DEFAULT 0,
-                                petitionCooldownUntilOps INTEGER NOT NULL DEFAULT 0,
-                                staffOpsSupported INTEGER NOT NULL DEFAULT 0,
-                                hqRoleName TEXT,
-                                baseFirepower INTEGER NOT NULL,
-                                baseStealth INTEGER NOT NULL,
-                                baseTech INTEGER NOT NULL,
-                                baseResilience INTEGER NOT NULL,
-                                uniformModeName TEXT NOT NULL,
-                                dressDisplayModeName TEXT NOT NULL,
-                                camoPatternName TEXT NOT NULL,
-                                dressStyleName TEXT NOT NULL,
-                                headgearStyleName TEXT NOT NULL,
-                                equippedLeftCordId TEXT,
-                                equippedRightCordId TEXT,
-                                hasWhiteGloves INTEGER NOT NULL,
-                                hasDressSash INTEGER NOT NULL,
-                                tailorOverridesCsv TEXT NOT NULL DEFAULT '',
-                                activeWardrobeKitName TEXT NOT NULL DEFAULT 'ALPHAS',
-                                wardrobeCsv TEXT NOT NULL DEFAULT '',
-                                missionsCompleted INTEGER NOT NULL,
-                                completedMissionIdsCsv TEXT NOT NULL DEFAULT '',
-                                schoolAttemptsCsv TEXT NOT NULL DEFAULT '',
-                                highestRiskName TEXT,
-                                timesWounded INTEGER NOT NULL DEFAULT 0,
-                                unlocked INTEGER NOT NULL,
-                                recruitCreditCost REAL NOT NULL,
-                                recruitIntelCost REAL NOT NULL,
-                                bio TEXT NOT NULL
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            "INSERT INTO operators (id, name, callsign, branchName, xp, specialtyName, statusName, recoveryUntilMillis, baseFirepower, baseStealth, baseTech, baseResilience, uniformModeName, dressDisplayModeName, camoPatternName, dressStyleName, headgearStyleName, hasWhiteGloves, hasDressSash, missionsCompleted, highestRiskName, unlocked, recruitCreditCost, recruitIntelCost, bio) VALUES ('op_vet', 'Vet', 'VET', 'ARMY', 500, 'ASSAULT', 'READY', 0, 14, 10, 10, 14, 'DRESS_UNIFORM', 'FULL_MEDALS', 'WOODLAND_OLIVE', 'ARMY_SERVICE_GREEN', 'OBSIDIAN_BERET', 1, 0, 4, 'MODERATE', 1, 0.0, 0.0, 'vet')"
-                        )
-                        db.execSQL(
-                            "INSERT INTO operators (id, name, callsign, branchName, xp, specialtyName, statusName, recoveryUntilMillis, baseFirepower, baseStealth, baseTech, baseResilience, uniformModeName, dressDisplayModeName, camoPatternName, dressStyleName, headgearStyleName, hasWhiteGloves, hasDressSash, missionsCompleted, highestRiskName, unlocked, recruitCreditCost, recruitIntelCost, bio) VALUES ('op_trainee', 'Trainee', 'BOOT', 'ARMY', 90, 'SIGNALS', 'READY', 0, 9, 11, 15, 11, 'DRESS_UNIFORM', 'RIBBONS', 'RANGER_GREEN', 'ARMY_SERVICE_GREEN', 'OBSIDIAN_BERET', 0, 0, 3, NULL, 1, 0.0, 0.0, 'trainee')"
-                        )
-                    }
-
-                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
-                })
-                .build()
-        )
-
-        helper.use { openHelper ->
-            val writableDb = openHelper.writableDatabase
-            AegisDatabase.MIGRATION_15_16.migrate(writableDb)
-
-            writableDb.query("SELECT id, combatMissionsCompleted FROM operators ORDER BY id").use { c ->
-                val map = mutableMapOf<String, Int>()
-                while (c.moveToNext()) {
-                    map[c.getString(0)] = c.getInt(1)
-                }
-                assertEquals(0, map["op_trainee"])
-                assertEquals(4, map["op_vet"])
-            }
-        }
-        context.deleteDatabase(dbName)
-    }
-
-    @Test
     fun `expanded 4-kit squad standard persists roundtrip and squad kit switcher dispatches`() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
@@ -1353,64 +893,6 @@ class AegisOpsRobolectricTest {
         } finally {
             db.close()
         }
-    }
-
-    @Test
-    fun `migration 16 to 17 adds campaign progress and rotating mission columns`() {
-        val context: Context = ApplicationProvider.getApplicationContext()
-        val dbName = "migration_16_17_test.db"
-        context.deleteDatabase(dbName)
-
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(dbName)
-                .callback(object : SupportSQLiteOpenHelper.Callback(16) {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        db.execSQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS commander_state (
-                                id INTEGER NOT NULL PRIMARY KEY,
-                                credits REAL NOT NULL,
-                                supplies REAL NOT NULL,
-                                intel REAL NOT NULL,
-                                prestige REAL NOT NULL,
-                                readiness INTEGER NOT NULL,
-                                totalMissionsCompleted INTEGER NOT NULL,
-                                lastTickMillis INTEGER NOT NULL,
-                                veteranLegacyBps INTEGER NOT NULL DEFAULT 0,
-                                retiredVeteransCount INTEGER NOT NULL DEFAULT 0,
-                                lastRetirementAtMillis INTEGER NOT NULL DEFAULT 0,
-                                lastInspectionAtMillis INTEGER NOT NULL DEFAULT 0,
-                                inspectionBuffUntilMillis INTEGER NOT NULL DEFAULT 0,
-                                smartWardrobeEnabled INTEGER NOT NULL DEFAULT 1
-                            )
-                            """.trimIndent()
-                        )
-                        db.execSQL(
-                            "INSERT INTO commander_state (id, credits, supplies, intel, prestige, readiness, totalMissionsCompleted, lastTickMillis) VALUES (1, 100.0, 80.0, 20.0, 10.0, 90, 5, 1000)"
-                        )
-                    }
-
-                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
-                })
-                .build()
-        )
-
-        helper.use { openHelper ->
-            val writableDb = openHelper.writableDatabase
-            AegisDatabase.MIGRATION_16_17.migrate(writableDb)
-
-            writableDb.query(
-                "SELECT completedCampaignStageIdsCsv, completedCampaignIdsCsv, rotatingMissionIdsCsv, rotationUpdatedAtMillis FROM commander_state WHERE id = 1"
-            ).use { c ->
-                assertTrue(c.moveToFirst())
-                assertEquals("", c.getString(0))
-                assertEquals("", c.getString(1))
-                assertEquals("", c.getString(2))
-                assertEquals(0L, c.getLong(3))
-            }
-        }
-        context.deleteDatabase(dbName)
     }
 
     @Test

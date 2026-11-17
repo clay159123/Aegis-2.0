@@ -21,7 +21,8 @@ data class CommanderStateEntity(
     val completedCampaignStageIdsCsv: String = "",
     val completedCampaignIdsCsv: String = "",
     val rotatingMissionIdsCsv: String = "",
-    val rotationUpdatedAtMillis: Long = 0L
+    val rotationUpdatedAtMillis: Long = 0L,
+    val saveFormatVersion: Int = 0
 )
 
 @Entity(tableName = "facilities")
