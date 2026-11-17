@@ -6,7 +6,9 @@ object GameCatalog {
 
     // Lazy: the seed lists below are declared after this property
     val initialOperators: List<Operator> by lazy {
-        seedOperators.map { op -> op.copy(equippedGearIds = starterLoadouts[op.id].orEmpty()) }
+        seedOperators.map { op ->
+            op.copy(equippedGearIds = starterLoadouts[op.id].orEmpty(), marksmanshipQual = startingRifleQualification(op))
+        }
     }
 
     /** Starting kit for the founding soldiers */
@@ -1790,6 +1792,40 @@ object GameCatalog {
                 "Zeroing optics on Range Alpha; safety brief complete.",
                 "Squad navigating pine compass course cleanly.",
                 "Qualification scores logged — ready for the Infantry Cord!"
+            )
+        ),
+        MissionTemplate(
+            id = "msn_rifle_qual",
+            title = "Rifle Qualification",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 100,
+                uniformKit = WardrobeKit.FIELD,
+                maxAttempts = 3,
+                allowedSpecialties = OperatorSpecialty.entries.toSet(),
+                prerequisiteAllIds = setOf("msn_basic_qual"),
+                suitabilitySummary = "Open to all MOS • 3 requalification attempts per soldier",
+                graduationRewardsSummary = "Score from firepower, Training Range and the day's shooting • best badge kept"
+            ),
+            baseSuccessRatePct = 100,
+            briefing = "Requalify on the known-distance range. Your own shooting counts; issued gear does not.",
+            durationSeconds = 10,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 30,
+            primaryFocus = "Rifle Qualification • Repeatable",
+            supplyCost = 3.0,
+            rewardCredits = 10.0,
+            rewardSupplies = 0.0,
+            rewardIntel = 0.0,
+            rewardPrestige = 2.0,
+            rewardXp = 20,
+            commsFeed = listOf(
+                "Firers to the line; zero confirmed.",
+                "Prone, kneeling, standing: targets up.",
+                "Scores tallied at the range tower."
             )
         ),
         MissionTemplate(

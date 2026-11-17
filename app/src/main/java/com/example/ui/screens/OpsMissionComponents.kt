@@ -807,7 +807,8 @@ internal fun HqStagingSheet(
                             mission = mission,
                             operator = op,
                             citations = uiState.citations,
-                            hqStaffSummary = uiState.hqStaffSummary
+                            hqStaffSummary = uiState.hqStaffSummary,
+                            facilities = uiState.facilities
                         )
                     } else {
                         TacticalCalculator.operatorSurvivalPct(

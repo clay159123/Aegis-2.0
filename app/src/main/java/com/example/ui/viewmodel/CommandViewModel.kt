@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import kotlin.random.Random
 
 data class CommandUiState(
@@ -76,6 +77,9 @@ class CommandViewModel(
 
     private val _nowMillis = MutableStateFlow(System.currentTimeMillis())
     private val _offlineReport = MutableStateFlow<OfflineReport?>(null)
+    private val _rifleQualQueue = MutableStateFlow<List<TacticalCalculator.RifleQualResult>>(emptyList())
+    /** Rifle qualification results waiting to be shown, one pop-up at a time. */
+    val rifleQualQueue: StateFlow<List<TacticalCalculator.RifleQualResult>> = _rifleQualQueue
     private val _lastDebrief = MutableStateFlow<DebriefSummary?>(null)
     private val _lastInspectionReport = MutableStateFlow<UniformInspectionReport?>(null)
     private val _statusBanner = MutableStateFlow<String?>(null)
@@ -202,6 +206,8 @@ class CommandViewModel(
             if (loadResult.wasReset) {
                 showBanner("This save was from an older version of Aegis Ops. A new command has been started.")
             }
+            // Builds keep running while the app is closed, with no offline cap
+            finishCompletedUpgrades(repository.facilities.first(), now)
             val facs = repository.facilities.first()
             val ops = repository.operators.first()
             val deps = repository.activeDeployments.first()
@@ -319,6 +325,8 @@ class CommandViewModel(
                     )
                 }
 
+                finishCompletedUpgrades(state.facilities, now)
+
                 val recoveredOps = state.operators.filter {
                     it.status == OperatorStatus.RECOVERING && now >= it.recoveryUntilMillis
                 }
@@ -397,17 +405,23 @@ class CommandViewModel(
         }
     }
 
+    /** Starts construction: the building keeps working at its current level until the timer finishes. */
     fun upgradeFacility(type: FacilityType) {
         val state = uiState.value
-        val current = state.facilities.find { it.type == type } ?: return
+        val now = System.currentTimeMillis()
+        val current = state.facilities.find { it.type == type } ?: FacilityState(type, type.startLevel)
+        TacticalCalculator.facilityUpgradeBlocker(type, state.facilities)?.let { blocker ->
+            showBanner("${type.title}: $blocker")
+            return
+        }
         val creditCost = type.upgradeCreditCost(current.level)
         val supplyCost = type.upgradeSupplyCost(current.level)
         if (state.resources.credits < creditCost || state.resources.supplies < supplyCost) {
-            showBanner("Insufficient CR or SUP to upgrade ${type.title}.")
+            showBanner("Insufficient CR or SUP to build ${type.title}.")
             return
         }
+        val buildSeconds = type.buildSeconds(current.level)
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
             repository.updateCommanderState { cur ->
                 cur.copy(
                     credits = (cur.credits - creditCost).coerceAtLeast(0.0),
@@ -415,9 +429,38 @@ class CommandViewModel(
                     lastSimulatedAtMillis = now
                 )
             }
-            repository.saveFacility(FacilityState(type = type, level = current.level + 1))
-            showBanner("${type.title} upgraded to Lv.${current.level + 1}")
+            repository.saveFacility(
+                current.copy(upgradeStartedAtMillis = now, upgradeEndsAtMillis = now + buildSeconds * 1000L)
+            )
+            showBanner("Construction started: ${type.title} Lv ${current.level + 1} (${TacticalCalculator.formatBuildTime(buildSeconds)})")
         }
+    }
+
+    /** Finishes a running build now for Prestige scaled by the time left. */
+    fun rushFacility(type: FacilityType) {
+        val state = uiState.value
+        val now = System.currentTimeMillis()
+        val current = state.facilities.find { it.type == type && it.isUpgrading } ?: return
+        val cost = TacticalCalculator.rushPrestigeCost(current, now)
+        if (state.resources.prestige < cost) {
+            showBanner("Need $cost PRS to rush ${type.title}.")
+            return
+        }
+        viewModelScope.launch {
+            repository.updateCommanderState { cur ->
+                cur.copy(prestige = (cur.prestige - cost).coerceAtLeast(0.0), lastSimulatedAtMillis = now)
+            }
+            val done = current.copy(level = (current.level + 1).coerceAtMost(MAX_FACILITY_LEVEL), upgradeEndsAtMillis = 0L, upgradeStartedAtMillis = 0L)
+            repository.saveFacility(done)
+            showBanner("${type.title} rushed to Lv ${done.level} for $cost PRS")
+        }
+    }
+
+    private suspend fun finishCompletedUpgrades(facilities: List<FacilityState>, now: Long) {
+        val done = TacticalCalculator.completedUpgrades(facilities, now)
+        if (done.isEmpty()) return
+        done.forEach { repository.saveFacility(it) }
+        showBanner(done.joinToString { "${it.type.title} Lv ${it.level}" } + " construction complete")
     }
 
     fun promoteOperator(
@@ -728,6 +771,7 @@ class CommandViewModel(
         val outcomes = mutableListOf<OperatorDebriefOutcome>()
 
         val missionSucceeded: Boolean
+        val rifleQualResults = mutableListOf<TacticalCalculator.RifleQualResult>()
         if (mission.risk.isTraining) {
             var anyPassed = false
             for (op in targetOps) {
@@ -736,9 +780,12 @@ class CommandViewModel(
                     mission = mission,
                     operator = op,
                     citations = state.citations,
-                    hqStaffSummary = state.hqStaffSummary
+                    hqStaffSummary = state.hqStaffSummary,
+                    facilities = state.facilities
                 )
-                val passed = Random.nextInt(100) < passOdds
+                // Rifle Qualification always completes; the score decides the badge
+                val isRifleQual = mission.id == TacticalCalculator.RIFLE_QUAL_MISSION_ID
+                val passed = isRifleQual || Random.nextInt(100) < passOdds
                 if (passed) anyPassed = true
 
                 val nextAttempts = (op.schoolAttempts[mission.id] ?: 0) + 1
@@ -765,7 +812,7 @@ class CommandViewModel(
                     ""
                 }
 
-                val updatedOp = op.copy(
+                val graduatedOp = op.copy(
                     xp = newXp,
                     baseFirepower = op.baseFirepower + (gradBonus?.firepower ?: 0),
                     baseStealth = op.baseStealth + (gradBonus?.stealth ?: 0),
@@ -775,6 +822,25 @@ class CommandViewModel(
                     schoolAttempts = updatedAttempts,
                     status = nextStatus
                 )
+                // Rifle Qualification, and graduating Marksmanship & Tactical Basics, both shoot for a badge
+                val shootsForQual = isRifleQual || (passed && mission.id == "msn_basic_qual")
+                val (updatedOp, qualNote) = if (shootsForQual) {
+                    val score = TacticalCalculator.rifleQualScore(
+                        graduatedOp, state.citations, state.facilities, Random.nextInt(TacticalCalculator.QUAL_ROLL_MAX + 1)
+                    )
+                    val attemptsLeft = if (isRifleQual) (TacticalCalculator.MAX_REQUAL_ATTEMPTS - nextAttempts).coerceAtLeast(0) else null
+                    val (qualified, result) = TacticalCalculator.applyRifleQualification(graduatedOp, score, attemptsLeft)
+                    rifleQualResults.add(result)
+                    val note = if (result.improved) {
+                        " Qualified ${result.achieved.shortLabel} (score $score) • award pending."
+                    } else {
+                        " Score $score: no change (${result.previous?.shortLabel ?: "unqualified"} held)" +
+                            (attemptsLeft?.let { " • $it attempts left." } ?: ".")
+                    }
+                    qualified to note
+                } else {
+                    graduatedOp to ""
+                }
                 updatedOperators.add(updatedOp)
 
                 val existingAndQueuedMedals = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet() +
@@ -795,7 +861,7 @@ class CommandViewModel(
                 } else {
                     ""
                 }
-                val deedText = baseDeedText + statGainNote + attemptNote
+                val deedText = baseDeedText + statGainNote + attemptNote + qualNote
 
                 if (recMedalId != null) {
                     newDeeds.add(
@@ -869,6 +935,8 @@ class CommandViewModel(
                         }
                     }
                     roll < survivalPct + 12 -> OperatorOutcomeType.WOUNDED
+                    // Aid Station can pull a would-be fatality back as wounded
+                    Random.nextInt(100) < TacticalCalculator.aidSaveChancePct(state.facilities) -> OperatorOutcomeType.WOUNDED
                     else -> OperatorOutcomeType.FALLEN
                 }
 
@@ -882,7 +950,11 @@ class CommandViewModel(
                     OperatorOutcomeType.WOUNDED -> OperatorStatus.RECOVERING
                     OperatorOutcomeType.FALLEN -> OperatorStatus.FALLEN
                 }
-                val recoveryAt = if (outcome == OperatorOutcomeType.WOUNDED) now + 45_000L else 0L
+                val recoveryAt = if (outcome == OperatorOutcomeType.WOUNDED) {
+                    now + (TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities)).roundToLong()
+                } else {
+                    0L
+                }
 
                 val opXp = if (missionSucceeded) xpEach else (xpEach * 0.45).roundToInt().coerceAtLeast(15)
                 val prevRank = op.rank
@@ -931,7 +1003,7 @@ class CommandViewModel(
                     !op.transferRequested &&
                     !op.retirementRequested
                 ) {
-                    (Random.nextInt(100) < 6).also { triggered ->
+                    (Random.nextInt(100) < (6 * TacticalCalculator.dfacPetitionFactor(state.facilities)).roundToInt()).also { triggered ->
                         if (triggered) petitionAlreadyActive = true
                     }
                 } else {
@@ -955,7 +1027,7 @@ class CommandViewModel(
                     !op.retirementRequested &&
                     TacticalCalculator.evaluateRetirementEligibility(postMissionCandidate).eligible
                 ) {
-                    (Random.nextInt(100) < 7).also { triggered ->
+                    (Random.nextInt(100) < (7 * TacticalCalculator.dfacPetitionFactor(state.facilities)).roundToInt()).also { triggered ->
                         if (triggered) petitionAlreadyActive = true
                     }
                 } else {
@@ -1101,7 +1173,7 @@ class CommandViewModel(
                 staffTotalOps >= TacticalCalculator.MIN_HQ_STAFF_RETIREMENT_TOTAL_OPS &&
                 TacticalCalculator.evaluateRetirementEligibility(candidateStaff).eligible
             ) {
-                (Random.nextInt(100) < 5).also { triggered ->
+                (Random.nextInt(100) < (5 * TacticalCalculator.dfacPetitionFactor(state.facilities)).roundToInt()).also { triggered ->
                     if (triggered) staffPetitionBlocked = true
                 }
             } else {
@@ -1208,7 +1280,8 @@ class CommandViewModel(
                 squad = squad,
                 deployedOperators = postMissionDeployed,
                 mission = mission,
-                missionSucceeded = missionSucceeded
+                missionSucceeded = missionSucceeded,
+                gainMultiplier = TacticalCalculator.dfacCohesionMultiplier(state.facilities)
             )
         }
         val postMissionDeployed = targetOps.map { updatedOpsById[it.id] ?: it }
@@ -1277,6 +1350,9 @@ class CommandViewModel(
             }
         }
 
+        if (rifleQualResults.isNotEmpty()) {
+            _rifleQualQueue.value = _rifleQualQueue.value + rifleQualResults
+        }
         viewModelScope.launch {
             repository.removeDeployment(deployment.id)
             repository.saveOperators(updatedOperators)
@@ -2191,6 +2267,22 @@ class CommandViewModel(
 
     fun dismissOfflineReport() {
         _offlineReport.value = null
+    }
+
+    /** Closes the current rifle qualification pop-up; an unawarded badge stays pending on the soldier. */
+    fun dismissRifleQualResult() {
+        _rifleQualQueue.value = _rifleQualQueue.value.drop(1)
+    }
+
+    /** Awards a soldier's pending rifle qualification badge so it appears on their uniform. */
+    fun awardMarksmanship(operatorId: String) {
+        val op = uiState.value.operators.find { it.id == operatorId } ?: return
+        val pending = op.pendingMarksmanshipQual ?: return
+        viewModelScope.launch {
+            repository.saveOperator(op.copy(marksmanshipQual = pending, pendingMarksmanshipQual = null))
+            showBanner("Awarded ${pending.shortLabel} badge to ${op.rank.code} ${op.callsign}")
+        }
+        _rifleQualQueue.value = _rifleQualQueue.value.filterNot { it.operatorId == operatorId && it.improved }
     }
 
     fun dismissDebrief() {

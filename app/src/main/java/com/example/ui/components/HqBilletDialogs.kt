@@ -540,7 +540,8 @@ fun DispatchHqMemberTaskingDialog(
                             mission = mission,
                             operator = operator,
                             citations = uiState.citations,
-                            hqStaffSummary = uiState.hqStaffSummary
+                            hqStaffSummary = uiState.hqStaffSummary,
+                            facilities = uiState.facilities
                         )
                     } else null
                     val attemptsUsed = operator.schoolAttempts[mission.id] ?: 0

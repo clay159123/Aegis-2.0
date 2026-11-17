@@ -28,7 +28,9 @@ data class CommanderStateEntity(
 @Entity(tableName = "facilities")
 data class FacilityEntity(
     @PrimaryKey val typeId: String,
-    val level: Int
+    val level: Int,
+    val upgradeEndsAtMillis: Long = 0L,
+    val upgradeStartedAtMillis: Long = 0L
 )
 
 @Entity(tableName = "operators")
@@ -72,6 +74,9 @@ data class OperatorEntity(
     val combatPatchHistoryCsv: String = "",
     val equippedGearCsv: String = "",
     val skinToneName: String? = null,
+    val marksmanshipQualName: String? = null,
+    val pendingMarksmanshipQualName: String? = null,
+    val lastQualScore: Int = 0,
     val bodyBuildName: String? = null,
     val unlocked: Boolean,
     val recruitCreditCost: Double,

@@ -57,7 +57,7 @@ class TacticalCalculatorTest {
         val fieldSchools = setOf(
             "msn_basic_qual", "msn_medical_school", "msn_engineer_school", "msn_night_qual",
             "msn_ranger_school", "msn_sf_school", "msn_ocs_school",
-            "msn_sapper_school", "msn_pathfinder_school", "msn_eib_testing"
+            "msn_sapper_school", "msn_pathfinder_school", "msn_eib_testing", "msn_rifle_qual"
         )
         GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.forEach { school ->
             val expected = if (school.id in fieldSchools) WardrobeKit.FIELD else WardrobeKit.BRAVOS
@@ -1559,7 +1559,7 @@ class TacticalCalculatorTest {
             if (it.type == FacilityType.ARMORY_WORKSHOP) it.copy(level = 3) else it
         }
 
-        // All 15 schools must exist with distinct IDs
+        // All 15 schools plus Rifle Qualification must exist with distinct IDs
         val schoolIds = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.map { it.id }.toSet()
         assertEquals(
             setOf(
@@ -1577,7 +1577,8 @@ class TacticalCalculatorTest {
                 "msn_ocs_school",
                 "msn_sapper_school",
                 "msn_pathfinder_school",
-                "msn_eib_testing"
+                "msn_eib_testing",
+                "msn_rifle_qual"
             ),
             schoolIds
         )
@@ -2286,20 +2287,14 @@ class TacticalCalculatorTest {
             )
         )
 
-        // Marksmanship qualification scales from Expert/Sharpshooter/Marksman and honors override
+        // Marksmanship shows the awarded qualification and honors the override
         assertEquals(
             MarksmanshipBadgeTier.EXPERT,
-            UniformRegaliaRules.resolveMarksmanshipTier(
-                baseOp.copy(baseFirepower = 18, completedMissionIds = setOf("msn_basic_qual", "msn_night_qual")),
-                emptyList()
-            )
+            UniformRegaliaRules.resolveMarksmanshipTier(baseOp.copy(marksmanshipQual = MarksmanshipBadgeTier.EXPERT), emptyList())
         )
         assertEquals(
-            MarksmanshipBadgeTier.SHARPSHOOTER,
-            UniformRegaliaRules.resolveMarksmanshipTier(
-                baseOp.copy(baseFirepower = 16, completedMissionIds = emptySet()),
-                emptyList()
-            )
+            MarksmanshipBadgeTier.NONE,
+            UniformRegaliaRules.resolveMarksmanshipTier(baseOp.copy(marksmanshipQual = null), emptyList())
         )
         assertEquals(
             MarksmanshipBadgeTier.MARKSMAN,
@@ -2767,7 +2762,7 @@ class TacticalCalculatorTest {
     @Test
     fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
         val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-        assertEquals(15, schools.size)
+        assertEquals(16, schools.size)
         schools.forEach { school ->
             assertFalse(school.id, school.hasClassCap)
             assertTrue(school.id, 15 in school.minOperators..school.maxOperators)
@@ -2984,5 +2979,99 @@ class TacticalCalculatorTest {
         // HQ staff don't follow a field squad standard
         val hq = a.copy(status = OperatorStatus.HQ_STAFF)
         assertNull(TacticalCalculator.standardSquadFor(hq, listOf(squad)))
+    }
+
+    @Test
+    fun buildingsUnlockByHqLevelCapAtTenAndBuildOnTimers() {
+        fun base(hq: Int, vararg extra: Pair<FacilityType, Int>) = FacilityType.entries.map { t ->
+            FacilityState(t, extra.toMap()[t] ?: if (t == FacilityType.COMMAND_HQ) hq else t.startLevel)
+        }
+        val start = base(1)
+        // New buildings start as empty lots behind HQ levels
+        assertEquals(0, TacticalCalculator.facilityLevel(start, FacilityType.DFAC))
+        assertEquals("Requires Command HQ Lv 2", TacticalCalculator.facilityUpgradeBlocker(FacilityType.DFAC, start))
+        assertNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.DFAC, base(2)))
+        assertNotNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.AIRFIELD, base(3)))
+        assertNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.AIRFIELD, base(4)))
+        // Cap at 10
+        assertEquals("Max level", TacticalCalculator.facilityUpgradeBlocker(FacilityType.ARMORY_WORKSHOP, base(1, FacilityType.ARMORY_WORKSHOP to 10)))
+        // Timers: 5 minutes for Lv 2, about 7 hours for Lv 10
+        assertEquals(300L, facilityBuildSeconds(2))
+        assertTrue(facilityBuildSeconds(10) in (6 * 3600L)..(8 * 3600L))
+        // One crew, a second at HQ 5
+        val busy = start.map { if (it.type == FacilityType.BARRACKS) it.copy(upgradeEndsAtMillis = 10_000L, upgradeStartedAtMillis = 1L) else it }
+        assertNotNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.ARMORY_WORKSHOP, busy))
+        val busyHq5 = busy.map { if (it.type == FacilityType.COMMAND_HQ) it.copy(level = 5) else it }
+        assertNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.ARMORY_WORKSHOP, busyHq5))
+        // Timer completion and Rush pricing
+        val done = TacticalCalculator.completedUpgrades(busy, 10_000L)
+        assertEquals(2, done.single { it.type == FacilityType.BARRACKS }.level)
+        assertTrue(TacticalCalculator.completedUpgrades(busy, 9_999L).isEmpty())
+        val running = FacilityState(FacilityType.BARRACKS, 4, upgradeEndsAtMillis = 30 * 60_000L)
+        assertEquals(30, TacticalCalculator.rushPrestigeCost(running, 0L))
+        assertEquals(RUSH_MIN_PRESTIGE, TacticalCalculator.rushPrestigeCost(running, 30 * 60_000L - 1_000L))
+    }
+
+    @Test
+    fun buildingPerksApply() {
+        fun with(t: FacilityType, lv: Int) = FacilityType.entries.map { FacilityState(it, if (it == t) lv else it.startLevel) }
+        // Barracks drives the roster
+        assertEquals(8, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 1)))
+        assertEquals(12, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 5)))
+        // Range: +1%/lv, +2%/lv for Ranger, still capped
+        val recruit = GameCatalog.createPostBasicRecruit("op_r", OperatorSpecialty.ASSAULT, emptySet(), 0)
+        val signals = GameCatalog.missions.first { it.id == "msn_signals_school" }
+        val ranger = GameCatalog.missions.first { it.id == "msn_ranger_school" }
+        assertEquals(3, TacticalCalculator.rangeSchoolBonusPct(signals, with(FacilityType.TRAINING_RANGE, 3)))
+        assertEquals(6, TacticalCalculator.rangeSchoolBonusPct(ranger, with(FacilityType.TRAINING_RANGE, 3)))
+        val noRange = TacticalCalculator.schoolPassOddsPct(signals, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 0))
+        val range3 = TacticalCalculator.schoolPassOddsPct(signals, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 3))
+        assertTrue(range3 >= noRange)
+        assertTrue(TacticalCalculator.schoolPassOddsPct(ranger, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 10)) <= 68)
+        // Aid Station and DFAC
+        assertEquals(0, TacticalCalculator.aidSaveChancePct(with(FacilityType.AID_STATION, 0)))
+        assertEquals(25, TacticalCalculator.aidSaveChancePct(with(FacilityType.AID_STATION, 5)))
+        assertTrue(TacticalCalculator.aidRecoveryMultiplier(with(FacilityType.AID_STATION, 5)) < 1.0)
+        assertEquals(1.25, TacticalCalculator.dfacCohesionMultiplier(with(FacilityType.DFAC, 5)), 0.001)
+        assertTrue(TacticalCalculator.dfacPetitionFactor(with(FacilityType.DFAC, 5)) < 1.0)
+        // Unbuilt buildings produce nothing
+        assertEquals(0.0, FacilityType.DFAC.productionPerSec(0), 0.0)
+    }
+
+    @Test
+    fun rifleQualificationIsEarnedStoredAndAwardedByThePlayer() {
+        val facNoRange = FacilityType.entries.map { FacilityState(it, it.startLevel) }
+        val facRange5 = facNoRange.map { if (it.type == FacilityType.TRAINING_RANGE) it.copy(level = 5) else it }
+        val soldier = GameCatalog.createPostBasicRecruit("op_q", OperatorSpecialty.ASSAULT, emptySet(), 0)
+            .copy(completedMissionIds = setOf("msn_basic_qual"))
+        // Score: own firepower + Range + roll; gear plays no part
+        val fp = TacticalCalculator.soldierStats(soldier, emptyList()).firepower
+        assertEquals(fp + 7, TacticalCalculator.rifleQualScore(soldier, emptyList(), facNoRange, 7))
+        assertEquals(fp + 5 + 7, TacticalCalculator.rifleQualScore(soldier, emptyList(), facRange5, 7))
+        // A better result waits for the player; the uniform shows nothing until it's awarded
+        val (pendingOp, first) = TacticalCalculator.applyRifleQualification(soldier, SHARPSHOOTER_SCORE, 2)
+        assertTrue(first.improved)
+        assertEquals(MarksmanshipBadgeTier.SHARPSHOOTER, pendingOp.pendingMarksmanshipQual)
+        assertEquals(MarksmanshipBadgeTier.NONE, UniformRegaliaRules.resolveMarksmanshipTier(pendingOp, emptyList()))
+        val awarded = pendingOp.copy(marksmanshipQual = pendingOp.pendingMarksmanshipQual, pendingMarksmanshipQual = null)
+        assertEquals(MarksmanshipBadgeTier.SHARPSHOOTER, UniformRegaliaRules.resolveMarksmanshipTier(awarded, emptyList()))
+        // A lower score never lowers the badge
+        val (lower, second) = TacticalCalculator.applyRifleQualification(awarded, 5, 1)
+        assertFalse(second.improved)
+        assertEquals(MarksmanshipBadgeTier.SHARPSHOOTER, lower.marksmanshipQual)
+        assertNull(lower.pendingMarksmanshipQual)
+        // Gear no longer changes the badge
+        val rifle = GameCatalog.initialGear.first { it.slot == GearSlot.WEAPON }.copy(unlocked = true, tier = 5)
+        assertEquals(MarksmanshipBadgeTier.SHARPSHOOTER, UniformRegaliaRules.resolveMarksmanshipTier(awarded, listOf(rifle)))
+        // Repeatable up to 3 times, then locked
+        val qual = GameCatalog.missions.first { it.id == TacticalCalculator.RIFLE_QUAL_MISSION_ID }
+        val graduated = awarded.copy(completedMissionIds = awarded.completedMissionIds + qual.id)
+        assertTrue(TacticalCalculator.canOperatorDeployOnMission(graduated, qual, emptySet()).eligible)
+        val usedUp = graduated.copy(schoolAttempts = mapOf(qual.id to 3))
+        val blocked = TacticalCalculator.canOperatorDeployOnMission(usedUp, qual, emptySet())
+        assertFalse(blocked.eligible)
+        assertTrue(blocked.reasonText.contains("No requalification attempts left"))
+        // Needs Marksmanship & Tactical Basics first
+        assertFalse(TacticalCalculator.canOperatorDeployOnMission(soldier.copy(completedMissionIds = emptySet()), qual, emptySet()).eligible)
     }
 }

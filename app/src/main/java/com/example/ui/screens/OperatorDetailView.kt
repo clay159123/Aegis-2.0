@@ -61,6 +61,7 @@ fun OperatorDetailView(
     onApproveRetirement: () -> Unit = {},
     onDenyRetirementRequest: () -> Unit = {},
     onSelectWardrobeKit: (WardrobeKit) -> Unit = {},
+    onAwardMarksmanship: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val extra = LocalAegisColors.current
@@ -282,6 +283,33 @@ fun OperatorDetailView(
                             style = MaterialTheme.typography.labelSmall,
                             color = extra.textMuted
                         )
+                    }
+
+                    // Rifle qualification: awarded badge, attempts left, and any badge waiting to be awarded
+                    val requalsUsed = operator.schoolAttempts[TacticalCalculator.RIFLE_QUAL_MISSION_ID] ?: 0
+                    Text(
+                        text = "Rifle qual: ${operator.marksmanshipQual?.shortLabel ?: "Unqualified"}" +
+                            (if (operator.lastQualScore > 0) " • last score ${operator.lastQualScore}" else "") +
+                            " • ${(TacticalCalculator.MAX_REQUAL_ATTEMPTS - requalsUsed).coerceAtLeast(0)} requals left",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = extra.textMuted
+                    )
+                    operator.pendingMarksmanshipQual?.let { pending ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${pending.shortLabel} badge ready to award",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = extra.brassBright
+                            )
+                            Button(
+                                onClick = onAwardMarksmanship,
+                                modifier = Modifier.defaultMinSize(minHeight = 40.dp).testTag("award_pending_marksmanship")
+                            ) { Text("Award Badge") }
+                        }
                     }
 
                     Row(

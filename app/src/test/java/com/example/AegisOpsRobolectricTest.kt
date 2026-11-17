@@ -43,6 +43,8 @@ import com.example.domain.model.UniformMode
 import com.example.domain.model.UniformTailorOverrides
 import com.example.domain.model.UnitPatchStyle
 import com.example.domain.model.WardrobeKit
+import com.example.domain.model.FacilityState
+import com.example.domain.model.FacilityType
 import com.example.ui.components.OperatorUniformPreview
 import com.example.ui.components.RankInsigniaBadge
 import com.example.ui.components.ResourceHudBar
@@ -977,6 +979,28 @@ class AegisOpsRobolectricTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("assemble_mission_camp_kestrel_4").performScrollTo().assertIsEnabled()
     }
+
+    @Test
+    fun `base map plot opens the building panel and starts an upgrade`() {
+        var upgraded: FacilityType? = null
+        val facs = FacilityType.entries.map { FacilityState(it, if (it == FacilityType.COMMAND_HQ) 2 else it.startLevel) }
+        composeTestRule.setContent {
+            AegisOpsTheme {
+                com.example.ui.components.BaseMapCard(
+                    facilities = facs,
+                    resources = ResourceBundle(credits = 10_000.0, supplies = 10_000.0, intel = 0.0, prestige = 0.0),
+                    nowMillis = 0L,
+                    onUpgrade = { upgraded = it },
+                    onRush = {}
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag("base_map").assertExists()
+        // Empty DFAC lot (unlocked at HQ 2) opens a Build panel
+        composeTestRule.onNodeWithTag("base_plot_dfac").performClick()
+        composeTestRule.onNodeWithTag("building_panel_dfac").assertExists()
+        composeTestRule.onNodeWithTag("upgrade_facility_dfac").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(FacilityType.DFAC, upgraded)
+    }
 }
-
-

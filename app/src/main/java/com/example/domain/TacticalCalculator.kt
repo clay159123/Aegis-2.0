@@ -370,7 +370,129 @@ object TacticalCalculator {
     }
 
     fun facilityLevel(facilities: List<FacilityState>, type: FacilityType): Int =
-        facilities.find { it.type == type }?.level ?: 1
+        facilities.find { it.type == type }?.level ?: type.startLevel
+
+    /** A building can be built or upgraded once Command HQ reaches its unlock level. */
+    fun isFacilityUnlocked(type: FacilityType, facilities: List<FacilityState>): Boolean =
+        facilityLevel(facilities, FacilityType.COMMAND_HQ) >= type.unlockHqLevel
+
+    /** Construction crews: one to start, a second at Command HQ Lv 5. */
+    fun constructionCrews(facilities: List<FacilityState>): Int =
+        if (facilityLevel(facilities, FacilityType.COMMAND_HQ) >= 5) 2 else 1
+
+    /** Why [type] can't start an upgrade right now, or null when it can. */
+    fun facilityUpgradeBlocker(type: FacilityType, facilities: List<FacilityState>): String? {
+        val state = facilities.find { it.type == type }
+        val level = state?.level ?: type.startLevel
+        return when {
+            !isFacilityUnlocked(type, facilities) -> "Requires Command HQ Lv ${type.unlockHqLevel}"
+            level >= MAX_FACILITY_LEVEL -> "Max level"
+            state?.isUpgrading == true -> "Already under construction"
+            facilities.count { it.isUpgrading } >= constructionCrews(facilities) ->
+                if (constructionCrews(facilities) < 2) "Construction crew busy (second crew at HQ Lv 5)" else "Both construction crews busy"
+            else -> null
+        }
+    }
+
+    /** Prestige to finish a running build now, scaled by the time left. */
+    fun rushPrestigeCost(facility: FacilityState, nowMillis: Long): Int {
+        if (!facility.isUpgrading) return 0
+        val minutesLeft = ((facility.upgradeEndsAtMillis - nowMillis).coerceAtLeast(0L) / 60_000.0)
+        return kotlin.math.ceil(minutesLeft * RUSH_PRESTIGE_PER_MINUTE).toInt().coerceAtLeast(RUSH_MIN_PRESTIGE)
+    }
+
+    /** Buildings whose timers have run out, at their new level. */
+    fun completedUpgrades(facilities: List<FacilityState>, nowMillis: Long): List<FacilityState> =
+        facilities.filter { it.isUpgrading && nowMillis >= it.upgradeEndsAtMillis }
+            .map { it.copy(level = (it.level + 1).coerceAtMost(MAX_FACILITY_LEVEL), upgradeEndsAtMillis = 0L, upgradeStartedAtMillis = 0L) }
+
+    /** DFAC: +5% squad cohesion gains per level. */
+    fun dfacCohesionMultiplier(facilities: List<FacilityState>): Double =
+        1.0 + facilityLevel(facilities, FacilityType.DFAC).coerceAtLeast(0) * 0.05
+
+    /** DFAC: scales transfer and retirement request chances down by 6% per level (to 40% at most). */
+    fun dfacPetitionFactor(facilities: List<FacilityState>): Double =
+        (1.0 - facilityLevel(facilities, FacilityType.DFAC).coerceAtLeast(0) * 0.06).coerceAtLeast(0.4)
+
+    /** Training Range: school pass bonus, +1% per level or +2% for SF selection, Ranger and EIB Testing. */
+    fun rangeSchoolBonusPct(mission: MissionTemplate, facilities: List<FacilityState>): Int {
+        val lv = facilityLevel(facilities, FacilityType.TRAINING_RANGE).coerceAtLeast(0)
+        val perLevel = if (mission.id in RANGE_DOUBLE_BONUS_SCHOOLS) 2 else 1
+        return lv * perLevel
+    }
+
+    val RANGE_DOUBLE_BONUS_SCHOOLS = setOf("msn_sf_school", "msn_ranger_school", "msn_eib_testing")
+
+    /** Aid Station: medbay recovery time multiplier, -7% per level (floor 37%). */
+    fun aidRecoveryMultiplier(facilities: List<FacilityState>): Double =
+        (1.0 - facilityLevel(facilities, FacilityType.AID_STATION).coerceAtLeast(0) * 0.07).coerceAtLeast(0.37)
+
+    /** Aid Station: chance a would-be fatality is pulled back as wounded instead, +5% per level. */
+    fun aidSaveChancePct(facilities: List<FacilityState>): Int =
+        facilityLevel(facilities, FacilityType.AID_STATION).coerceAtLeast(0) * 5
+
+    const val BASE_RECOVERY_MILLIS = 45_000L
+
+    // ---------- Rifle qualification ----------
+    const val RIFLE_QUAL_MISSION_ID = "msn_rifle_qual"
+    const val MAX_REQUAL_ATTEMPTS = 3
+    const val QUAL_ROLL_MAX = RIFLE_QUAL_ROLL_MAX
+    const val RANGE_QUAL_BONUS_PER_LEVEL = 1
+
+    fun qualRank(tier: MarksmanshipBadgeTier?): Int = rifleQualRank(tier)
+
+    fun qualTierForScore(score: Int): MarksmanshipBadgeTier = rifleQualTierForScore(score)
+
+    /** Score: the soldier's own firepower (no gear) + Training Range bonus + [roll]. */
+    fun rifleQualScore(operator: Operator, citations: List<AwardedMedal>, facilities: List<FacilityState>, roll: Int): Int =
+        soldierStats(operator, citations).firepower +
+            facilityLevel(facilities, FacilityType.TRAINING_RANGE).coerceAtLeast(0) * RANGE_QUAL_BONUS_PER_LEVEL +
+            roll.coerceIn(0, QUAL_ROLL_MAX)
+
+    /** The best badge the soldier holds or has waiting. */
+    fun bestQualification(operator: Operator): MarksmanshipBadgeTier? =
+        listOfNotNull(operator.marksmanshipQual, operator.pendingMarksmanshipQual).maxByOrNull { qualRank(it) }
+
+    data class RifleQualResult(
+        val operatorId: String,
+        val callsign: String,
+        val score: Int,
+        val previous: MarksmanshipBadgeTier?,
+        val achieved: MarksmanshipBadgeTier,
+        val attemptsLeft: Int?
+    ) {
+        /** Only a better badge than the soldier holds is worth awarding. */
+        val improved: Boolean get() = qualRank(achieved) > qualRank(previous)
+    }
+
+    /**
+     * Applies a qualification score: a better badge waits for the player to award it
+     * (pending); a lower score never lowers the badge.
+     */
+    fun applyRifleQualification(operator: Operator, score: Int, attemptsLeft: Int?): Pair<Operator, RifleQualResult> {
+        val previous = bestQualification(operator)
+        val result = RifleQualResult(operator.id, operator.callsign, score, previous, qualTierForScore(score), attemptsLeft)
+        val updated = if (result.improved) {
+            operator.copy(pendingMarksmanshipQual = result.achieved, lastQualScore = score)
+        } else {
+            operator.copy(lastQualScore = score)
+        }
+        return updated to result
+    }
+
+
+    /** "45s", "5m", "1h 12m", "7h" */
+    fun formatBuildTime(seconds: Long): String {
+        val s = seconds.coerceAtLeast(0L)
+        val h = s / 3600
+        val m = (s % 3600) / 60
+        return when {
+            h > 0 && m > 0 -> "${h}h ${m}m"
+            h > 0 -> "${h}h"
+            m > 0 -> "${m}m"
+            else -> "${s}s"
+        }
+    }
 
     data class HqStaffSummary(
         val staffCount: Int = 0,
@@ -494,7 +616,7 @@ object TacticalCalculator {
         }
 
         if (mission.scope == MissionScope.TRAINING) {
-            if (mission.id in operator.completedMissionIds) {
+            if (mission.id in operator.completedMissionIds && mission.id != RIFLE_QUAL_MISSION_ID) {
                 return EligibilityResult(false, listOf("Already Graduated"))
             }
             val req = mission.schoolRequirements
@@ -509,7 +631,11 @@ object TacticalCalculator {
                 }
                 val attemptsUsed = operator.schoolAttempts[mission.id] ?: 0
                 if (req.maxAttempts != null && attemptsUsed >= req.maxAttempts) {
-                    missing += "Washed out ($attemptsUsed/${req.maxAttempts} attempts used)"
+                    missing += if (mission.id == RIFLE_QUAL_MISSION_ID) {
+                        "No requalification attempts left"
+                    } else {
+                        "Washed out ($attemptsUsed/${req.maxAttempts} attempts used)"
+                    }
                 }
 
                 if (req.minRankTier.order > RankTier.SOLDIER.order && operator.rank.tier.order < req.minRankTier.order) {
@@ -938,7 +1064,8 @@ object TacticalCalculator {
         mission: MissionTemplate,
         operator: Operator,
         citations: List<AwardedMedal>,
-        hqStaffSummary: HqStaffSummary? = null
+        hqStaffSummary: HqStaffSummary? = null,
+        facilities: List<FacilityState> = emptyList()
     ): Int {
         val req = mission.schoolRequirements ?: return 90
         val stats = soldierStats(operator, citations)
@@ -962,7 +1089,9 @@ object TacticalCalculator {
             "msn_nco_school" -> 92
             else -> 94
         }
-        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus).coerceIn(15, maxCap)
+        // Training Range bonus still stops at the school's cap
+        val rangeBonus = rangeSchoolBonusPct(mission, facilities)
+        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus + rangeBonus).coerceIn(15, maxCap)
     }
 
     fun missionSuccessOddsPct(
@@ -979,7 +1108,7 @@ object TacticalCalculator {
         if (selectedOperators.isEmpty()) return 0
         if (mission.risk.isTraining) {
             return selectedOperators.map {
-                schoolPassOddsPct(mission, it, citations, hqStaffSummary)
+                schoolPassOddsPct(mission, it, citations, hqStaffSummary, facilities)
             }.average().roundToInt()
         }
         val efficiency = missionEfficiencyPct(
@@ -1126,9 +1255,10 @@ object TacticalCalculator {
         )
     }
 
+    /** Field roster comes from the Barracks: 8 at Lv 1, +1 per level after. */
     fun maxFieldRosterSlots(facilities: List<FacilityState>): Int {
-        val hqLevel = facilityLevel(facilities, FacilityType.COMMAND_HQ)
-        return 7 + hqLevel
+        val barracksLevel = facilityLevel(facilities, FacilityType.BARRACKS)
+        return 8 + (barracksLevel - 1).coerceAtLeast(0)
     }
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {
@@ -1257,7 +1387,7 @@ object TacticalCalculator {
         val stats = operatorStats(operator, gearItems, citations, facilities)
         val equipped = gearItems.equippedBy(operator)
         val gearSurvival = equipped.sumOf { it.survivalBonusPct }
-        val reconBonus = (facilityLevel(facilities, FacilityType.RECON_ARRAY) - 1) * 2
+        val reconBonus = (facilityLevel(facilities, FacilityType.RECON_ARRAY) - 1).coerceAtLeast(0) * 2
         val staffBonus = hqStaffSummary?.survivalBonusPct ?: (hqStaffCount.coerceAtLeast(0) * 2).coerceAtMost(10)
         val resilienceFactor = (stats.resilience * 0.40 + stats.stealth * 0.25).roundToInt()
         val nightSynergy = if (mission.isNightOp && equipped.any { it.id.contains("nvg") || it.id.contains("thermal") }) 8 else 0

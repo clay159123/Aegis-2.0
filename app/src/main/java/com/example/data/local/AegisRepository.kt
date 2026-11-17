@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 7
+        const val SAVE_FORMAT_VERSION = 8
     }
 
     private val commanderMutex = Mutex()
@@ -31,7 +31,12 @@ class AegisRepository(private val dao: AegisDao) {
     val facilities: Flow<List<FacilityState>> = dao.observeFacilities().map { list ->
         list.mapNotNull { entity ->
             FacilityType.entries.find { it.id == entity.typeId }?.let { type ->
-                FacilityState(type = type, level = entity.level)
+                FacilityState(
+                    type = type,
+                    level = entity.level,
+                    upgradeEndsAtMillis = entity.upgradeEndsAtMillis,
+                    upgradeStartedAtMillis = entity.upgradeStartedAtMillis
+                )
             }
         }.sortedBy { FacilityType.entries.indexOf(it.type) }
     }
@@ -150,7 +155,7 @@ class AegisRepository(private val dao: AegisDao) {
         dao.upsertCommanderState(initialState)
 
         dao.upsertFacilities(
-            FacilityType.entries.map { FacilityEntity(typeId = it.id, level = 1) }
+            FacilityType.entries.map { FacilityEntity(typeId = it.id, level = it.startLevel) }
         )
 
         dao.upsertOperators(GameCatalog.initialOperators.map { it.toEntity() })
@@ -274,7 +279,14 @@ class AegisRepository(private val dao: AegisDao) {
     }
 
     suspend fun saveFacility(facility: FacilityState) {
-        dao.upsertFacility(FacilityEntity(typeId = facility.type.id, level = facility.level))
+        dao.upsertFacility(
+            FacilityEntity(
+                typeId = facility.type.id,
+                level = facility.level,
+                upgradeEndsAtMillis = facility.upgradeEndsAtMillis,
+                upgradeStartedAtMillis = facility.upgradeStartedAtMillis
+            )
+        )
     }
 
     suspend fun saveOperator(operator: Operator) {
@@ -413,6 +425,9 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     combatPatchHistory = decodeCombatPatchHistoryCsv(combatPatchHistoryCsv),
     equippedGearIds = decodeEquippedGearCsv(equippedGearCsv),
     skinToneOverride = skinToneName?.let { n -> SkinTone.entries.find { it.name == n } },
+    marksmanshipQual = marksmanshipQualName?.let { n -> MarksmanshipBadgeTier.entries.find { it.name == n } },
+    pendingMarksmanshipQual = pendingMarksmanshipQualName?.let { n -> MarksmanshipBadgeTier.entries.find { it.name == n } },
+    lastQualScore = lastQualScore,
     bodyBuildOverride = bodyBuildName?.let { n -> BodyBuild.entries.find { it.name == n } },
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
@@ -475,6 +490,9 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     combatPatchHistoryCsv = encodeCombatPatchHistoryCsv(combatPatchHistory),
     equippedGearCsv = encodeEquippedGearCsv(equippedGearIds),
     skinToneName = skinToneOverride?.name,
+    marksmanshipQualName = marksmanshipQual?.name,
+    pendingMarksmanshipQualName = pendingMarksmanshipQual?.name,
+    lastQualScore = lastQualScore,
     bodyBuildName = bodyBuildOverride?.name,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
