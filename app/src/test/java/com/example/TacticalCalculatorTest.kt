@@ -12,6 +12,14 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** A player-picked cord on each shoulder, stored the way the Tailor Studio saves it */
+private fun Operator.withManualCords(left: String?, right: String?): Operator = copy(
+    wardrobe = wardrobe.withKit(
+        WardrobeKit.ALPHAS,
+        wardrobe.alphas.copy(equippedLeftCordId = left, equippedRightCordId = right, cordCustomized = true)
+    )
+)
+
 class TacticalCalculatorTest {
 
     @Test
@@ -875,11 +883,8 @@ class TacticalCalculatorTest {
     @Test
     fun resolveWornRegaliaEnforcesRegulationCapsAndPrecedence() {
         val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
-            .copy(
-                dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                equippedLeftCordId = "cord_infantry_blue",
-                equippedRightCordId = "cord_general_aiguillette"
-            )
+            .copy(dressDisplayMode = DressDisplayMode.FULL_MEDALS)
+            .withManualCords("cord_infantry_blue", "cord_general_aiguillette")
         // Give Kestrel every single award in the entire catalog
         val allAwards = GameCatalog.medals
 
@@ -1417,10 +1422,7 @@ class TacticalCalculatorTest {
 
         // Swapped cords (Staff Aiguillette on Left, Infantry Cord on Right) must be rejected
         val illegalCordPlacement = TacticalCalculator.resolveWornRegalia(
-            baseOp.copy(
-                equippedLeftCordId = "cord_general_aiguillette",
-                equippedRightCordId = "cord_infantry_blue"
-            ),
+            baseOp.withManualCords("cord_general_aiguillette", "cord_infantry_blue"),
             GameCatalog.medals
         )
         assertNull(illegalCordPlacement.leftCord)
@@ -2192,9 +2194,8 @@ class TacticalCalculatorTest {
 
         // Default mode enforces cord shoulder & badge slot regulations
         val strictWorn = TacticalCalculator.resolveWornRegalia(
-            operator = infOp.copy(
-                equippedLeftCordId = "cord_general_aiguillette", // RIGHT_ONLY cord on left shoulder -> ignored under strict rules
-                equippedRightCordId = "cord_infantry_blue",     // LEFT_ONLY cord on right shoulder -> ignored under strict rules
+            // RIGHT_ONLY cord on left shoulder and LEFT_ONLY cord on right shoulder -> ignored under strict rules
+            operator = infOp.withManualCords("cord_general_aiguillette", "cord_infantry_blue").copy(
                 tailorOverrides = UniformTailorOverrides(
                     pinSlot1 = nonAboveRackBadge.id,
                     pinSlot2 = UniformTailorOverrides.SLOT_NONE,
@@ -2210,9 +2211,7 @@ class TacticalCalculatorTest {
 
         // With Free Custom Override enabled, player can place any earned cord on either shoulder and any earned badge in any chest slot
         val freeWorn = TacticalCalculator.resolveWornRegalia(
-            operator = infOp.copy(
-                equippedLeftCordId = "cord_general_aiguillette",
-                equippedRightCordId = "cord_infantry_blue",
+            operator = infOp.withManualCords("cord_general_aiguillette", "cord_infantry_blue").copy(
                 tailorOverrides = UniformTailorOverrides(
                     pinSlot1 = nonAboveRackBadge.id,
                     pinSlot2 = aboveRackBadge.id,
@@ -2683,7 +2682,64 @@ class TacticalCalculatorTest {
         assertEquals(4, secondBatch.toSet().size)
         assertTrue(secondBatch.any { it !in firstBatch })
     }
+
+    @Test
+    fun autoBeretWearsHighestEarnedUnlessPlayerPicked() {
+        val base = GameCatalog.initialOperators.first { it.id == "op_kestrel" }.copy(
+            completedMissionIds = emptySet(),
+            headgearStyle = HeadgearStyle.OBSIDIAN_BERET
+        )
+        // A stored black beret no longer blocks an upgrade
+        val airborne = base.copy(completedMissionIds = setOf("msn_night_qual"))
+        assertEquals(HeadgearStyle.MAROON_BERET, TacticalCalculator.defaultHeadgearForKit(WardrobeKit.BRAVOS, airborne, emptySet()))
+        // Tan (Ranger) outranks maroon (Airborne)
+        val ranger = airborne.copy(completedMissionIds = airborne.completedMissionIds + "msn_ranger_school")
+        val rangerOwned = setOf("insig_ranger_tab")
+        val rangerAuto = TacticalCalculator.defaultHeadgearForKit(WardrobeKit.BRAVOS, ranger, rangerOwned)
+        assertEquals(HeadgearStyle.TAN_BERET, rangerAuto)
+        // An explicit pick holds
+        assertEquals(
+            HeadgearStyle.OBSIDIAN_BERET,
+            TacticalCalculator.defaultHeadgearForKit(WardrobeKit.BRAVOS, ranger, rangerOwned, preferred = HeadgearStyle.OBSIDIAN_BERET)
+        )
+        assertEquals(
+            listOf(HeadgearStyle.EMERALD_BERET, HeadgearStyle.TAN_BERET, HeadgearStyle.MAROON_BERET, HeadgearStyle.OBSIDIAN_BERET),
+            TacticalCalculator.BERET_LADDER
+        )
+    }
+
+    @Test
+    fun autoCordsFollowMosAndHqStatusAndManualPickOverrides() {
+        val medals = GameCatalog.medals.associateBy { it.id }
+        val base = GameCatalog.initialOperators.first { it.id == "op_kestrel" }.copy(
+            specialty = OperatorSpecialty.ASSAULT,
+            status = OperatorStatus.READY,
+            equippedLeftCordId = "cord_signals_orange",
+            equippedRightCordId = null
+        )
+        val owned = listOf("cord_signals_orange", "cord_infantry_blue", "cord_valor_fourragere", "cord_general_aiguillette")
+            .map { medals.getValue(it) }
+
+        // Auto ignores the stale stored id and wears the MOS-preferred cord; field soldiers wear the valor cord
+        val field = TacticalCalculator.resolveWornRegalia(base, owned)
+        assertEquals("cord_infantry_blue", field.leftCord?.id)
+        assertEquals("cord_valor_fourragere", field.rightCord?.id)
+
+        // HQ staff wear the gold aiguillette first
+        val hq = TacticalCalculator.resolveWornRegalia(base.copy(status = OperatorStatus.HQ_STAFF), owned)
+        assertEquals("cord_general_aiguillette", hq.rightCord?.id)
+
+        // A newly earned better cord shows without any re-save
+        val onlySignals = owned.filter { it.id != "cord_infantry_blue" }
+        assertEquals("cord_signals_orange", TacticalCalculator.resolveWornRegalia(base, onlySignals).leftCord?.id)
+
+        // A manual pick overrides Auto; AUTO on one shoulder keeps that shoulder automatic
+        val manual = base.copy(status = OperatorStatus.HQ_STAFF)
+            .withManualCords("cord_signals_orange", UniformTailorOverrides.SLOT_AUTO)
+        val manualWorn = TacticalCalculator.resolveWornRegalia(manual, owned)
+        assertEquals("cord_signals_orange", manualWorn.leftCord?.id)
+        assertEquals("cord_general_aiguillette", manualWorn.rightCord?.id)
+        // "None Worn" is respected
+        assertNull(TacticalCalculator.resolveWornRegalia(base.withManualCords(null, null), owned).leftCord)
+    }
 }
-
-
-

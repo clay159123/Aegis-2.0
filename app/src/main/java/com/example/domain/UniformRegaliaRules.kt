@@ -72,9 +72,30 @@ object UniformRegaliaRules {
         )
     )
 
-    private val preferredRightCordBySpecialty: Map<OperatorSpecialty, List<String>> = mapOf(
-        OperatorSpecialty.COMMAND to listOf("cord_general_aiguillette", "cord_valor_fourragere")
-    )
+    const val CORD_HQ_AIGUILLETTE = "cord_general_aiguillette"
+    const val CORD_VALOR = "cord_valor_fourragere"
+
+    /** Right shoulder Auto order: HQ staff wear the gold aiguillette first; field soldiers wear only the valor cord. */
+    fun rightCordAutoOrder(isHqStaff: Boolean): List<String> =
+        if (isHqStaff) listOf(CORD_HQ_AIGUILLETTE, CORD_VALOR) else listOf(CORD_VALOR)
+
+    /**
+     * Auto cord for one shoulder from the soldier's owned cords.
+     * Left: highest MOS-preferred branch cord. Right: see [rightCordAutoOrder].
+     */
+    fun autoCordForShoulder(
+        operator: Operator,
+        ownedMedals: List<MedalDefinition>,
+        isRightShoulder: Boolean
+    ): MedalDefinition? {
+        val owned = ownedMedals.filter { isCordAllowedOnShoulder(it, isRightShoulder) }
+        return if (isRightShoulder) {
+            val byId = owned.associateBy { it.id }
+            rightCordAutoOrder(operator.status == OperatorStatus.HQ_STAFF).firstNotNullOfOrNull { byId[it] }
+        } else {
+            cordsForShoulder(owned, isRightShoulder = false, specialty = operator.specialty).firstOrNull()
+        }
+    }
 
     private val preferredBadgesBySpecialtyAndSlot: Map<OperatorSpecialty, Map<ChestBadgeSlot, List<String>>> = mapOf(
         OperatorSpecialty.ASSAULT to mapOf(
@@ -240,16 +261,14 @@ object UniformRegaliaRules {
     fun mosCordPriority(specialty: OperatorSpecialty, medalId: String): Int {
         val leftIdx = preferredCordOrderBySpecialty[specialty]?.indexOf(medalId) ?: -1
         if (leftIdx >= 0) return leftIdx
-        val rightList = preferredRightCordBySpecialty[specialty]
-            ?: listOf("cord_valor_fourragere", "cord_general_aiguillette")
+        val rightList = listOf(CORD_VALOR, CORD_HQ_AIGUILLETTE)
         val rightIdx = rightList.indexOf(medalId)
         return if (rightIdx >= 0) rightIdx else 999
     }
 
     fun isPrimaryMosCord(specialty: OperatorSpecialty, medalId: String): Boolean {
         val leftTop = preferredCordOrderBySpecialty[specialty]?.firstOrNull()
-        val rightTop = (preferredRightCordBySpecialty[specialty]
-            ?: listOf("cord_valor_fourragere", "cord_general_aiguillette")).firstOrNull()
+        val rightTop = CORD_VALOR
         return medalId == leftTop || medalId == rightTop
     }
 

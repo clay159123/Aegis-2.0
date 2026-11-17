@@ -930,7 +930,11 @@ data class UniformTailorRequest(
     val hasWhiteGloves: Boolean,
     val hasDressSash: Boolean,
     val tailorOverrides: UniformTailorOverrides = UniformTailorOverrides(),
-    val wardrobeKit: WardrobeKit = if (uniformMode == UniformMode.FIELD_TACTICAL) WardrobeKit.FIELD else WardrobeKit.ALPHAS
+    val wardrobeKit: WardrobeKit = if (uniformMode == UniformMode.FIELD_TACTICAL) WardrobeKit.FIELD else WardrobeKit.ALPHAS,
+    /** True only when the player picked headgear by hand in this request */
+    val headgearTouched: Boolean = false,
+    /** True when the player picked "Auto" headgear, clearing a saved manual pick */
+    val headgearAuto: Boolean = false
 ) {
     companion object {
         fun fromOperator(
@@ -943,8 +947,9 @@ data class UniformTailorRequest(
             camoPattern = op.wardrobe.forKit(kit).camoPattern ?: op.camoPattern,
             dressStyle = op.wardrobe.forKit(kit).dressStyle ?: op.dressStyle,
             headgearStyle = op.wardrobe.forKit(kit).headgearStyle ?: op.headgearStyle,
-            equippedLeftCordId = if (op.wardrobe.forKit(kit).cordCustomized) op.wardrobe.forKit(kit).equippedLeftCordId else op.equippedLeftCordId,
-            equippedRightCordId = if (op.wardrobe.forKit(kit).cordCustomized) op.wardrobe.forKit(kit).equippedRightCordId else op.equippedRightCordId,
+            // Cords are shared by Alphas and Bravos and stored on the Alphas settings; AUTO = resolve at render time
+            equippedLeftCordId = op.wardrobe.alphas.let { if (it.cordCustomized) it.equippedLeftCordId else UniformTailorOverrides.SLOT_AUTO },
+            equippedRightCordId = op.wardrobe.alphas.let { if (it.cordCustomized) it.equippedRightCordId else UniformTailorOverrides.SLOT_AUTO },
             // Mess keeps its own default (gloves on) and never inherits the Alphas/top-level setting
             hasWhiteGloves = op.wardrobe.forKit(kit).hasWhiteGloves
                 ?: if (kit == WardrobeKit.MESS) true else op.hasWhiteGloves,

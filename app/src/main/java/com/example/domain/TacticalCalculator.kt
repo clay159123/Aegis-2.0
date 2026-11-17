@@ -237,20 +237,33 @@ object TacticalCalculator {
             else -> ownedById[overrides.neckSlot]?.takeIf { it.isNeckMedallion }
         }
 
-        val leftCord = operator.equippedLeftCordId?.let { id ->
-            ownedById[id]?.takeIf {
-                it.category == AwardCategory.SHOULDER_CORD &&
-                    (overrides.freeTailorOverride || UniformRegaliaRules.isCordAllowedOnShoulder(it, isRightShoulder = false))
-            }
-        }
-        val rightCord = operator.equippedRightCordId
-            ?.takeIf { it != leftCord?.id }
-            ?.let { id ->
+        // Cords resolve at render time: Auto picks from owned cords, a manual pick is honored if still owned
+        val cordSettings = operator.wardrobe.alphas
+        val leftChoice = if (cordSettings.cordCustomized) cordSettings.equippedLeftCordId else UniformTailorOverrides.SLOT_AUTO
+        val rightChoice = if (cordSettings.cordCustomized) cordSettings.equippedRightCordId else UniformTailorOverrides.SLOT_AUTO
+        val leftCord = if (leftChoice == UniformTailorOverrides.SLOT_AUTO) {
+            UniformRegaliaRules.autoCordForShoulder(operator, sorted, isRightShoulder = false)
+        } else {
+            leftChoice?.let { id ->
                 ownedById[id]?.takeIf {
                     it.category == AwardCategory.SHOULDER_CORD &&
-                        (overrides.freeTailorOverride || UniformRegaliaRules.isCordAllowedOnShoulder(it, isRightShoulder = true))
+                        (overrides.freeTailorOverride || UniformRegaliaRules.isCordAllowedOnShoulder(it, isRightShoulder = false))
                 }
             }
+        }
+        val rightCord = if (rightChoice == UniformTailorOverrides.SLOT_AUTO) {
+            UniformRegaliaRules.autoCordForShoulder(operator, sorted, isRightShoulder = true)
+                ?.takeIf { it.id != leftCord?.id }
+        } else {
+            rightChoice
+                ?.takeIf { it != leftCord?.id }
+                ?.let { id ->
+                    ownedById[id]?.takeIf {
+                        it.category == AwardCategory.SHOULDER_CORD &&
+                            (overrides.freeTailorOverride || UniformRegaliaRules.isCordAllowedOnShoulder(it, isRightShoulder = true))
+                    }
+                }
+        }
 
         val tabPool = UniformRegaliaRules.tabsInPrecedenceOrder(sorted)
         val resolvedTabs = resolvePositionalSlots(
@@ -679,6 +692,14 @@ object TacticalCalculator {
         }
     }
 
+    /** Bravos beret Auto order, highest first: SF, Ranger, Airborne, then the black beret. */
+    val BERET_LADDER: List<HeadgearStyle> = listOf(
+        HeadgearStyle.EMERALD_BERET,
+        HeadgearStyle.TAN_BERET,
+        HeadgearStyle.MAROON_BERET,
+        HeadgearStyle.OBSIDIAN_BERET
+    )
+
     fun defaultHeadgearForKit(
         kit: WardrobeKit,
         operator: Operator,
@@ -688,21 +709,13 @@ object TacticalCalculator {
         val tier = operator.rank.tier
         return when (kit) {
             WardrobeKit.BRAVOS -> {
+                // Only an explicit player pick ([preferred]) holds; otherwise wear the highest earned beret
                 if (preferred != null && preferred.kind == HeadgearKind.BERET) return preferred
-                if (operator.headgearStyle.kind == HeadgearKind.BERET) return operator.headgearStyle
-                when {
-                    evaluateHeadgearEligibility(HeadgearStyle.EMERALD_BERET, operator, ownedMedalIds).eligible ->
-                        HeadgearStyle.EMERALD_BERET
-                    evaluateHeadgearEligibility(HeadgearStyle.MAROON_BERET, operator, ownedMedalIds).eligible ->
-                        HeadgearStyle.MAROON_BERET
-                    evaluateHeadgearEligibility(HeadgearStyle.TAN_BERET, operator, ownedMedalIds).eligible ->
-                        HeadgearStyle.TAN_BERET
-                    else -> HeadgearStyle.OBSIDIAN_BERET
-                }
+                BERET_LADDER.firstOrNull { evaluateHeadgearEligibility(it, operator, ownedMedalIds).eligible }
+                    ?: HeadgearStyle.OBSIDIAN_BERET
             }
             WardrobeKit.ALPHAS, WardrobeKit.MESS -> {
                 if (preferred != null && preferred.kind != HeadgearKind.BERET) return preferred
-                if (operator.headgearStyle.kind != HeadgearKind.BERET) return operator.headgearStyle
                 when (tier) {
                     RankTier.FLAG_OFFICER -> HeadgearStyle.FLAG_GENERAL_CAP
                     RankTier.OFFICER -> HeadgearStyle.OFFICER_PEAKED_CAP
@@ -751,15 +764,11 @@ object TacticalCalculator {
                     dressDisplayMode = bravosDisplay,
                     hasWhiteGloves = false,
                     hasDressSash = false,
-                    // Shoulder cords are worn on the Bravos shirt, same selection as Alphas
-                    equippedLeftCordId = if (settings.cordCustomized) settings.equippedLeftCordId else operator.equippedLeftCordId,
-                    equippedRightCordId = if (settings.cordCustomized) settings.equippedRightCordId else operator.equippedRightCordId
+                    // Shoulder cords are worn on the Bravos shirt, same selection as Alphas (resolved in resolveWornRegalia)
                 )
             }
             WardrobeKit.ALPHAS -> {
                 val rawSash = settings.hasDressSash ?: operator.hasDressSash
-                val leftCord = if (settings.cordCustomized) settings.equippedLeftCordId else operator.equippedLeftCordId
-                val rightCord = if (settings.cordCustomized) settings.equippedRightCordId else operator.equippedRightCordId
                 operator.copy(
                     activeWardrobeKit = WardrobeKit.ALPHAS,
                     uniformMode = UniformMode.DRESS_UNIFORM,
@@ -772,13 +781,11 @@ object TacticalCalculator {
                         WardrobeKit.ALPHAS,
                         operator,
                         ownedMedalIds,
-                        settings.headgearStyle ?: operator.headgearStyle.takeIf { it.kind != HeadgearKind.BERET }
+                        settings.headgearStyle
                     ),
                     dressDisplayMode = settings.dressDisplayMode ?: operator.dressDisplayMode,
                     hasWhiteGloves = settings.hasWhiteGloves ?: operator.hasWhiteGloves,
-                    hasDressSash = rawSash && sashAllowed,
-                    equippedLeftCordId = leftCord,
-                    equippedRightCordId = rightCord
+                    hasDressSash = rawSash && sashAllowed
                 )
             }
             WardrobeKit.MESS -> {
@@ -800,7 +807,7 @@ object TacticalCalculator {
                         WardrobeKit.MESS,
                         operator,
                         ownedMedalIds,
-                        settings.headgearStyle ?: operator.headgearStyle.takeIf { it.kind != HeadgearKind.BERET }
+                        settings.headgearStyle
                     ),
                     dressDisplayMode = messDisplay,
                     hasWhiteGloves = settings.hasWhiteGloves ?: true,

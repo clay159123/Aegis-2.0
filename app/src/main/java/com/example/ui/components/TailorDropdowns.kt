@@ -255,17 +255,38 @@ fun DressStyleDropdown(
 fun HeadgearStyleDropdown(
     operator: Operator,
     ownedMedalIds: Set<String>,
-    onSelect: (HeadgearStyle) -> Unit,
+    onSelect: (HeadgearStyle?) -> Unit,
     modifier: Modifier = Modifier,
     freeCustomOverride: Boolean = false,
     wardrobeKit: WardrobeKit? = null,
     testTag: String = "dropdown_headgear_style"
 ) {
-    val options = remember(operator, ownedMedalIds, freeCustomOverride, wardrobeKit) {
-        HeadgearStyle.entries.map { hg ->
+    val extra = LocalAegisColors.current
+    // Auto = no saved manual pick for this kit; the game wears the highest earned beret or the rank's cap
+    val isAuto = wardrobeKit != null && wardrobeKit != WardrobeKit.FIELD &&
+        operator.wardrobe.forKit(wardrobeKit).headgearStyle == null
+    val autoHeadgear = remember(operator, ownedMedalIds, wardrobeKit) {
+        wardrobeKit?.takeIf { it != WardrobeKit.FIELD }?.let {
+            TacticalCalculator.defaultHeadgearForKit(it, operator, ownedMedalIds, preferred = null)
+        }
+    }
+    val options = remember(operator, ownedMedalIds, freeCustomOverride, wardrobeKit, autoHeadgear) {
+        listOfNotNull(
+            autoHeadgear?.let { auto ->
+                DropdownOptionItem<HeadgearStyle?>(
+                    value = null,
+                    title = "Auto (${auto.label})",
+                    subtitle = "Wears the highest headgear earned; updates as the soldier qualifies",
+                    primaryColor = Color(auto.colorHex),
+                    trimColor = extra.signalsCyan,
+                    enabled = true,
+                    testTag = "${testTag}_opt_auto"
+                )
+            }
+        ) + HeadgearStyle.entries.map { hg ->
             val elig = TacticalCalculator.evaluateHeadgearEligibility(hg, operator, ownedMedalIds, wardrobeKit)
             val isEnabled = elig.eligible || freeCustomOverride
-            DropdownOptionItem(
+            DropdownOptionItem<HeadgearStyle?>(
                 value = hg,
                 title = if (!elig.eligible && freeCustomOverride) "★ ${hg.label} (Override)" else hg.label,
                 subtitle = when {
@@ -281,12 +302,12 @@ fun HeadgearStyleDropdown(
     }
     SingleChoiceDropdown(
         label = "Army Headgear",
-        selectedText = operator.headgearStyle.label,
+        selectedText = if (isAuto) "Auto (${operator.headgearStyle.label})" else operator.headgearStyle.label,
         selectedPrimaryColor = Color(operator.headgearStyle.colorHex),
         selectedTrimColor = Color(operator.dressStyle.trimHex),
         supportingHint = operator.headgearStyle.requirementHint,
         options = options,
-        selectedValue = operator.headgearStyle,
+        selectedValue = if (isAuto) null else operator.headgearStyle,
         onSelect = onSelect,
         modifier = modifier,
         fieldTestTag = testTag
@@ -304,9 +325,12 @@ fun ShoulderCordDropdown(
     modifier: Modifier = Modifier,
     otherShoulderCordId: String? = null,
     freeCustomOverride: Boolean = false,
+    /** The cord Auto currently resolves to, or null when Auto leaves the shoulder plain */
+    autoCord: MedalDefinition? = null,
     testTag: String
 ) {
     val extra = LocalAegisColors.current
+    val isAuto = selectedCordId == UniformTailorOverrides.SLOT_AUTO
     val shoulderSlot = if (isRightShoulder) CordShoulderSlot.RIGHT_STAFF_VALOR else CordShoulderSlot.LEFT_BRANCH
     val allowedCords = remember(isRightShoulder, specialty, freeCustomOverride) {
         if (freeCustomOverride) {
@@ -323,8 +347,23 @@ fun ShoulderCordDropdown(
     }
     val selectedCord = allowedCords.find { it.id == selectedCordId }
 
-    val options = remember(allowedCords, ownedMedalIds, otherShoulderCordId, isRightShoulder, specialty) {
+    val options = remember(allowedCords, ownedMedalIds, otherShoulderCordId, isRightShoulder, specialty, autoCord) {
         buildList {
+            add(
+                DropdownOptionItem<String?>(
+                    value = UniformTailorOverrides.SLOT_AUTO,
+                    title = "Auto (${autoCord?.shortName ?: "None Earned Yet"})",
+                    subtitle = if (isRightShoulder) {
+                        "HQ staff: Gold Aiguillette, then Valor Cord. Field: Valor Cord"
+                    } else {
+                        "Highest MOS-preferred cord earned; updates as new cords are awarded"
+                    },
+                    primaryColor = autoCord?.cordHex?.let { Color(it) } ?: Color.Transparent,
+                    trimColor = extra.signalsCyan,
+                    enabled = true,
+                    testTag = "${testTag}_opt_auto"
+                )
+            )
             add(
                 DropdownOptionItem<String?>(
                     value = null,
@@ -364,9 +403,12 @@ fun ShoulderCordDropdown(
 
     SingleChoiceDropdown(
         label = label,
-        selectedText = selectedCord?.shortName ?: "None Worn",
-        selectedPrimaryColor = selectedCord?.cordHex?.let { Color(it) } ?: Color.Transparent,
-        selectedTrimColor = if (selectedCord != null) Color(0xFFF2D272) else extra.borderSubtle,
+        selectedText = when {
+            isAuto -> "Auto (${autoCord?.shortName ?: "None Earned Yet"})"
+            else -> selectedCord?.shortName ?: "None Worn"
+        },
+        selectedPrimaryColor = (if (isAuto) autoCord else selectedCord)?.cordHex?.let { Color(it) } ?: Color.Transparent,
+        selectedTrimColor = if (isAuto) extra.signalsCyan else if (selectedCord != null) Color(0xFFF2D272) else extra.borderSubtle,
         supportingHint = if (selectedCord != null) {
             "${shoulderSlot.ruleHint} • ${selectedCord.name}"
         } else {
@@ -374,7 +416,7 @@ fun ShoulderCordDropdown(
             "${shoulderSlot.ruleHint} • $ownedCount/${allowedCords.size} earned"
         },
         options = options,
-        selectedValue = selectedCord?.id,
+        selectedValue = if (isAuto) UniformTailorOverrides.SLOT_AUTO else selectedCord?.id,
         onSelect = onSelect,
         modifier = modifier,
         fieldTestTag = testTag

@@ -527,17 +527,19 @@ class CommandViewModel(
         }
         val nextAlphas = op.wardrobe.alphas.copy(
             dressStyle = updatedAlphasDress,
+            // Keep a still-valid manual pick; otherwise Auto shows the new rank's cap
             headgearStyle = op.wardrobe.alphas.headgearStyle?.takeIf {
                 it.kind != HeadgearKind.BERET && it.requiredTier.order >= newRank.tier.order
-            } ?: updatedServiceCap
+            }
         )
         val nextMess = op.wardrobe.mess.copy(
             dressStyle = op.wardrobe.mess.dressStyle?.takeIf {
                 it.isCutawayMess && it.requiredTier.order >= newRank.tier.order
             } ?: updatedMessDress,
+            // Keep a still-valid manual pick; otherwise Auto shows the new rank's cap
             headgearStyle = op.wardrobe.mess.headgearStyle?.takeIf {
                 it.kind != HeadgearKind.BERET && it.requiredTier.order >= newRank.tier.order
-            } ?: updatedServiceCap
+            }
         )
         val nextBravos = op.wardrobe.bravos.copy(
             dressStyle = updatedAlphasDress
@@ -1715,6 +1717,12 @@ class CommandViewModel(
             }
             fallbackHeadgear
         }
+        // Headgear is saved only when picked by hand; otherwise the kit keeps Auto (or its earlier manual pick)
+        val savedHeadgear: HeadgearStyle? = when {
+            request.headgearAuto -> null
+            request.headgearTouched -> finalHeadgear
+            else -> currentKitSettings.headgearStyle
+        }
 
         val glovesCheck = TacticalCalculator.evaluateWhiteGlovesEligibility(op, ownedMedalIds)
         val finalGloves = when {
@@ -1742,13 +1750,14 @@ class CommandViewModel(
         }
 
         val medalsById = GameCatalog.medals.associateBy { it.id }
-        val finalLeftCord = request.equippedLeftCordId?.takeIf { id ->
+        val autoCord = UniformTailorOverrides.SLOT_AUTO
+        val finalLeftCord = if (request.equippedLeftCordId == autoCord) autoCord else request.equippedLeftCordId?.takeIf { id ->
             id in ownedMedalIds && medalsById[id]?.let {
                 it.category == AwardCategory.SHOULDER_CORD &&
                     (freeOverride || UniformRegaliaRules.isCordAllowedOnShoulder(it, isRightShoulder = false))
             } == true
         }
-        val finalRightCord = request.equippedRightCordId?.takeIf { id ->
+        val finalRightCord = if (request.equippedRightCordId == autoCord) autoCord else request.equippedRightCordId?.takeIf { id ->
             id in ownedMedalIds && id != finalLeftCord && medalsById[id]?.let {
                 it.category == AwardCategory.SHOULDER_CORD &&
                     (freeOverride || UniformRegaliaRules.isCordAllowedOnShoulder(it, isRightShoulder = true))
@@ -1802,7 +1811,7 @@ class CommandViewModel(
             WardrobeKit.FIELD -> currentKitSettings.copy(camoPattern = request.camoPattern)
             WardrobeKit.BRAVOS -> currentKitSettings.copy(
                 dressStyle = finalDress,
-                headgearStyle = finalHeadgear,
+                headgearStyle = savedHeadgear,
                 dressDisplayMode = if (request.dressDisplayMode == DressDisplayMode.CLEAN) {
                     DressDisplayMode.CLEAN
                 } else {
@@ -1813,7 +1822,7 @@ class CommandViewModel(
             )
             WardrobeKit.ALPHAS -> currentKitSettings.copy(
                 dressStyle = finalDress,
-                headgearStyle = finalHeadgear,
+                headgearStyle = savedHeadgear,
                 dressDisplayMode = request.dressDisplayMode,
                 hasWhiteGloves = finalGloves,
                 hasDressSash = finalSash,
@@ -1823,7 +1832,7 @@ class CommandViewModel(
             )
             WardrobeKit.MESS -> currentKitSettings.copy(
                 dressStyle = finalDress,
-                headgearStyle = finalHeadgear,
+                headgearStyle = savedHeadgear,
                 dressDisplayMode = if (request.dressDisplayMode == DressDisplayMode.CLEAN) {
                     DressDisplayMode.CLEAN
                 } else {
@@ -1834,9 +1843,8 @@ class CommandViewModel(
             )
         }
         var updatedWardrobe = op.wardrobe.withKit(targetKit, updatedKitSettings)
-        if (targetKit != WardrobeKit.ALPHAS &&
-            (finalLeftCord != op.equippedLeftCordId || finalRightCord != op.equippedRightCordId)
-        ) {
+        // Cords live on the Alphas settings for Alphas and Bravos alike
+        if (targetKit != WardrobeKit.ALPHAS) {
             updatedWardrobe = updatedWardrobe.withKit(
                 WardrobeKit.ALPHAS,
                 updatedWardrobe.alphas.copy(
@@ -1856,7 +1864,7 @@ class CommandViewModel(
                     dressDisplayMode = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD) updatedKitSettings.dressDisplayMode ?: op.dressDisplayMode else op.dressDisplayMode,
                     camoPattern = if (targetKit == WardrobeKit.FIELD) request.camoPattern else op.camoPattern,
                     dressStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD) finalDress else op.dressStyle,
-                    headgearStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD) finalHeadgear else op.headgearStyle,
+                    headgearStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD && request.headgearTouched && !request.headgearAuto) finalHeadgear else op.headgearStyle,
                     equippedLeftCordId = finalLeftCord,
                     equippedRightCordId = finalRightCord,
                     hasWhiteGloves = if (targetKit == WardrobeKit.ALPHAS) finalGloves else op.hasWhiteGloves,
@@ -2155,47 +2163,14 @@ class CommandViewModel(
                     awardedAtMillis = now
                 )
             )
-            // Automatically equip newly awarded Shoulder Cords on their regulation shoulder if empty or higher MOS priority
+            // Newly awarded cords show through Auto at render time; just bring the soldier into dress uniform
             if (medal.category == AwardCategory.SHOULDER_CORD) {
-                val currentSlotCord = if (medal.isRightShoulder) {
-                    operator.equippedRightCordId
-                } else {
-                    operator.equippedLeftCordId
-                }
-                val currentMedal = currentSlotCord?.let { id -> GameCatalog.medals.find { it.id == id } }
-                val shouldEquip = currentMedal == null ||
-                    !UniformRegaliaRules.isCordAllowedOnShoulder(currentMedal, medal.isRightShoulder) ||
-                    UniformRegaliaRules.mosCordPriority(operator.specialty, medal.id) <
-                    UniformRegaliaRules.mosCordPriority(operator.specialty, currentMedal.id)
-                val updatedOp = if (!shouldEquip) {
+                repository.saveOperator(
                     operator.copy(
                         uniformMode = UniformMode.DRESS_UNIFORM,
                         activeWardrobeKit = if (operator.activeWardrobeKit == WardrobeKit.FIELD) WardrobeKit.ALPHAS else operator.activeWardrobeKit
                     )
-                } else if (medal.isRightShoulder) {
-                    val nextAlphas = operator.wardrobe.alphas.copy(
-                        equippedRightCordId = medal.id,
-                        cordCustomized = true
-                    )
-                    operator.copy(
-                        uniformMode = UniformMode.DRESS_UNIFORM,
-                        activeWardrobeKit = WardrobeKit.ALPHAS,
-                        equippedRightCordId = medal.id,
-                        wardrobe = operator.wardrobe.withKit(WardrobeKit.ALPHAS, nextAlphas)
-                    )
-                } else {
-                    val nextAlphas = operator.wardrobe.alphas.copy(
-                        equippedLeftCordId = medal.id,
-                        cordCustomized = true
-                    )
-                    operator.copy(
-                        uniformMode = UniformMode.DRESS_UNIFORM,
-                        activeWardrobeKit = WardrobeKit.ALPHAS,
-                        equippedLeftCordId = medal.id,
-                        wardrobe = operator.wardrobe.withKit(WardrobeKit.ALPHAS, nextAlphas)
-                    )
-                }
-                repository.saveOperator(updatedOp)
+                )
             }
             showBanner("Awarded ${medal.name} to ${operator.rank.code} ${operator.callsign}!")
         }
