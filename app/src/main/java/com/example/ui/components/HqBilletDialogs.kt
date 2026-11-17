@@ -459,7 +459,7 @@ fun DispatchHqMemberTaskingDialog(
     val allowedMissions = GameCatalog.missions.filter { it.scope.hqStaffAllowed }
     val durationMult = TacticalCalculator.durationMultiplier(uiState.facilities, uiState.hqStaffSummary)
     val supplyMult = TacticalCalculator.supplyCostMultiplier(uiState.facilities, uiState.hqStaffSummary)
-    val slotsFull = uiState.deployments.size >= uiState.maxDeploymentSlots
+    val slotsFull = uiState.occupiedDeploymentSlots >= uiState.maxDeploymentSlots
     val alreadyDeployed = operator.id in deployedOpIds || operator.status == OperatorStatus.DEPLOYED
 
     AlertDialog(
@@ -512,7 +512,7 @@ fun DispatchHqMemberTaskingDialog(
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
                     ) {
                         Text(
-                            text = "All HQ tasking slots are currently full (${uiState.deployments.size}/${uiState.maxDeploymentSlots}).",
+                            text = "All HQ tasking slots are currently full (${uiState.occupiedDeploymentSlots}/${uiState.maxDeploymentSlots}).",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.padding(10.dp)
@@ -623,7 +623,7 @@ fun DispatchHqMemberTaskingDialog(
                                 if (mission.minOperators == 1) {
                                     Button(
                                         onClick = { onDispatchMission(mission) },
-                                        enabled = !alreadyDeployed && !slotsFull && canAfford,
+                                        enabled = !alreadyDeployed && (mission.scope == MissionScope.TRAINING || !slotsFull) && canAfford,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .defaultMinSize(minHeight = 48.dp)

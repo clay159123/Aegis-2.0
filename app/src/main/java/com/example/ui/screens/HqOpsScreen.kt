@@ -302,7 +302,7 @@ fun HqOpsScreen(
                             ) {
                                 Text(
                                     text = buildString {
-                                        append("AEGIS HQ • ${uiState.deployments.size}/${uiState.maxDeploymentSlots} OPS")
+                                        append("AEGIS HQ • ${uiState.occupiedDeploymentSlots}/${uiState.maxDeploymentSlots} OPS")
                                         if (uiState.hqStaffCount > 0) {
                                             append(" • STAFF ${uiState.hqStaffCount}/${uiState.maxHqStaffSlots}")
                                         }
@@ -561,7 +561,7 @@ fun HqOpsScreen(
         if (uiState.deployments.isNotEmpty()) {
             item {
                 OpsSectionBanner(
-                    title = "Active Missions (${uiState.deployments.size}/${uiState.maxDeploymentSlots})",
+                    title = "Active Missions (${uiState.occupiedDeploymentSlots}/${uiState.maxDeploymentSlots})",
                     badgeText = if (returnedCount > 0) "$returnedCount RETURNED" else "LIVE TIMERS",
                     badgeAccent = if (returnedCount > 0) extra.brassBright else extra.signalsCyan,
                     expanded = showActiveOps,
@@ -732,7 +732,7 @@ fun HqOpsScreen(
                         durationMult = durationMult,
                         supplyMult = supplyMult,
                         currentSupplies = uiState.resources.supplies,
-                        slotsFull = uiState.deployments.size >= uiState.maxDeploymentSlots,
+                        slotsFull = uiState.occupiedDeploymentSlots >= uiState.maxDeploymentSlots,
                         expandedMissionIds = expandedMissionIds,
                         onToggleMissionDetails = { mId ->
                             expandedMissionIds = if (mId in expandedMissionIds) {
@@ -813,7 +813,8 @@ fun HqOpsScreen(
                     items(group.missions, key = { it.id }) { mission ->
                         val adjustedSec = (mission.durationSeconds * durationMult).roundToInt()
                         val adjustedSup = (mission.supplyCost * supplyMult).roundToInt()
-                        val slotsFull = uiState.deployments.size >= uiState.maxDeploymentSlots
+                        val slotsFull = mission.scope != MissionScope.TRAINING &&
+                            uiState.occupiedDeploymentSlots >= uiState.maxDeploymentSlots
                         val qualifiedCount = qualifiedByMissionId[mission.id] ?: 0
                         val isExpanded = mission.id in expandedMissionIds
 

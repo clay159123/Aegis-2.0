@@ -1004,6 +1004,12 @@ object TacticalCalculator {
         return (2 + hqLevel).coerceAtMost(HqStaffRole.entries.size)
     }
 
+    /** Number of active deployments that use an HQ tasking slot. Schools (TRAINING) never do. */
+    fun occupiedDeploymentSlots(deployments: List<ActiveDeployment>): Int =
+        deployments.count { deployment ->
+            GameCatalog.missions.find { it.id == deployment.templateId }?.scope != MissionScope.TRAINING
+        }
+
     fun maxDeploymentSlots(facilities: List<FacilityState>): Int {
         val hqLevel = facilityLevel(facilities, FacilityType.COMMAND_HQ)
         return 2 + (if (hqLevel >= 3) 1 else 0) + (if (hqLevel >= 6) 1 else 0)

@@ -52,6 +52,9 @@ data class CommandUiState(
     val rotatingMissionIds: List<String> = emptyList(),
     val rotationUpdatedAtMillis: Long = 0L
 ) {
+    /** Deployments that use an HQ tasking slot. Schools and training never take a slot. */
+    val occupiedDeploymentSlots: Int
+        get() = TacticalCalculator.occupiedDeploymentSlots(deployments)
     val veteranLegacyPctText: String get() = TacticalCalculator.formatBpsPercent(veteranLegacyBps)
     val inspectionBuffActive: Boolean get() = inspectionBuffUntilMillis > nowMillis
     val inspectionBuffRemainingSec: Long
@@ -556,7 +559,7 @@ class CommandViewModel(
         squadId: String? = null
     ) {
         val state = uiState.value
-        if (state.deployments.size >= state.maxDeploymentSlots) {
+        if (mission.scope != MissionScope.TRAINING && state.occupiedDeploymentSlots >= state.maxDeploymentSlots) {
             showBanner("All HQ tasking slots occupied.")
             return
         }
