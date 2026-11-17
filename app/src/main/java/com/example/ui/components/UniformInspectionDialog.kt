@@ -331,7 +331,7 @@ fun UniformInspectionDialog(
                         InspectionSpecRow("Wardrobe Kit", effectiveOp.activeWardrobeKit.label)
                         InspectionSpecRow("Uniform Cut", "${effectiveOp.dressStyle.label} (${effectiveOp.dressDisplayMode.label})")
                         InspectionSpecRow("Rank & Grade", "${effectiveOp.rank.title} (${effectiveOp.rank.payGrade})")
-                        InspectionSpecRow("Unit / Combat SSI", "${effectiveOp.tailorOverrides.unitPatch.label} / ${combatPatch.label}")
+                        InspectionSpecRow("Unit / Combat SSI", "${UniformRegaliaRules.resolveUnitPatch(effectiveOp, squads).label} / ${combatPatch.label}")
                         InspectionSpecRow("Squad Leader Pin", if (leaderPinShown) "Worn above \"${effectiveOp.callsign}\" nameplate" else "None")
                         InspectionSpecRow(
                             "Shoulder Tabs",

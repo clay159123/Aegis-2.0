@@ -362,20 +362,38 @@ object UniformRegaliaRules {
         return result.toList()
     }
 
+    /**
+     * Left shoulder (unit patch). Auto follows the soldier's situation at render time:
+     * HQ staff wear High Command, squad members wear their squad's division patch, and
+     * anyone else wears the Unassigned patch. A Tailor Studio pick overrides Auto.
+     */
+    fun resolveUnitPatch(operator: Operator, squads: List<TacticalSquad>): UnitPatchStyle {
+        val chosen = operator.tailorOverrides.unitPatch
+        if (chosen != UnitPatchStyle.AUTO_MOS) return chosen
+        if (operator.status == OperatorStatus.HQ_STAFF) return UnitPatchStyle.SUPREME_HQ
+        return squads.firstOrNull { operator.id in it.memberIds }?.standardPatch
+            ?.takeIf { it.isDivision }
+            ?: UnitPatchStyle.UNASSIGNED
+    }
+
+    /** Combat patches the soldier has earned, newest campaign first. */
+    fun earnedCombatPatches(operator: Operator): List<UnitPatchStyle> =
+        operator.combatPatchHistory
+            .sortedByDescending { it.recordedAtMillis }
+            .map { it.patch }
+            .distinct()
+
+    /**
+     * Right shoulder (combat patch): the squad patch worn in the soldier's most recent
+     * campaign. No campaign history means no combat patch. A manual pick must be one the
+     * soldier actually earned.
+     */
     fun resolveCombatPatch(operator: Operator): UnitPatchStyle {
         val chosen = operator.tailorOverrides.combatPatch
         if (chosen == UnitPatchStyle.NONE) return UnitPatchStyle.NONE
-        if (chosen != UnitPatchStyle.AUTO_MOS) return chosen
-        val combatQualified = (operator.highestRiskSurvived?.baseDangerPenalty ?: 0) >= MissionRisk.MODERATE.baseDangerPenalty
-        if (!combatQualified) return UnitPatchStyle.NONE
-        return when (operator.specialty) {
-            OperatorSpecialty.ASSAULT -> UnitPatchStyle.AEGIS_VANGUARD
-            OperatorSpecialty.RECON -> UnitPatchStyle.SKYWARD_AIRBORNE
-            OperatorSpecialty.SIGNALS -> UnitPatchStyle.SIGNAL_DIRECTORATE
-            OperatorSpecialty.BREACHER -> UnitPatchStyle.SAPPER_CITADEL
-            OperatorSpecialty.MEDIC -> UnitPatchStyle.MEDICAL_COMMAND
-            OperatorSpecialty.COMMAND -> UnitPatchStyle.SUPREME_HQ
-        }
+        val earned = earnedCombatPatches(operator)
+        if (chosen != UnitPatchStyle.AUTO_MOS && chosen in earned) return chosen
+        return earned.firstOrNull() ?: UnitPatchStyle.NONE
     }
 
     fun resolveMarksmanshipTier(
@@ -538,7 +556,7 @@ object UniformRegaliaRules {
         if (subjectSquad != null) {
             val targetPatch = subjectSquad.standardPatch
             val alignedPatchCount = activeSubjects.count {
-                targetPatch == UnitPatchStyle.AUTO_MOS || it.tailorOverrides.unitPatch == targetPatch
+                resolveUnitPatch(it, listOf(subjectSquad)) == targetPatch
             }
             val alignedCamoCount = if (subjectSquad.standardCamo == null) activeSubjects.size else {
                 activeSubjects.count { it.camoPattern == subjectSquad.standardCamo }

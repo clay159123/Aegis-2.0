@@ -60,7 +60,7 @@ fun SquadEditorDialog(
         mutableStateOf(editingSquad?.leaderId)
     }
     var standardPatch by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardPatch ?: UnitPatchStyle.AUTO_MOS)
+        mutableStateOf(editingSquad?.standardPatch ?: UnitPatchStyle.firstUnusedDivision(allSquads))
     }
     var standardCamo by remember(editingSquad?.id) {
         mutableStateOf(editingSquad?.standardCamo)
@@ -309,11 +309,12 @@ fun SquadEditorDialog(
                     color = extra.textMuted
                 )
 
+                // Squads pick a division patch; High Command is reserved for HQ staff
                 val patchOptions = remember {
-                    UnitPatchStyle.entries.map { patch ->
+                    UnitPatchStyle.DIVISIONS.map { patch ->
                         DropdownOptionItem(
                             value = patch,
-                            title = if (patch == UnitPatchStyle.AUTO_MOS) "Auto (Individual MOS Patch)" else patch.label,
+                            title = patch.label,
                             subtitle = patch.subtitle,
                             primaryColor = Color(patch.primaryHex),
                             trimColor = Color(patch.accentHex)
@@ -322,7 +323,7 @@ fun SquadEditorDialog(
                 }
                 SingleChoiceDropdown(
                     label = "Squad Unit Patch (SSI)",
-                    selectedText = if (standardPatch == UnitPatchStyle.AUTO_MOS) "Auto (Individual MOS Patch)" else standardPatch.label,
+                    selectedText = standardPatch.label,
                     selectedPrimaryColor = Color(standardPatch.primaryHex),
                     selectedTrimColor = Color(standardPatch.accentHex),
                     options = patchOptions,

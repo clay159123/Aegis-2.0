@@ -53,11 +53,14 @@ fun OperatorUniformPreview(
         operator.activeWardrobeKit == WardrobeKit.BRAVOS -> WardrobeKit.BRAVOS
         else -> WardrobeKit.ALPHAS
     }
-    val renderOperator = if (kitOverride != null) {
+    val renderOperator = (if (kitOverride != null) {
         // An explicit kit comes from the duty resolver, which only puts HQ staff in Field at a field school
         TacticalCalculator.resolveKitAppearance(operator, kitOverride, squads, ownedIds, allowFieldForHqStaff = true)
     } else {
         operator
+    }).let { op ->
+        // Left-shoulder patch follows squad membership (or HQ / Unassigned) at render time
+        op.copy(tailorOverrides = op.tailorOverrides.copy(unitPatch = UniformRegaliaRules.resolveUnitPatch(op, squads)))
     }
 
     val bgTop = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -1484,21 +1487,8 @@ private fun DrawScope.drawWrappedUnitShoulderPatch(
         close()
     }
 
-    val shieldPrimary = when (patchStyle) {
-        UnitPatchStyle.AUTO_MOS -> when (specialty) {
-            OperatorSpecialty.ASSAULT -> Color(0xFF1D4E89)   // Infantry Cobalt Blue
-            OperatorSpecialty.RECON -> Color(0xFF23533A)     // Airborne/Recon Hunter Green
-            OperatorSpecialty.SIGNALS -> Color(0xFF1A3A5C)   // Signal Corps Deep Azure
-            OperatorSpecialty.BREACHER -> Color(0xFF7A2229)  // Engineer Scarlet
-            OperatorSpecialty.MEDIC -> Color(0xFF4F2442)     // Medical Maroon
-            OperatorSpecialty.COMMAND -> Color(0xFF1B2E4B)   // HQ Command Sapphire
-        }
-        else -> Color(patchStyle.primaryHex)
-    }
-    val patchFlashCol = when (patchStyle) {
-        UnitPatchStyle.AUTO_MOS -> accentCol
-        else -> Color(patchStyle.accentHex)
-    }
+    val shieldPrimary = Color(patchStyle.primaryHex)
+    val patchFlashCol = Color(patchStyle.accentHex)
 
     drawPath(shieldPath, color = shieldPrimary)
 
@@ -1530,61 +1520,13 @@ private fun DrawScope.drawWrappedUnitShoulderPatch(
     // Gold merrowed embroidered border + distinct emblem motif inside shield
     drawPath(shieldPath, color = trimCol, style = Stroke(width = (w * 0.007f).coerceAtLeast(1.5f), join = StrokeJoin.Round))
     val emblemCenter = Offset(midX, h * (topFrac + 0.022f))
-    when (patchStyle) {
-        UnitPatchStyle.MEDICAL_COMMAND -> {
-            drawLine(Color.White, Offset(midX, emblemCenter.y - h * 0.010f), Offset(midX, emblemCenter.y + h * 0.010f), strokeWidth = 2.0f)
-            drawLine(Color.White, Offset(midX - w * 0.011f, emblemCenter.y), Offset(midX + w * 0.011f, emblemCenter.y), strokeWidth = 2.0f)
-        }
-        UnitPatchStyle.SIGNAL_DIRECTORATE -> {
-            val bolt = Path().apply {
-                moveTo(midX + w * 0.006f, emblemCenter.y - h * 0.011f)
-                lineTo(midX - w * 0.007f, emblemCenter.y + h * 0.001f)
-                lineTo(midX + w * 0.003f, emblemCenter.y + h * 0.001f)
-                lineTo(midX - w * 0.006f, emblemCenter.y + h * 0.013f)
-            }
-            drawPath(bolt, color = Color(0xFF5AC8FA), style = Stroke(width = 1.8f, cap = StrokeCap.Round))
-        }
-        UnitPatchStyle.INTEL_OVERWATCH -> {
-            val diamond = Path().apply {
-                moveTo(midX, emblemCenter.y - h * 0.012f)
-                lineTo(midX + w * 0.011f, emblemCenter.y)
-                lineTo(midX, emblemCenter.y + h * 0.012f)
-                lineTo(midX - w * 0.011f, emblemCenter.y)
-                close()
-            }
-            drawPath(diamond, color = Color(0xFF63B8D6), style = Stroke(width = 1.5f))
-            drawCircle(Color.White, radius = w * 0.0035f, center = emblemCenter)
-        }
-        UnitPatchStyle.SPECIAL_FORCES -> {
-            // Iconic SF dagger flanked by three lightning/chevron flashes
-            drawLine(Color(0xFFF2D272), Offset(midX, emblemCenter.y - h * 0.012f), Offset(midX, yBot - h * 0.008f), strokeWidth = 1.9f, cap = StrokeCap.Round)
-            drawLine(Color(0xFFF2D272), Offset(midX - w * 0.010f, emblemCenter.y + h * 0.003f), Offset(midX + w * 0.010f, emblemCenter.y + h * 0.003f), strokeWidth = 1.6f)
-            drawStar(Offset(midX, emblemCenter.y - h * 0.010f), w * 0.0065f, w * 0.003f, Color(0xFFF2D272))
-        }
-        UnitPatchStyle.SAPPER_CITADEL -> {
-            drawRect(Color(0xFFF2D272), Offset(midX - w * 0.012f, emblemCenter.y - h * 0.006f), Size(w * 0.024f, h * 0.014f), style = Stroke(1.5f))
-            drawLine(Color(0xFFF2D272), Offset(midX, emblemCenter.y - h * 0.006f), Offset(midX, emblemCenter.y + h * 0.008f), strokeWidth = 1.4f)
-        }
-        UnitPatchStyle.LOGISTICS_CORPS -> {
-            drawCircle(Color(0xFFF2D272), radius = w * 0.012f, center = emblemCenter, style = Stroke(1.5f))
-            drawLine(Color(0xFFF2D272), Offset(midX - w * 0.009f, emblemCenter.y), Offset(midX + w * 0.009f, emblemCenter.y), strokeWidth = 1.3f)
-            drawLine(Color(0xFFF2D272), Offset(midX, emblemCenter.y - h * 0.009f), Offset(midX, emblemCenter.y + h * 0.009f), strokeWidth = 1.3f)
-        }
-        UnitPatchStyle.SKYWARD_AIRBORNE -> {
-            drawLine(Color.White, Offset(midX - w * 0.015f, emblemCenter.y), Offset(midX + w * 0.015f, emblemCenter.y), strokeWidth = 1.9f, cap = StrokeCap.Round)
-            drawStar(emblemCenter, w * 0.009f, w * 0.004f, Color(0xFFF5D576))
-        }
-        else -> {
-            drawStar(emblemCenter, w * 0.012f, w * 0.0052f, Color(0xFFF5D576))
-            drawLine(
-                color = Color.White.copy(alpha = 0.9f),
-                start = Offset(midX, h * (topFrac + 0.036f)),
-                end = Offset(apexX, yBot - h * 0.007f),
-                strokeWidth = 1.4f,
-                cap = StrokeCap.Round
-            )
-        }
-    }
+    drawUnitPatchEmblem(
+        patchStyle = patchStyle,
+        center = emblemCenter,
+        unitW = w,
+        unitH = h,
+        accent = patchFlashCol
+    )
 }
 
 internal fun DrawScope.drawWrappedSleeveRankInsignia(

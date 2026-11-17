@@ -323,11 +323,11 @@ fun UniformTailorStudioCard(
             }
 
             // 2. Unit Patches & Shoulder Tabs
-            val patchLabel = if (overrides.unitPatch == UnitPatchStyle.AUTO_MOS) {
-                "${operator.specialty.label} Patch"
-            } else {
-                overrides.unitPatch.label
-            }
+            val autoUnitPatch = UniformRegaliaRules.resolveUnitPatch(
+                operator.copy(tailorOverrides = overrides.copy(unitPatch = UnitPatchStyle.AUTO_MOS)),
+                squads
+            )
+            val patchLabel = if (overrides.unitPatch == UnitPatchStyle.AUTO_MOS) autoUnitPatch.label else overrides.unitPatch.label
             TailorAccordionSection(
                 icon = Icons.Filled.Shield,
                 title = "Unit Patches & Shoulder Tabs",
@@ -338,7 +338,8 @@ fun UniformTailorStudioCard(
             ) {
                 UnitPatchDropdown(
                     selectedPatch = overrides.unitPatch,
-                    specialty = operator.specialty,
+                    autoPatch = autoUnitPatch,
+                    isHqStaff = operator.status == OperatorStatus.HQ_STAFF,
                     onSelect = { patch ->
                         updateOverrides(forceDressMode = false) { it.copy(unitPatch = patch) }
                     },
@@ -346,7 +347,7 @@ fun UniformTailorStudioCard(
                 )
                 CombatPatchDropdown(
                     selectedPatch = overrides.combatPatch,
-                    specialty = operator.specialty,
+                    earnedPatches = UniformRegaliaRules.earnedCombatPatches(operator),
                     onSelect = { patch ->
                         updateOverrides(forceDressMode = false) { it.copy(combatPatch = patch) }
                     },

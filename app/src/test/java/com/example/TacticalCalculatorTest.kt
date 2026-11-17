@@ -92,6 +92,29 @@ class TacticalCalculatorTest {
     }
 
     @Test
+    fun leftShoulderPatchFollowsSquadHqOrUnassigned() {
+        val soldier = GameCatalog.initialOperators.first { it.id == "op_cipher" }
+        val squadA = TacticalSquad(id = "sq_a", name = "Alpha", memberIds = listOf(soldier.id), leaderId = soldier.id, standardPatch = UnitPatchStyle.DIVISION_3)
+        val squadB = TacticalSquad(id = "sq_b", name = "Bravo", memberIds = emptyList(), leaderId = null, standardPatch = UnitPatchStyle.DIVISION_5)
+        assertEquals(UnitPatchStyle.DIVISION_3, UniformRegaliaRules.resolveUnitPatch(soldier, listOf(squadA, squadB)))
+        // Moving squads changes the patch automatically
+        val moved = listOf(squadA.copy(memberIds = emptyList()), squadB.copy(memberIds = listOf(soldier.id)))
+        assertEquals(UnitPatchStyle.DIVISION_5, UniformRegaliaRules.resolveUnitPatch(soldier, moved))
+        assertEquals(UnitPatchStyle.UNASSIGNED, UniformRegaliaRules.resolveUnitPatch(soldier, emptyList()))
+        val hq = soldier.copy(status = OperatorStatus.HQ_STAFF)
+        assertEquals(UnitPatchStyle.SUPREME_HQ, UniformRegaliaRules.resolveUnitPatch(hq, listOf(squadA)))
+        // A Tailor Studio pick still overrides Auto
+        val picked = soldier.copy(tailorOverrides = UniformTailorOverrides(unitPatch = UnitPatchStyle.DIVISION_6))
+        assertEquals(UnitPatchStyle.DIVISION_6, UniformRegaliaRules.resolveUnitPatch(picked, listOf(squadA)))
+        // New squads get the first division patch nobody is using
+        assertEquals(UnitPatchStyle.DIVISION_1, UnitPatchStyle.firstUnusedDivision(listOf(squadA, squadB)))
+        assertEquals(
+            UnitPatchStyle.DIVISION_2,
+            UnitPatchStyle.firstUnusedDivision(listOf(squadA.copy(standardPatch = UnitPatchStyle.DIVISION_1), squadB))
+        )
+    }
+
+    @Test
     fun schoolDeploymentsDoNotUseHqSlots() {
         val school = GameCatalog.missions.first { it.scope == MissionScope.TRAINING }
         val combat = GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT }
@@ -1282,7 +1305,7 @@ class TacticalCalculatorTest {
             equippedLeftCordId = "cord_infantry_blue",
             equippedRightCordId = "cord_valor_fourragere",
             tailorOverrides = UniformTailorOverrides(
-                unitPatch = UnitPatchStyle.SAPPER_CITADEL,
+                unitPatch = UnitPatchStyle.DIVISION_2,
                 neckSlot = UniformTailorOverrides.SLOT_NONE,
                 tabSlot1 = "insig_sapper_tab",
                 tabSlot2 = UniformTailorOverrides.SLOT_NONE,
@@ -2138,16 +2161,29 @@ class TacticalCalculatorTest {
             highestRiskSurvived = null
         )
 
-        // Combat patch is NONE before Moderate+ combat, auto after Moderate+ combat, and respects manual override
+        // Combat patch comes only from campaign history: none without it, newest campaign on Auto,
+        // and a manual pick must be a patch the soldier earned
         assertEquals(UnitPatchStyle.NONE, UniformRegaliaRules.resolveCombatPatch(baseOp))
         assertEquals(
-            UnitPatchStyle.AEGIS_VANGUARD,
+            UnitPatchStyle.NONE,
             UniformRegaliaRules.resolveCombatPatch(baseOp.copy(missionsCompleted = 2, highestRiskSurvived = MissionRisk.MODERATE))
         )
+        val veteran = baseOp.copy(
+            combatPatchHistory = emptyList<CombatPatchRecord>()
+                .recordCampaignPatch("camp_a", UnitPatchStyle.DIVISION_1, 100L)
+                .recordCampaignPatch("camp_b", UnitPatchStyle.DIVISION_4, 200L)
+        )
+        assertEquals(UnitPatchStyle.DIVISION_4, UniformRegaliaRules.resolveCombatPatch(veteran))
         assertEquals(
-            UnitPatchStyle.SKYWARD_AIRBORNE,
+            UnitPatchStyle.DIVISION_1,
             UniformRegaliaRules.resolveCombatPatch(
-                baseOp.copy(tailorOverrides = UniformTailorOverrides(combatPatch = UnitPatchStyle.SKYWARD_AIRBORNE))
+                veteran.copy(tailorOverrides = UniformTailorOverrides(combatPatch = UnitPatchStyle.DIVISION_1))
+            )
+        )
+        assertEquals(
+            UnitPatchStyle.DIVISION_4,
+            UniformRegaliaRules.resolveCombatPatch(
+                veteran.copy(tailorOverrides = UniformTailorOverrides(combatPatch = UnitPatchStyle.DIVISION_6))
             )
         )
 

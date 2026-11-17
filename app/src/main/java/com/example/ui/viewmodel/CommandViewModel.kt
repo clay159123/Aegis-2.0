@@ -908,6 +908,15 @@ class CommandViewModel(
                     op.highestRiskSurvived
                 }
                 val updatedWoundedCount = if (outcome == OperatorOutcomeType.WOUNDED) op.timesWounded + 1 else op.timesWounded
+                // Campaign missions record the squad patch worn; the newest campaign becomes the combat patch
+                val updatedCombatPatchHistory = mission.campaignId?.let { campaignId ->
+                    val wornPatch = UniformRegaliaRules.resolveUnitPatch(op, state.squads)
+                    if (wornPatch == UnitPatchStyle.NONE) {
+                        op.combatPatchHistory
+                    } else {
+                        op.combatPatchHistory.recordCampaignPatch(campaignId, wornPatch, System.currentTimeMillis())
+                    }
+                } ?: op.combatPatchHistory
 
                 val askTransfer = if (
                     !wasHqStaff &&
@@ -958,6 +967,7 @@ class CommandViewModel(
                     completedMissionIds = updatedCompletedIds,
                     highestRiskSurvived = updatedHighestRisk,
                     timesWounded = updatedWoundedCount,
+                    combatPatchHistory = updatedCombatPatchHistory,
                     status = nextStatus,
                     hqRole = if (outcome == OperatorOutcomeType.FALLEN) null else op.hqRole,
                     recoveryUntilMillis = recoveryAt,
@@ -2234,7 +2244,8 @@ class CommandViewModel(
     ) {
         val existing = squadId?.let { id -> uiState.value.squads.find { it.id == id } }
         val standard = SquadUniformStandard(
-            patch = standardPatch ?: existing?.standardPatch ?: UnitPatchStyle.AUTO_MOS,
+            patch = standardPatch ?: existing?.standardPatch
+                ?: UnitPatchStyle.firstUnusedDivision(uiState.value.squads),
             camo = standardCamo,
             bravosHeadgear = existing?.standardBravosHeadgear,
             bravosDressStyle = existing?.standardBravosDressStyle,
@@ -2279,12 +2290,16 @@ class CommandViewModel(
             existing?.name ?: SquadCohesionRules.nextDefaultSquadName(state.squads)
         }
         val now = System.currentTimeMillis()
+        // Squads always carry a division patch; a missing or non-division pick gets the first free one
+        val resolvedPatch = standard.patch.takeIf { it.isDivision }
+            ?: existing?.standardPatch?.takeIf { it.isDivision }
+            ?: UnitPatchStyle.firstUnusedDivision(state.squads, excludingSquadId = existing?.id)
         val targetSquad = if (existing != null) {
             existing.copy(
                 name = resolvedName,
                 memberIds = validIds,
                 leaderId = resolvedLeaderId,
-                standardPatch = standard.patch,
+                standardPatch = resolvedPatch,
                 standardCamo = standard.camo,
                 standardHeadgear = standard.alphasHeadgear,
                 standardDressStyle = standard.alphasDressStyle,
@@ -2304,7 +2319,7 @@ class CommandViewModel(
                 cohesionXp = 0,
                 missionsTogether = 0,
                 createdAtMillis = now,
-                standardPatch = standard.patch,
+                standardPatch = resolvedPatch,
                 standardCamo = standard.camo,
                 standardHeadgear = standard.alphasHeadgear,
                 standardDressStyle = standard.alphasDressStyle,
@@ -2454,7 +2469,7 @@ class CommandViewModel(
                 headgearStyle = alphasCap ?: op.headgearStyle,
                 dressStyle = alphasDress ?: op.dressStyle,
                 hasWhiteGloves = nextAlphasGloves,
-                tailorOverrides = op.tailorOverrides.copy(unitPatch = squad.standardPatch),
+                // The squad patch is resolved from membership at render time, never copied onto the soldier
                 wardrobe = nextWardrobe
             )
         }
