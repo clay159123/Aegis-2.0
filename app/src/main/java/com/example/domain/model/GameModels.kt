@@ -481,6 +481,7 @@ data class UniformTailorOverrides(
     val neckSlot: String = SLOT_AUTO,
     val tabSlot1: String = SLOT_AUTO,
     val tabSlot2: String = SLOT_AUTO,
+    val tabSlot3: String = SLOT_AUTO,
     val pinSlot1: String = SLOT_AUTO,
     val pinSlot2: String = SLOT_AUTO,
     val pinSlot3: String = SLOT_AUTO,

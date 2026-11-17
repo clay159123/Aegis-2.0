@@ -8,7 +8,7 @@ object TacticalCalculator {
 
     const val MAX_WORN_NECK_MEDALS = 1
     const val MAX_WORN_CORDS_PER_SHOULDER = 1
-    const val MAX_WORN_SHOULDER_TABS = 2
+    const val MAX_WORN_SHOULDER_TABS = 3
     const val MAX_WORN_CHEST_BADGES = 3
     const val MAX_WORN_HANGING_MEDALS = 4
     const val MAX_WORN_RIBBONS = 9
@@ -164,6 +164,7 @@ object TacticalCalculator {
         val rightCord: MedalDefinition?,
         val tabSlot1: MedalDefinition?,
         val tabSlot2: MedalDefinition?,
+        val tabSlot3: MedalDefinition?,
         val chestPinAboveRack: MedalDefinition?,
         val chestPinLeftPocket: MedalDefinition?,
         val chestPinRightPocket: MedalDefinition?,
@@ -238,14 +239,17 @@ object TacticalCalculator {
                 }
             }
 
-        val tabPool = UniformRegaliaRules.tabsForSpecialty(sorted, operator.specialty)
+        val tabPool = UniformRegaliaRules.tabsInPrecedenceOrder(sorted)
         val resolvedTabs = resolvePositionalSlots(
-            slotValues = listOf(overrides.tabSlot1, overrides.tabSlot2),
+            slotValues = listOf(overrides.tabSlot1, overrides.tabSlot2, overrides.tabSlot3),
             pool = tabPool
         )
         val tabSlot1 = resolvedTabs.getOrNull(0)
         val tabSlot2 = resolvedTabs.getOrNull(1)
+        val tabSlot3 = resolvedTabs.getOrNull(2)
+        // Whatever the slots hold, the stack always draws in real-world precedence order
         val shoulderTabs = resolvedTabs.filterNotNull()
+            .sortedBy { UniformRegaliaRules.tabPrecedence(it.id) }
 
         val badgePool = sorted.filter {
             it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape != InsigniaShape.TAB
@@ -327,6 +331,7 @@ object TacticalCalculator {
             rightCord = rightCord,
             tabSlot1 = tabSlot1,
             tabSlot2 = tabSlot2,
+            tabSlot3 = tabSlot3,
             chestPinAboveRack = chestPinAboveRack,
             chestPinLeftPocket = chestPinLeftPocket,
             chestPinRightPocket = chestPinRightPocket,

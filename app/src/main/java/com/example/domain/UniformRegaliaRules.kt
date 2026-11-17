@@ -235,10 +235,15 @@ object UniformRegaliaRules {
         )
     )
 
-    private val preferredTabOrderBySpecialty: Map<OperatorSpecialty, List<String>> = mapOf(
-        OperatorSpecialty.BREACHER to listOf("insig_sapper_tab", "insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab"),
-        OperatorSpecialty.RECON to listOf("insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab", "insig_sapper_tab"),
-        OperatorSpecialty.ASSAULT to listOf("insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab", "insig_sapper_tab")
+    /**
+     * Real-world tab order, top to bottom, for every MOS: Special Forces, Ranger, Sapper,
+     * then Airborne. The stack always draws in this order.
+     */
+    val TAB_PRECEDENCE: List<String> = listOf(
+        "insig_sf_tab",
+        "insig_ranger_tab",
+        "insig_sapper_tab",
+        "insig_airborne_tab"
     )
 
     fun isCordAllowedOnShoulder(medal: MedalDefinition, isRightShoulder: Boolean): Boolean =
@@ -294,23 +299,15 @@ object UniformRegaliaRules {
                 .thenBy { it.precedenceOrder }
         )
 
-    fun mosTabPriority(specialty: OperatorSpecialty, medalId: String): Int {
-        val idx = preferredTabOrderBySpecialty[specialty]?.indexOf(medalId) ?: -1
+    fun tabPrecedence(medalId: String): Int {
+        val idx = TAB_PRECEDENCE.indexOf(medalId)
         return if (idx >= 0) idx else 999
     }
 
-    fun primaryTabIdsForSpecialty(specialty: OperatorSpecialty): Set<String> =
-        preferredTabOrderBySpecialty[specialty]?.firstOrNull()?.let { setOf(it) } ?: emptySet()
-
-    fun tabsForSpecialty(
-        medals: List<MedalDefinition>,
-        specialty: OperatorSpecialty
-    ): List<MedalDefinition> = medals
+    /** Shoulder tabs from [medals], in [TAB_PRECEDENCE] order. */
+    fun tabsInPrecedenceOrder(medals: List<MedalDefinition>): List<MedalDefinition> = medals
         .filter { it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape == InsigniaShape.TAB }
-        .sortedWith(
-            compareBy<MedalDefinition> { mosTabPriority(specialty, it.id) }
-                .thenBy { it.precedenceOrder }
-        )
+        .sortedWith(compareBy<MedalDefinition> { tabPrecedence(it.id) }.thenBy { it.precedenceOrder })
 
     /**
      * Resolves the 3 distinct chest badge slots (ABOVE_RACK, LEFT_POCKET, RIGHT_POCKET):

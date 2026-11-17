@@ -587,28 +587,22 @@ private fun DrawScope.drawDressUniformFigure(
     }
 
     // 7. Crisp Wrapped Shoulder Tabs + Directorate Heraldic SSI Shield on Outer Upper Deltoid (Wearer's Left Sleeve = +1f)
-    wornRegalia.tabSlot1?.let { tab1 ->
+    // Up to 3 tabs stack top-down in precedence order; a full stack uses slightly slimmer tabs
+    val wornTabs = wornRegalia.shoulderTabs.take(TacticalCalculator.MAX_WORN_SHOULDER_TABS)
+    val tabHeightFrac = if (wornTabs.size >= 3) 0.019f else 0.021f
+    val tabStepFrac = tabHeightFrac + 0.004f
+    wornTabs.forEachIndexed { idx, tab ->
         drawWrappedShoulderTab(
             sideSign = 1f,
-            topFrac = 0.344f,
-            tabColor = Color(tab1.insigniaColorHex),
+            topFrac = 0.344f + idx * tabStepFrac,
+            tabColor = Color(tab.insigniaColorHex),
             sleeveFaceX = ::sleeveFaceX,
-            h = h
-        )
-    }
-    wornRegalia.tabSlot2?.let { tab2 ->
-        val slot2Frac = if (wornRegalia.tabSlot1 != null) 0.369f else 0.344f
-        drawWrappedShoulderTab(
-            sideSign = 1f,
-            topFrac = slot2Frac,
-            tabColor = Color(tab2.insigniaColorHex),
-            sleeveFaceX = ::sleeveFaceX,
-            h = h
+            h = h,
+            heightFrac = tabHeightFrac
         )
     }
 
-    val wornTabCount = listOfNotNull(wornRegalia.tabSlot1, wornRegalia.tabSlot2).size
-    val ssiTopFrac = 0.350f + wornTabCount * 0.026f
+    val ssiTopFrac = if (wornTabs.isEmpty()) 0.350f else 0.344f + wornTabs.size * tabStepFrac + 0.006f
     val chosenPatch = operator.tailorOverrides.unitPatch
     if (chosenPatch != UnitPatchStyle.NONE) {
         drawWrappedUnitShoulderPatch(
@@ -1392,9 +1386,10 @@ private fun DrawScope.drawWrappedShoulderTab(
     topFrac: Float,
     tabColor: Color,
     sleeveFaceX: (Float, Float, Float) -> Float,
-    h: Float
+    h: Float,
+    heightFrac: Float = 0.021f
 ) {
-    val botFrac = topFrac + 0.021f
+    val botFrac = topFrac + heightFrac
     val yTop = h * topFrac
     val yBot = h * botFrac
     val rise = h * 0.007f
@@ -1985,7 +1980,7 @@ private fun DrawScope.drawFieldTacticalFigure(
             endX = cx + w * 0.364f
         )
     )
-    wornRegalia.shoulderTabs.take(2).forEachIndexed { idx, tab ->
+    wornRegalia.shoulderTabs.take(TacticalCalculator.MAX_WORN_SHOULDER_TABS).forEachIndexed { idx, tab ->
         val tabYShift = idx * h * 0.012f
         val arcCol = if (tab.id == "insig_sf_tab") Color(0xFFF2D272) else Color(tab.insigniaColorHex)
         drawLine(
@@ -2000,7 +1995,7 @@ private fun DrawScope.drawFieldTacticalFigure(
     if (chosenPatch != UnitPatchStyle.NONE) {
         val patchColor = if (chosenPatch == UnitPatchStyle.AUTO_MOS) accentCamo else Color(chosenPatch.primaryHex)
         val patchBorder = if (chosenPatch == UnitPatchStyle.AUTO_MOS) Color(0xFFD8B24C) else Color(chosenPatch.accentHex)
-        val patchTopY = h * (0.470f + wornRegalia.shoulderTabs.size.coerceAtMost(2) * 0.008f)
+        val patchTopY = h * (0.470f + wornRegalia.shoulderTabs.size.coerceAtMost(TacticalCalculator.MAX_WORN_SHOULDER_TABS) * 0.008f)
         drawRoundRect(
             color = patchColor,
             topLeft = Offset(cx + w * 0.298f, patchTopY),

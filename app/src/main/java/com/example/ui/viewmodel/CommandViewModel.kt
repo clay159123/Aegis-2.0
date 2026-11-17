@@ -1759,6 +1759,9 @@ class CommandViewModel(
             tabSlot2 = sanitizeSlot(ov.tabSlot2) {
                 it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape == InsigniaShape.TAB
             },
+            tabSlot3 = sanitizeSlot(ov.tabSlot3) {
+                it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape == InsigniaShape.TAB
+            },
             pinSlot1 = sanitizeSlot(ov.pinSlot1) {
                 it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape != InsigniaShape.TAB &&
                     (freeOverride || it.isAllowedInChestSlot(ChestBadgeSlot.ABOVE_RACK))
