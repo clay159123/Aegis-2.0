@@ -80,6 +80,12 @@ class CommandViewModel(
     private val _rifleQualQueue = MutableStateFlow<List<TacticalCalculator.RifleQualResult>>(emptyList())
     /** Rifle qualification results waiting to be shown, one pop-up at a time. */
     val rifleQualQueue: StateFlow<List<TacticalCalculator.RifleQualResult>> = _rifleQualQueue
+    private val _awardQueue = MutableStateFlow<List<PendingDeed>>(emptyList())
+    /** Newly earned awards waiting for an Award or Skip decision, one pop-up at a time. */
+    val awardQueue: StateFlow<List<PendingDeed>> = _awardQueue
+    private val _awardQueueTotal = MutableStateFlow(0)
+    /** Size of the current award batch, for the "n of N" counter. Resets once the queue empties. */
+    val awardQueueTotal: StateFlow<Int> = _awardQueueTotal
     private val _lastDebrief = MutableStateFlow<DebriefSummary?>(null)
     private val _lastInspectionReport = MutableStateFlow<UniformInspectionReport?>(null)
     private val _statusBanner = MutableStateFlow<String?>(null)
@@ -529,6 +535,17 @@ class CommandViewModel(
                 )
             }
             repository.saveOperator(progressedOp)
+            val promotionDeeds = newlyEligibleAwardDeeds(
+                before = op,
+                after = progressedOp,
+                state = state,
+                reasonTitle = "Promotion to ${nextRank.code}",
+                now = now
+            )
+            if (promotionDeeds.isNotEmpty()) {
+                repository.addPendingDeeds(promotionDeeds)
+                enqueueAwardPrompts(promotionDeeds)
+            }
             val msg = if (tierChanged) {
                 val focusNote = endorsementFocus?.let { " • Endorsed: ${it.title}" } ?: ""
                 "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!"
@@ -852,7 +869,8 @@ class CommandViewModel(
                     equippedGear = opGear,
                     existingCitationMedalIds = existingAndQueuedMedals,
                     missionSucceeded = passed,
-                    rollSeedPct = Random.nextInt(100)
+                    rollSeedPct = Random.nextInt(100),
+                    ownedMedalIds = repeatableOwnedIds(state, op.id)
                 )
                 val maxAttempts = mission.schoolRequirements?.maxAttempts
                 val attemptNote = if (!passed && maxAttempts != null) {
@@ -1072,7 +1090,8 @@ class CommandViewModel(
                     existingCitationMedalIds = existingAndQueuedMedals,
                     missionSucceeded = missionSucceeded,
                     rollSeedPct = Random.nextInt(100),
-                    allCampaignCitations = effectiveCampaignCitations
+                    allCampaignCitations = effectiveCampaignCitations,
+                    ownedMedalIds = repeatableOwnedIds(state, op.id)
                 )
 
                 if (recMedalId != null) {
@@ -1353,6 +1372,32 @@ class CommandViewModel(
         if (rifleQualResults.isNotEmpty()) {
             _rifleQualQueue.value = _rifleQualQueue.value + rifleQualResults
         }
+
+        // Sovereign Star heroism roll: each soldier on an eligible mission rolls once; a hit replaces
+        // that soldier's citation from this mission
+        val anyCasualty = outcomes.any { it.outcome == OperatorOutcomeType.WOUNDED || it.outcome == OperatorOutcomeType.FALLEN }
+        for (i in outcomes.indices) {
+            val o = outcomes[i]
+            val odds = TacticalCalculator.heroismOdds(mission, o.outcome, missionSucceeded, anyCasualty)
+            if (odds <= 0.0 || Random.nextDouble() >= odds) continue
+            val alreadyHas = state.citations.any { it.operatorId == o.operatorId && it.medalId == TacticalCalculator.SOVEREIGN_STAR_ID } ||
+                state.pendingDeeds.any { it.operatorId == o.operatorId && it.recommendedMedalId == TacticalCalculator.SOVEREIGN_STAR_ID }
+            if (alreadyHas) continue
+            val text = TacticalCalculator.heroismDeedText(mission, o.outcome)
+            newDeeds.removeAll { it.operatorId == o.operatorId && it.missionTitle == mission.title }
+            newDeeds.add(
+                PendingDeed(
+                    id = "deed_${UUID.randomUUID().toString().take(8)}",
+                    operatorId = o.operatorId,
+                    missionTitle = mission.title,
+                    deedSummary = text,
+                    recommendedMedalId = TacticalCalculator.SOVEREIGN_STAR_ID,
+                    createdAtMillis = now
+                )
+            )
+            outcomes[i] = o.copy(deedText = text, recommendedMedalId = TacticalCalculator.SOVEREIGN_STAR_ID)
+        }
+        enqueueAwardPrompts(newDeeds)
         viewModelScope.launch {
             repository.removeDeployment(deployment.id)
             repository.saveOperators(updatedOperators)
@@ -2198,31 +2243,32 @@ class CommandViewModel(
         medalId: String,
         citationNote: String,
         missionTitle: String = "HQ Ceremonial Citation"
-    ) {
+    ): Boolean {
         val state = uiState.value
-        val operator = state.operators.find { it.id == operatorId && it.unlocked } ?: return
-        val medal = GameCatalog.medals.find { it.id == medalId } ?: return
+        val operator = state.operators.find { it.id == operatorId && it.unlocked } ?: return false
+        val medal = GameCatalog.medals.find { it.id == medalId } ?: return false
 
         val ownedMedalIds = state.citations.filter { it.operatorId == operatorId }.map { it.medalId }.toSet()
         val alreadyAwarded = medalId in ownedMedalIds
         val repeatable = TacticalCalculator.isRepeatableAward(medal)
         if (alreadyAwarded && !repeatable) {
             showBanner("${operator.callsign} already holds ${medal.shortName}.")
-            return
+            return false
         }
         val eligibility = TacticalCalculator.evaluateAwardEligibility(
             medal = medal,
             operator = operator,
             ownedMedalIds = ownedMedalIds,
-            allCitations = state.citations
+            allCitations = state.citations,
+            heroismCited = state.pendingDeeds.any { it.operatorId == operatorId && it.recommendedMedalId == medalId }
         )
         if (!eligibility.eligible) {
             showBanner("${medal.shortName} locked: ${eligibility.reasonText}")
-            return
+            return false
         }
         if (state.resources.prestige < medal.prestigeCost) {
             showBanner("Need ${medal.prestigeCost} PRS to confer ${medal.name}.")
-            return
+            return false
         }
 
         val cleanNote = citationNote.trim().ifBlank {
@@ -2256,6 +2302,65 @@ class CommandViewModel(
                 )
             }
             showBanner("Awarded ${medal.name} to ${operator.rank.code} ${operator.callsign}!")
+        }
+        return true
+    }
+
+    /** Award button on the award pop-up: confers the head of the queue and moves to the next card. */
+    fun awardFromQueue() {
+        val deed = _awardQueue.value.firstOrNull() ?: return
+        val ok = awardMedal(deed.operatorId, deed.recommendedMedalId, deed.deedSummary, deed.missionTitle)
+        if (ok) popAwardQueue()
+    }
+
+    /** Skip on the award pop-up: the award stays in Pending Awards on the Honors screen. */
+    fun skipAwardPrompt() = popAwardQueue()
+
+    private fun popAwardQueue() {
+        val rest = _awardQueue.value.drop(1)
+        _awardQueue.value = rest
+        if (rest.isEmpty()) _awardQueueTotal.value = 0
+    }
+
+    private fun enqueueAwardPrompts(deeds: List<PendingDeed>) {
+        if (deeds.isEmpty()) return
+        _awardQueue.value = _awardQueue.value + deeds
+        _awardQueueTotal.value = _awardQueueTotal.value + deeds.size
+    }
+
+    /** Medal ids this soldier holds that aren't also waiting in Pending Awards (used for repeat awards). */
+    private fun repeatableOwnedIds(state: CommandUiState, operatorId: String): Set<String> {
+        val pending = state.pendingDeeds.filter { it.operatorId == operatorId }.map { it.recommendedMedalId }.toSet()
+        return state.citations.filter { it.operatorId == operatorId }.map { it.medalId }.toSet() - pending
+    }
+
+    /**
+     * Awards that [after] qualifies for but [before] didn't, skipping one-time awards already held and
+     * anything already pending. Used after promotions so a new rank's awards get offered right away.
+     */
+    private fun newlyEligibleAwardDeeds(
+        before: Operator,
+        after: Operator,
+        state: CommandUiState,
+        reasonTitle: String,
+        now: Long
+    ): List<PendingDeed> {
+        val owned = state.citations.filter { it.operatorId == after.id }.map { it.medalId }.toSet()
+        val pending = state.pendingDeeds.filter { it.operatorId == after.id }.map { it.recommendedMedalId }.toSet()
+        return GameCatalog.medals.filter { medal ->
+            medal.id !in pending &&
+                (medal.id !in owned || TacticalCalculator.isRepeatableAward(medal)) &&
+                TacticalCalculator.evaluateAwardEligibility(medal, after, owned, state.citations).eligible &&
+                !TacticalCalculator.evaluateAwardEligibility(medal, before, owned, state.citations).eligible
+        }.map { medal ->
+            PendingDeed(
+                id = "deed_${UUID.randomUUID().toString().take(8)}",
+                operatorId = after.id,
+                missionTitle = reasonTitle,
+                deedSummary = "Met the standard for the ${medal.name} with ${reasonTitle.lowercase()}.",
+                recommendedMedalId = medal.id,
+                createdAtMillis = now
+            )
         }
     }
 

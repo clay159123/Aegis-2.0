@@ -413,7 +413,7 @@ class TacticalCalculatorTest {
             equippedGear = emptyList(),
             existingCitationMedalIds = emptySet()
         )
-        assertEquals("medal_sovereign_star", fallenMedal)
+        assertEquals("medal_distinguished_cross", fallenMedal)
     }
 
     @Test
@@ -1146,84 +1146,58 @@ class TacticalCalculatorTest {
         val infCord = GameCatalog.medals.first { it.id == "cord_infantry_blue" }
         val rangerTab = GameCatalog.medals.first { it.id == "insig_ranger_tab" }
 
-        // 1. Living Sovereign Star requires Extreme Combat Hazard, 8+ Combat Ops, AND Service Cross or Silver Vanguard Star
-        val sevenOpExtreme = vesper.copy(
-            missionsCompleted = 7,
-            combatMissionsCompleted = 7,
+        // 1. The Sovereign Star needs a heroism citation; no career checklist unlocks it
+        val veteran = vesper.copy(
+            missionsCompleted = 12,
+            combatMissionsCompleted = 12,
             highestRiskSurvived = MissionRisk.EXTREME
         )
         assertFalse(
-            TacticalCalculator.evaluateAwardEligibility(
-                sovereignStar,
-                sevenOpExtreme,
-                setOf("medal_distinguished_cross")
-            ).eligible
+            TacticalCalculator.evaluateAwardEligibility(sovereignStar, veteran, setOf("medal_distinguished_cross")).eligible
         )
-        val eightOpExtremeNoPriorValor = vesper.copy(
-            missionsCompleted = 8,
-            combatMissionsCompleted = 8,
-            highestRiskSurvived = MissionRisk.EXTREME
-        )
-        assertFalse(
-            TacticalCalculator.evaluateAwardEligibility(
-                sovereignStar,
-                eightOpExtremeNoPriorValor,
-                emptySet()
-            ).eligible
-        )
-        val eightOpExtremeQualified = eightOpExtremeNoPriorValor
+        val rookie = kestrel.copy(missionsCompleted = 1, combatMissionsCompleted = 1, highestRiskSurvived = MissionRisk.LOW)
         assertTrue(
-            TacticalCalculator.evaluateAwardEligibility(
-                sovereignStar,
-                eightOpExtremeQualified,
-                setOf("medal_distinguished_cross")
-            ).eligible
+            TacticalCalculator.evaluateAwardEligibility(sovereignStar, rookie, emptySet(), heroismCited = true).eligible
         )
 
-        // 2. Per-soldier cap = 1 for Sovereign Star allows multiple distinct heroes (living or fallen)
-        val firstSovereignCit = AwardedMedal(
-            id = "cit_moh_1",
-            operatorId = eightOpExtremeQualified.id,
-            medalId = sovereignStar.id,
-            citationNote = "Held the ridge alone",
-            awardedAtMillis = 100L
-        )
         val secondCandidate = kestrel.copy(
             missionsCompleted = 10,
             combatMissionsCompleted = 10,
             highestRiskSurvived = MissionRisk.EXTREME
         )
-        val fallenCandidate = cipher.copy(status = OperatorStatus.FALLEN, missionsCompleted = 1, combatMissionsCompleted = 1)
-        assertTrue(
-            TacticalCalculator.evaluateAwardEligibility(
-                medal = sovereignStar,
-                operator = secondCandidate,
-                ownedMedalIds = setOf("medal_silver_vanguard"),
-                allCitations = listOf(firstSovereignCit)
-            ).eligible
+
+        // 2. Per-soldier cap = 1 still holds with a citation; other heroes (living or fallen) can still earn one
+        val firstSovereignCit = AwardedMedal(
+            id = "cit_moh_1",
+            operatorId = veteran.id,
+            medalId = sovereignStar.id,
+            citationNote = "Held the ridge alone",
+            awardedAtMillis = 100L
         )
+        val fallenCandidate = cipher.copy(status = OperatorStatus.FALLEN, missionsCompleted = 1, combatMissionsCompleted = 1)
         assertTrue(
             TacticalCalculator.evaluateAwardEligibility(
                 medal = sovereignStar,
                 operator = fallenCandidate,
                 ownedMedalIds = emptySet(),
-                allCitations = listOf(firstSovereignCit)
+                allCitations = listOf(firstSovereignCit),
+                heroismCited = true
             ).eligible
         )
-        // Same soldier who already earned Sovereign Star is blocked from earning a 2nd copy
         assertFalse(
             TacticalCalculator.evaluateAwardEligibility(
                 medal = sovereignStar,
-                operator = eightOpExtremeQualified,
-                ownedMedalIds = setOf("medal_distinguished_cross", sovereignStar.id),
-                allCitations = listOf(firstSovereignCit)
+                operator = veteran,
+                ownedMedalIds = setOf(sovereignStar.id),
+                allCitations = listOf(firstSovereignCit),
+                heroismCited = true
             ).eligible
         )
         assertFalse(TacticalCalculator.isRepeatableAward(sovereignStar))
 
-        // 3. Mission deed recommendation grants Sovereign Star to a 2nd fallen hero, falling back only if that same soldier already holds it
+        // 3. A fallen soldier's deed follows the chain below the Star (the Star itself comes only from the roll)
         val deepOp = GameCatalog.missions.first { it.id == "msn_deep_expedition" }
-        val (secondFallenAward, _) = TacticalCalculator.recommendedMedalForMissionDeed(
+        val (fallenAward, _) = TacticalCalculator.recommendedMedalForMissionDeed(
             mission = deepOp,
             operator = fallenCandidate,
             outcome = OperatorOutcomeType.FALLEN,
@@ -1231,16 +1205,7 @@ class TacticalCalculatorTest {
             existingCitationMedalIds = emptySet(),
             allCampaignCitations = listOf(firstSovereignCit)
         )
-        assertEquals("medal_sovereign_star", secondFallenAward)
-        val (repeatBlockedFallback, _) = TacticalCalculator.recommendedMedalForMissionDeed(
-            mission = deepOp,
-            operator = fallenCandidate,
-            outcome = OperatorOutcomeType.FALLEN,
-            equippedGear = emptyList(),
-            existingCitationMedalIds = setOf(sovereignStar.id),
-            allCampaignCitations = listOf(firstSovereignCit)
-        )
-        assertEquals("medal_distinguished_cross", repeatBlockedFallback)
+        assertEquals("medal_distinguished_cross", fallenAward)
 
         // 4. Sovereign Star uses a per-soldier cap (1 max/soldier) instead of a global campaign cap
         assertNull(TacticalCalculator.campaignCapForAward(sovereignStar.id))
@@ -3073,5 +3038,67 @@ class TacticalCalculatorTest {
         assertTrue(blocked.reasonText.contains("No requalification attempts left"))
         // Needs Marksmanship & Tactical Basics first
         assertFalse(TacticalCalculator.canOperatorDeployOnMission(soldier.copy(completedMissionIds = emptySet()), qual, emptySet()).eligible)
+    }
+
+    @Test
+    fun heroismOddsFollowMissionScopeRiskAndCasualties() {
+        fun mission(scope: MissionScope, risk: MissionRisk) =
+            GameCatalog.missions.first { it.scope == scope }.copy(scope = scope, risk = risk)
+        val combatLow = mission(MissionScope.FIELD_COMBAT, MissionRisk.LOW)
+        val combatExtreme = mission(MissionScope.FIELD_COMBAT, MissionRisk.EXTREME)
+        assertEquals(TacticalCalculator.HEROISM_ODDS_LOW, TacticalCalculator.heroismOdds(combatLow, OperatorOutcomeType.SAFE, true, false), 1e-9)
+        assertEquals(TacticalCalculator.HEROISM_ODDS_EXTREME, TacticalCalculator.heroismOdds(combatExtreme, OperatorOutcomeType.SAFE, true, false), 1e-9)
+        assertEquals(TacticalCalculator.HEROISM_ODDS_EXTREME * 2, TacticalCalculator.heroismOdds(combatExtreme, OperatorOutcomeType.FALLEN, false, true), 1e-9)
+
+        val diploLow = mission(MissionScope.STAFF_DIPLOMATIC, MissionRisk.LOW)
+        val diploMod = mission(MissionScope.STAFF_DIPLOMATIC, MissionRisk.MODERATE)
+        assertEquals(0.0, TacticalCalculator.heroismOdds(diploLow, OperatorOutcomeType.WOUNDED, false, true), 0.0)
+        assertEquals(0.0, TacticalCalculator.heroismOdds(diploMod, OperatorOutcomeType.SAFE, true, false), 0.0)
+        assertEquals(TacticalCalculator.HEROISM_ODDS_MODERATE, TacticalCalculator.heroismOdds(diploMod, OperatorOutcomeType.SAFE, true, true), 1e-9)
+        assertEquals(TacticalCalculator.HEROISM_ODDS_MODERATE, TacticalCalculator.heroismOdds(diploMod, OperatorOutcomeType.SAFE, false, false), 1e-9)
+
+        // Schools and training never roll
+        GameCatalog.missions.filter { it.scope == MissionScope.TRAINING || it.risk.isTraining }.forEach { m ->
+            assertEquals(0.0, TacticalCalculator.heroismOdds(m, OperatorOutcomeType.TRAINING_PASSED, true, true), 0.0)
+            assertEquals(0.0, TacticalCalculator.heroismOdds(m, OperatorOutcomeType.SAFE, false, true), 0.0)
+        }
+    }
+
+    @Test
+    fun repeatableAwardsComeBackButOneTimeAndPendingAwardsDoNot() {
+        val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
+        val extremeOp = GameCatalog.missions.first { it.risk == MissionRisk.EXTREME && it.scope == MissionScope.FIELD_COMBAT }
+        val wounded = kestrel.copy(missionsCompleted = 3, combatMissionsCompleted = 3, highestRiskSurvived = MissionRisk.HIGH, timesWounded = 1)
+        // Purple Shield already held (and not pending): a new wound earns it again
+        val (again, _) = TacticalCalculator.recommendedMedalForMissionDeed(
+            mission = extremeOp,
+            operator = wounded,
+            outcome = OperatorOutcomeType.WOUNDED,
+            equippedGear = emptyList(),
+            existingCitationMedalIds = setOf("medal_purple_shield"),
+            ownedMedalIds = setOf("medal_purple_shield")
+        )
+        assertEquals("medal_purple_shield", again)
+        // Already waiting in Pending Awards: not suggested a second time
+        val (pendingSkip, _) = TacticalCalculator.recommendedMedalForMissionDeed(
+            mission = extremeOp,
+            operator = wounded,
+            outcome = OperatorOutcomeType.WOUNDED,
+            equippedGear = emptyList(),
+            existingCitationMedalIds = setOf("medal_purple_shield"),
+            ownedMedalIds = emptySet()
+        )
+        assertTrue(pendingSkip != "medal_purple_shield")
+        // One-time awards stay skipped once held
+        val ranger = GameCatalog.missions.first { it.id == "msn_ranger_school" }
+        val (tab, _) = TacticalCalculator.recommendedMedalForMissionDeed(
+            mission = ranger,
+            operator = kestrel,
+            outcome = OperatorOutcomeType.TRAINING_PASSED,
+            equippedGear = emptyList(),
+            existingCitationMedalIds = setOf("insig_ranger_tab"),
+            ownedMedalIds = setOf("insig_ranger_tab")
+        )
+        assertNull(tab)
     }
 }
