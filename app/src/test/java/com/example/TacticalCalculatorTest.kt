@@ -418,7 +418,7 @@ class TacticalCalculatorTest {
     @Test
     fun postBasicRecruitNonInfantrySchoolsAndHqStaffBonusesWorkCorrectly() {
         val facilities = FacilityType.entries.map { FacilityState(it, 1) }
-        assertEquals(5, TacticalCalculator.maxFieldRosterSlots(facilities))
+        assertEquals(8, TacticalCalculator.maxFieldRosterSlots(facilities))
         assertEquals(3, TacticalCalculator.maxHqStaffSlots(facilities))
 
         val baseRates = TacticalCalculator.productionRates(facilities, hqStaffCount = 0)
@@ -2128,7 +2128,7 @@ class TacticalCalculatorTest {
             eligibleOperatorIds = allOps.map { it.id }.toSet(),
             maxCount = MAX_SQUAD_SIZE
         )
-        assertEquals(MAX_SQUAD_SIZE, ordered.size)
+        assertEquals(squad.memberIds.size, ordered.size)
         assertEquals(allOps[2].id, ordered.first())
 
         val twoMax = SquadCohesionRules.orderedMembersForDeployment(
@@ -2360,7 +2360,8 @@ class TacticalCalculatorTest {
         assertTrue(report.prestigeEarned > 0)
         assertEquals(180, report.buffDurationSec)
 
-        val mission = GameCatalog.missions.first { it.id == "msn_ridge_patrol" }
+        // A demanding op keeps the veteran below the efficiency cap so the +8 buff shows in full
+        val mission = GameCatalog.missions.first { it.id == "msn_deep_expedition" }
         val facilities = FacilityType.entries.map { FacilityState(it, 1) }
         val normalEff = TacticalCalculator.missionEfficiencyPct(
             mission, listOf(vetOp), emptyList(), emptyList(), facilities, inspectionBuffActive = false
@@ -2503,11 +2504,14 @@ class TacticalCalculatorTest {
 
         val manualRightKitDiplo = TacticalCalculator.evaluateMissionKitBonus(diploMission, listOf(fieldInMessGear), smartWardrobeEnabled = false)
         assertTrue(manualRightKitDiplo.allMatched)
+        // A fresh recruit stays under the odds cap, so the Mess kit bonus is visible
+        val envoy = GameCatalog.createPostBasicRecruit("op_envoy", OperatorSpecialty.COMMAND, emptySet(), 0)
+        val treaty = GameCatalog.missions.first { it.id == "msn_diplo_treaty" }
         val oddsWithoutMess = TacticalCalculator.missionSuccessOddsPct(
-            diploMission, listOf(fieldInFieldGear), emptyList(), emptyList(), facilities, smartWardrobeEnabled = false
+            treaty, listOf(envoy.copy(activeWardrobeKit = WardrobeKit.FIELD)), emptyList(), emptyList(), facilities, smartWardrobeEnabled = false
         )
         val oddsWithMess = TacticalCalculator.missionSuccessOddsPct(
-            diploMission, listOf(fieldInMessGear), emptyList(), emptyList(), facilities, smartWardrobeEnabled = false
+            treaty, listOf(envoy.copy(activeWardrobeKit = WardrobeKit.MESS)), emptyList(), emptyList(), facilities, smartWardrobeEnabled = false
         )
         assertTrue(oddsWithMess > oddsWithoutMess)
 
@@ -2848,5 +2852,38 @@ class TacticalCalculatorTest {
         val req = UniformTailorRequest.fromOperator(r.copy(skinToneOverride = SkinTone.FAIR, bodyBuildOverride = BodyBuild.SLIM))
         assertEquals(SkinTone.FAIR, req.skinToneOverride)
         assertEquals(BodyBuild.SLIM, req.bodyBuildOverride)
+    }
+
+    @Test
+    fun squadsRunTwoToSixWithFullStrengthAndMissionBands() {
+        assertEquals(6, MAX_SQUAD_SIZE)
+        assertEquals(2, MIN_SQUAD_SIZE)
+        // Mission bands: recon/staff/diplomatic 1-3, combat ops 3-6
+        GameCatalog.missions.filter { it.scope == MissionScope.STAFF_DIPLOMATIC }.forEach {
+            assertEquals(it.id, 1 to 3, it.minOperators to it.maxOperators)
+        }
+        assertEquals(1 to 3, GameCatalog.missions.first { it.id == "msn_ridge_patrol" }.let { it.minOperators to it.maxOperators })
+        assertEquals(3 to 6, GameCatalog.missions.first { it.id == "msn_citadel_recovery" }.let { it.minOperators to it.maxOperators })
+
+        // Average power: six copies of a soldier score the same as three
+        val mission = GameCatalog.missions.first { it.id == "msn_citadel_recovery" }
+        val facilities = FacilityType.entries.map { FacilityState(it, 2) }
+        val troops = (1..6).map { GameCatalog.createPostBasicRecruit("op_t$it", OperatorSpecialty.ASSAULT, emptySet(), 0).copy(id = "op_t$it") }
+        assertEquals(
+            TacticalCalculator.missionEfficiencyPct(mission, troops.take(3), emptyList(), emptyList(), facilities),
+            TacticalCalculator.missionEfficiencyPct(mission, troops, emptyList(), emptyList(), facilities)
+        )
+
+        // Full Strength at 4+ deployed members of a 4+ squad
+        val squad = TacticalSquad("sq_fs", "Alpha", troops.map { it.id }, troops.first().id, cohesionXp = 300)
+        val four = SquadCohesionRules.evaluateActiveBonus(troops.take(4), listOf(squad))!!
+        val three = SquadCohesionRules.evaluateActiveBonus(troops.take(3), listOf(squad))!!
+        assertTrue(four.fullStrength)
+        assertFalse(three.fullStrength)
+
+        // Cohesion headcount: a squad of 6 gains only slightly more than a squad of 4
+        assertEquals(60, SquadCohesionRules.cohesionHeadcountXp(4))
+        assertEquals(70, SquadCohesionRules.cohesionHeadcountXp(6))
+        assertEquals(30, SquadCohesionRules.cohesionHeadcountXp(2))
     }
 }

@@ -2232,6 +2232,10 @@ class CommandViewModel(
                 state.operators.find { it.id == id }?.let { SquadCohesionRules.isOperatorEligibleForFieldSquad(it) } == true
             }
             .take(MAX_SQUAD_SIZE)
+        if (validIds.size < MIN_SQUAD_SIZE) {
+            showBanner("A squad needs at least $MIN_SQUAD_SIZE field soldiers.")
+            return
+        }
 
         val resolvedLeaderId = leaderId?.takeIf { it in validIds }
             ?: SquadCohesionRules.pickDefaultLeaderId(validIds, state.operators)

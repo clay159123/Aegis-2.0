@@ -1066,7 +1066,7 @@ object TacticalCalculator {
 
     fun maxFieldRosterSlots(facilities: List<FacilityState>): Int {
         val hqLevel = facilityLevel(facilities, FacilityType.COMMAND_HQ)
-        return 4 + hqLevel
+        return 7 + hqLevel
     }
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {
@@ -1239,14 +1239,16 @@ object TacticalCalculator {
         smartWardrobeEnabled: Boolean = false
     ): Int {
         if (selectedOperators.isEmpty()) return 0
-        val totalPower = selectedOperators.sumOf {
+        // Difficulty compares the team's average power per soldier, so extra soldiers don't trivialize a mission;
+        // they help through MOS coverage, squad bonuses and survival instead
+        val averagePower = selectedOperators.map {
             operatorStats(it, gearItems, citations, facilities).totalPower
-        }
+        }.average()
         val staffBonus = ((hqStaffSummary?.efficiencyBonusPct ?: (hqStaffCount.coerceAtLeast(0) * 4)) / 2).coerceAtMost(14)
         val cohesionEff = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads)?.efficiencyBonusPct ?: 0
         val inspectionBonus = if (inspectionBuffActive) 8 else 0
         val kitEffBonus = evaluateMissionKitBonus(mission, selectedOperators, smartWardrobeEnabled).efficiencyBonusPct
-        val baseRatio = (totalPower.toDouble() / mission.recommendedPower.coerceAtLeast(1)) * 100.0
+        val baseRatio = (averagePower / mission.recommendedPower.coerceAtLeast(1)) * 100.0
         return (baseRatio + staffBonus + cohesionEff + inspectionBonus + kitEffBonus).roundToInt().coerceIn(45, 185)
     }
 

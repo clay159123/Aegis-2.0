@@ -40,7 +40,7 @@ fun FieldSquadsSection(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionHeader(
             title = "Combat Squads (${squads.size})",
-            subtitle = "Max $MAX_SQUAD_SIZE soldiers/squad • Designate Squad Leader • Deploy together to build Cohesion",
+            subtitle = "$MIN_SQUAD_SIZE–$MAX_SQUAD_SIZE soldiers/squad • Full Strength at $FULL_STRENGTH_SQUAD_SIZE+ • Deploy together to build Cohesion",
             trailing = {
                 FilledTonalButton(
                     onClick = onCreateSquadClick,
@@ -69,7 +69,7 @@ fun FieldSquadsSection(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Form a 1–$MAX_SQUAD_SIZE soldier squad with a designated Squad Leader to select the whole team in 1 tap and build mission Cohesion.",
+                            text = "Form a $MIN_SQUAD_SIZE–$MAX_SQUAD_SIZE soldier squad with a designated Squad Leader to select the whole team in 1 tap and build mission Cohesion.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -125,7 +125,8 @@ fun FieldSquadsSection(
                                     color = cohesionColor.copy(alpha = 0.16f)
                                 ) {
                                     Text(
-                                        text = "${members.size}/$MAX_SQUAD_SIZE • $readyCount READY",
+                                        text = "${members.size}/$MAX_SQUAD_SIZE • $readyCount READY" +
+                                            if (members.size >= FULL_STRENGTH_SQUAD_SIZE) " • FULL STRENGTH" else "",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = cohesionColor,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

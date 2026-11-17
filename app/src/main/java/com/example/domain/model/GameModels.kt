@@ -1076,6 +1076,7 @@ data class MissionTemplate(
     val durationSeconds: Int,
     val minOperators: Int,
     val maxOperators: Int,
+    /** Target power per soldier: schools compare one soldier to it, missions compare the team's average. */
     val recommendedPower: Int,
     val primaryFocus: String,
     val isNightOp: Boolean = false,
@@ -1103,7 +1104,10 @@ data class MissionTemplate(
     }
 }
 
-const val MAX_SQUAD_SIZE = 4
+const val MAX_SQUAD_SIZE = 6
+const val MIN_SQUAD_SIZE = 2
+/** A squad with at least this many members fights at Full Strength (small survival and odds boost). */
+const val FULL_STRENGTH_SQUAD_SIZE = 4
 const val MAX_SQUAD_COHESION_XP = 1000
 
 enum class SquadCohesionTier(
@@ -1220,7 +1224,8 @@ data class ActiveSquadCohesionBonus(
     val tier: SquadCohesionTier,
     val efficiencyBonusPct: Int,
     val survivalBonusPct: Int,
-    val successOddsBonusPct: Int
+    val successOddsBonusPct: Int,
+    val fullStrength: Boolean = false
 )
 
 data class ActiveDeployment(

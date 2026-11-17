@@ -13,6 +13,12 @@ data class SquadCohesionGainResult(
 
 object SquadCohesionRules {
 
+    /** Survival and pass-chance boost for a squad deployed at Full Strength. */
+    const val FULL_STRENGTH_BONUS_PCT = 2
+
+    fun cohesionHeadcountXp(participants: Int): Int =
+        30 + (minOf(participants, FULL_STRENGTH_SQUAD_SIZE) - 2) * 15 + (participants - FULL_STRENGTH_SQUAD_SIZE).coerceAtLeast(0) * 5
+
     private val natoSquadCallsigns = listOf(
         "Alpha Squad",
         "Bravo Squad",
@@ -107,7 +113,11 @@ object SquadCohesionRules {
         val survBonus = (scale * 10.0).roundToInt() + if (leaderPresent && score >= 20) 1 else 0
         val oddsBonus = (scale * 8.0).roundToInt() + leaderPresenceOdds
 
-        if (effBonus <= 0 && survBonus <= 0 && oddsBonus <= 0) return null
+        // Full Strength: a squad of 4+ that deploys at least 4 of its members
+        val fullStrength = squad.memberIds.size >= FULL_STRENGTH_SQUAD_SIZE && deployedCount >= FULL_STRENGTH_SQUAD_SIZE
+        val fullStrengthBonus = if (fullStrength) FULL_STRENGTH_BONUS_PCT else 0
+
+        if (effBonus <= 0 && survBonus <= 0 && oddsBonus <= 0 && !fullStrength) return null
 
         return ActiveSquadCohesionBonus(
             squad = squad,
@@ -116,8 +126,9 @@ object SquadCohesionRules {
             cohesionScore = score,
             tier = tier,
             efficiencyBonusPct = effBonus,
-            survivalBonusPct = survBonus,
-            successOddsBonusPct = oddsBonus
+            survivalBonusPct = survBonus + fullStrengthBonus,
+            successOddsBonusPct = oddsBonus + fullStrengthBonus,
+            fullStrength = fullStrength
         )
     }
 
@@ -135,7 +146,8 @@ object SquadCohesionRules {
 
         val leaderOp = squad.leaderId?.let { id -> participating.firstOrNull { it.id == id } }
         val leaderPresent = leaderOp != null
-        val baseXp = 30 + (participating.size - 2) * 15
+        // Headcount helps up to 4; members 5 and 6 add only a little
+        val baseXp = cohesionHeadcountXp(participating.size)
         val hazardBonus = when (mission.risk) {
             MissionRisk.TRAINING, MissionRisk.LOW -> 0
             MissionRisk.MODERATE -> 10
