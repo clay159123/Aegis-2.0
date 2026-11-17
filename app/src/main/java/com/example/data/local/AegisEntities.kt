@@ -124,7 +124,8 @@ data class SquadEntity(
     val standardBravosDressStyleName: String? = null,
     val standardMessDressStyleName: String? = null,
     val standardMessHeadgearName: String? = null,
-    val standardWhiteGloves: Boolean? = null
+    val standardAlphasGloves: Boolean? = null,
+    val standardMessGloves: Boolean? = null
 )
 
 @Entity(tableName = "citations")

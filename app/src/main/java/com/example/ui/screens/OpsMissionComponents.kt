@@ -800,11 +800,8 @@ internal fun HqStagingSheet(
                         TacticalCalculator.schoolPassOddsPct(
                             mission = mission,
                             operator = op,
-                            gearItems = uiState.gearItems,
                             citations = uiState.citations,
-                            facilities = uiState.facilities,
-                            hqStaffSummary = uiState.hqStaffSummary,
-                            smartWardrobeEnabled = uiState.smartWardrobeEnabled
+                            hqStaffSummary = uiState.hqStaffSummary
                         )
                     } else {
                         TacticalCalculator.operatorSurvivalPct(

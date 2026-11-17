@@ -15,14 +15,32 @@ object TacticalCalculator {
 
     // Per-soldier uniqueness cap: Sovereign Star of Aegis is limited to 1 per soldier (multiple soldiers may earn it)
     const val MAX_SOVEREIGN_STAR_PER_SOLDIER = 1
+    const val SCHOOL_BASELINE_PASS_BONUS = 4
     const val STANDALONE_ROTATION_INTERVAL_MILLIS = 4L * 60_000L // 4 minutes
     const val ROTATION_REFRESH_INTEL_COST = 15.0
 
     fun campaignCapForAward(medalId: String): Int? = null
 
-    fun perSoldierCapForAward(medalId: String): Int? = when (medalId) {
-        "medal_sovereign_star" -> MAX_SOVEREIGN_STAR_PER_SOLDIER
-        else -> null
+    /** Ribbons and medals that can only ever be earned once per soldier. */
+    val ONE_TIME_RIBBON_IDS: Set<String> = setOf(
+        "medal_basic_training", // Army Service Ribbon
+        "medal_night_owl"       // Night Ops Qualification Ribbon
+    )
+
+    /**
+     * How many times one soldier can hold an award, or null for no limit. One-time awards
+     * (every school insignia, every shoulder cord, the Sovereign Star and the ribbons in
+     * [ONE_TIME_RIBBON_IDS]) are capped at 1. Everything else stays repeatable and stacks
+     * through the oak leaf device system.
+     */
+    fun perSoldierCapForAward(medalId: String): Int? {
+        if (medalId == "medal_sovereign_star") return MAX_SOVEREIGN_STAR_PER_SOLDIER
+        if (medalId in ONE_TIME_RIBBON_IDS) return 1
+        val category = GameCatalog.medals.find { it.id == medalId }?.category ?: return null
+        return when (category) {
+            AwardCategory.SCHOOL_INSIGNIA, AwardCategory.SHOULDER_CORD -> 1
+            AwardCategory.MEDAL, AwardCategory.RIBBON -> null
+        }
     }
 
     fun isAllCampaignsCleared(completedCampaignIds: Set<String>): Boolean =
@@ -485,7 +503,8 @@ object TacticalCalculator {
                     missing += "Requires 1 entry school ($anyLabels)"
                 }
 
-                val stats = operatorStats(operator, gearItems, citations, facilities)
+                // Schools judge the soldier, not their kit: no gear or Armory bonus here
+                val stats = soldierStats(operator, citations)
                 if (req.minFirepower > 0 && stats.firepower < req.minFirepower) {
                     missing += "Not suited: Needs ${req.minFirepower}+ Firepower (${stats.firepower})"
                 }
@@ -534,12 +553,15 @@ object TacticalCalculator {
                 bonusSummary = null,
                 shortBadge = "Req: Field ACU"
             )
-            MissionScope.TRAINING -> MissionUniformRequirement(
-                kit = WardrobeKit.BRAVOS,
-                isMandatory = false,
-                bonusSummary = "+4% Pass • +10% XP",
-                shortBadge = "Rec: Bravos (+4% Pass)"
-            )
+            MissionScope.TRAINING -> {
+                val kit = schoolUniformKit(mission)
+                MissionUniformRequirement(
+                    kit = kit,
+                    isMandatory = true,
+                    bonusSummary = "+10% XP",
+                    shortBadge = "Uniform: ${kit.shortLabel}"
+                )
+            }
             MissionScope.STAFF_DIPLOMATIC -> MissionUniformRequirement(
                 kit = WardrobeKit.MESS,
                 isMandatory = false,
@@ -557,7 +579,7 @@ object TacticalCalculator {
             val mission = GameCatalog.missions.find { it.id == activeDep.templateId }
             return when (mission?.scope) {
                 MissionScope.FIELD_COMBAT -> DutyUniformContext.COMBAT_DEPLOYMENT
-                MissionScope.TRAINING -> DutyUniformContext.TRAINING_MISSION
+                MissionScope.TRAINING -> schoolDutyContext(mission)
                 MissionScope.STAFF_DIPLOMATIC -> DutyUniformContext.DIPLOMATIC_MISSION
                 null -> DutyUniformContext.COMBAT_DEPLOYMENT
             }
@@ -572,14 +594,30 @@ object TacticalCalculator {
         }
     }
 
+    /** Uniform a school requires: Field for field schools, Bravos for classroom schools. */
+    fun schoolUniformKit(mission: MissionTemplate): WardrobeKit =
+        mission.schoolRequirements?.uniformKit ?: WardrobeKit.BRAVOS
+
+    /** Duty context while attending a school, based on the uniform it requires. */
+    fun schoolDutyContext(mission: MissionTemplate): DutyUniformContext =
+        if (schoolUniformKit(mission) == WardrobeKit.FIELD) DutyUniformContext.FIELD_SCHOOL
+        else DutyUniformContext.TRAINING_MISSION
+
     fun resolveEffectiveWardrobeKit(
         operator: Operator,
         smartWardrobeEnabled: Boolean,
         dutyContext: DutyUniformContext
     ): WardrobeKit {
+        // Schools dress their students automatically, whatever the wardrobe setting.
+        // Field schools put HQ staff in Field kit too, for the length of the course.
+        when (dutyContext) {
+            DutyUniformContext.FIELD_SCHOOL -> return WardrobeKit.FIELD
+            DutyUniformContext.TRAINING_MISSION -> return WardrobeKit.BRAVOS
+            else -> Unit
+        }
         val resolved = if (smartWardrobeEnabled) {
             when (dutyContext) {
-                DutyUniformContext.COMBAT_DEPLOYMENT -> WardrobeKit.FIELD
+                DutyUniformContext.COMBAT_DEPLOYMENT, DutyUniformContext.FIELD_SCHOOL -> WardrobeKit.FIELD
                 DutyUniformContext.TRAINING_MISSION, DutyUniformContext.ON_BASE -> WardrobeKit.BRAVOS
                 DutyUniformContext.HQ_ASSIGNMENT,
                 DutyUniformContext.PROMOTION_BOARD,
@@ -659,9 +697,14 @@ object TacticalCalculator {
         operator: Operator,
         kit: WardrobeKit,
         squads: List<TacticalSquad> = emptyList(),
-        ownedMedalIds: Set<String> = emptySet()
+        ownedMedalIds: Set<String> = emptySet(),
+        allowFieldForHqStaff: Boolean = false
     ): Operator {
-        val effectiveKit = if (kit.isAvailableFor(operator)) kit else WardrobeKit.ALPHAS
+        val effectiveKit = if (kit.isAvailableFor(operator) || (allowFieldForHqStaff && kit == WardrobeKit.FIELD)) {
+            kit
+        } else {
+            WardrobeKit.ALPHAS
+        }
         val settings = operator.wardrobe.forKit(effectiveKit)
         val allowFree = operator.tailorOverrides.freeTailorOverride
         val sashAllowed = allowFree || evaluateDressSashEligibility(operator, squads).eligible
@@ -687,8 +730,9 @@ object TacticalCalculator {
                     dressDisplayMode = bravosDisplay,
                     hasWhiteGloves = false,
                     hasDressSash = false,
-                    equippedLeftCordId = null,
-                    equippedRightCordId = null
+                    // Shoulder cords are worn on the Bravos shirt, same selection as Alphas
+                    equippedLeftCordId = if (settings.cordCustomized) settings.equippedLeftCordId else operator.equippedLeftCordId,
+                    equippedRightCordId = if (settings.cordCustomized) settings.equippedRightCordId else operator.equippedRightCordId
                 )
             }
             WardrobeKit.ALPHAS -> {
@@ -758,7 +802,7 @@ object TacticalCalculator {
         }
         val dutyCtx = when (mission.scope) {
             MissionScope.FIELD_COMBAT -> DutyUniformContext.COMBAT_DEPLOYMENT
-            MissionScope.TRAINING -> DutyUniformContext.TRAINING_MISSION
+            MissionScope.TRAINING -> schoolDutyContext(mission)
             MissionScope.STAFF_DIPLOMATIC -> DutyUniformContext.DIPLOMATIC_MISSION
         }
         val allMatched = selectedOperators.all { op ->
@@ -782,21 +826,13 @@ object TacticalCalculator {
                     summaryLabel = "Wear Mess Dress (or turn Smart Duty-Dress ON) for +20% PRS & +8% Odds"
                 )
             }
-            MissionScope.TRAINING -> if (allMatched) {
-                MissionKitBonus(
-                    recommendedKit = WardrobeKit.BRAVOS,
-                    allMatched = true,
-                    successOddsBonusPct = 4,
-                    xpMult = 1.10,
-                    summaryLabel = "Service Bravos Standard: +4% Pass Odds • +10% Training XP"
-                )
-            } else {
-                MissionKitBonus(
-                    recommendedKit = WardrobeKit.BRAVOS,
-                    allMatched = false,
-                    summaryLabel = "Service Bravos recommended for Training Schools (+4% Pass • +10% XP)"
-                )
-            }
+            // Students are dressed in the school's uniform automatically, so the XP bonus always applies
+            MissionScope.TRAINING -> MissionKitBonus(
+                recommendedKit = req.kit,
+                allMatched = true,
+                xpMult = 1.10,
+                summaryLabel = "${req.kit.label} school uniform: +10% Training XP"
+            )
             MissionScope.FIELD_COMBAT -> MissionKitBonus(
                 recommendedKit = WardrobeKit.FIELD,
                 allMatched = allMatched
@@ -804,22 +840,25 @@ object TacticalCalculator {
         }
     }
 
+    /**
+     * Pass odds for a school. Uses the soldier's own stats only ([soldierStats]): carried
+     * gear and the uniform worn have no effect on school results.
+     */
     fun schoolPassOddsPct(
         mission: MissionTemplate,
         operator: Operator,
-        gearItems: List<GearItem>,
         citations: List<AwardedMedal>,
-        facilities: List<FacilityState>,
-        hqStaffSummary: HqStaffSummary? = null,
-        smartWardrobeEnabled: Boolean = false
+        hqStaffSummary: HqStaffSummary? = null
     ): Int {
         val req = mission.schoolRequirements ?: return 90
-        val stats = operatorStats(operator, gearItems, citations, facilities)
+        val stats = soldierStats(operator, citations)
         val rankBonus = operator.rank.ordinal.coerceAtMost(10)
         val mosFitBonus = if (operator.specialty in req.naturalFitSpecialties) 5 else 0
         val statMargin = ((stats.totalPower - mission.recommendedPower) / 5).coerceIn(-16, 10)
         val staffBonus = (hqStaffSummary?.efficiencyBonusPct ?: 0) / 6
-        val bravosBonus = if (resolveEffectiveWardrobeKit(operator, smartWardrobeEnabled, DutyUniformContext.TRAINING_MISSION) == WardrobeKit.BRAVOS) 4 else 0
+        // Flat +4 keeps overall pass rates where they were when Bravos gave +4; the uniform
+        // itself no longer matters.
+        val baselineBonus = SCHOOL_BASELINE_PASS_BONUS
         val maxCap = when (mission.id) {
             "msn_sf_school" -> 52
             "msn_ranger_school" -> 68
@@ -830,7 +869,7 @@ object TacticalCalculator {
             "msn_nco_school" -> 92
             else -> 94
         }
-        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + bravosBonus).coerceIn(15, maxCap)
+        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus).coerceIn(15, maxCap)
     }
 
     fun missionSuccessOddsPct(
@@ -847,7 +886,7 @@ object TacticalCalculator {
         if (selectedOperators.isEmpty()) return 0
         if (mission.risk.isTraining) {
             return selectedOperators.map {
-                schoolPassOddsPct(mission, it, gearItems, citations, facilities, hqStaffSummary, smartWardrobeEnabled)
+                schoolPassOddsPct(mission, it, citations, hqStaffSummary)
             }.average().roundToInt()
         }
         val efficiency = missionEfficiencyPct(
@@ -1046,6 +1085,10 @@ object TacticalCalculator {
         val campaignMult = campaignSupplyCostMultiplier(completedCampaignIds)
         return (facMult * staffMult * campaignMult).coerceAtLeast(0.50)
     }
+
+    /** The soldier's own stats: base + rank + medal bonuses, with no gear and no Armory multiplier. */
+    fun soldierStats(operator: Operator, citations: List<AwardedMedal>): StatProfile =
+        operatorStats(operator, gearItems = emptyList(), citations = citations, facilities = emptyList())
 
     fun operatorStats(
         operator: Operator,

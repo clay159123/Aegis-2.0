@@ -729,11 +729,8 @@ class CommandViewModel(
                 val passOdds = TacticalCalculator.schoolPassOddsPct(
                     mission = mission,
                     operator = op,
-                    gearItems = state.gearItems,
                     citations = state.citations,
-                    facilities = state.facilities,
-                    hqStaffSummary = state.hqStaffSummary,
-                    smartWardrobeEnabled = state.smartWardrobeEnabled
+                    hqStaffSummary = state.hqStaffSummary
                 )
                 val passed = Random.nextInt(100) < passOdds
                 if (passed) anyPassed = true
@@ -2242,7 +2239,8 @@ class CommandViewModel(
             alphasDressStyle = standardDressStyle,
             messDressStyle = existing?.standardMessDressStyle,
             messHeadgear = existing?.standardMessHeadgear,
-            whiteGloves = existing?.standardWhiteGloves
+            alphasGloves = existing?.standardAlphasGloves,
+            messGloves = existing?.standardMessGloves
         )
         saveSquadWithStandard(
             squadId = squadId,
@@ -2291,7 +2289,8 @@ class CommandViewModel(
                 standardBravosDressStyle = standard.bravosDressStyle,
                 standardMessDressStyle = standard.messDressStyle,
                 standardMessHeadgear = standard.messHeadgear,
-                standardWhiteGloves = standard.whiteGloves
+                standardAlphasGloves = standard.alphasGloves,
+                standardMessGloves = standard.messGloves
             )
         } else {
             TacticalSquad(
@@ -2310,7 +2309,8 @@ class CommandViewModel(
                 standardBravosDressStyle = standard.bravosDressStyle,
                 standardMessDressStyle = standard.messDressStyle,
                 standardMessHeadgear = standard.messHeadgear,
-                standardWhiteGloves = standard.whiteGloves
+                standardAlphasGloves = standard.alphasGloves,
+                standardMessGloves = standard.messGloves
             )
         }
 
@@ -2414,8 +2414,8 @@ class CommandViewModel(
                 allowFree || TacticalCalculator.evaluateDressStyleEligibility(ds, op, ownedMedalIds, WardrobeKit.MESS).eligible
             } ?: op.wardrobe.mess.dressStyle
 
-            val nextAlphasGloves = squad.standardWhiteGloves ?: op.wardrobe.alphas.hasWhiteGloves ?: op.hasWhiteGloves
-            val nextMessGloves = squad.standardWhiteGloves ?: op.wardrobe.mess.hasWhiteGloves ?: true
+            val nextAlphasGloves = squad.standardAlphasGloves ?: op.wardrobe.alphas.hasWhiteGloves ?: op.hasWhiteGloves
+            val nextMessGloves = squad.standardMessGloves ?: op.wardrobe.mess.hasWhiteGloves ?: true
 
             val nextWardrobe = op.wardrobe
                 .withKit(WardrobeKit.FIELD, op.wardrobe.field.copy(camoPattern = nextCamo))

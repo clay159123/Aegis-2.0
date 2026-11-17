@@ -539,9 +539,7 @@ fun DispatchHqMemberTaskingDialog(
                         TacticalCalculator.schoolPassOddsPct(
                             mission = mission,
                             operator = operator,
-                            gearItems = uiState.gearItems,
                             citations = uiState.citations,
-                            facilities = uiState.facilities,
                             hqStaffSummary = uiState.hqStaffSummary
                         )
                     } else null

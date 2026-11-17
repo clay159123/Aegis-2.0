@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.MarksmanshipBadgeTier
+import com.example.domain.model.MedalDefinition
 import com.example.domain.model.OperatorSpecialty
 import com.example.domain.model.UnitPatchStyle
 import kotlin.math.cos
@@ -439,4 +440,101 @@ private fun DrawScope.drawMiniStar(
     }
     path.close()
     drawPath(path, color = color)
+}
+
+/**
+ * Braided shoulder cords and aiguillettes (left = branch/school, right = staff/valor).
+ * Shared by the dress coats and the Bravos shirt. [inset] moves the anchor toward the
+ * body center and [drop] moves it down, both as fractions of the figure size, so each
+ * garment can line the cord up with its own shoulder seam.
+ */
+internal fun DrawScope.drawShoulderCords(
+    w: Float,
+    h: Float,
+    cx: Float,
+    leftCordDef: MedalDefinition?,
+    rightCordDef: MedalDefinition?,
+    trimCol: Color,
+    inset: Float = 0f,
+    drop: Float = 0f
+) {
+    if (leftCordDef != null) {
+        val cordCol = Color(leftCordDef.cordHex ?: 0xFF2C6FB8)
+        val cordOuter = Path().apply {
+            moveTo(cx - w * (0.252f - inset), h * (0.326f + drop))
+            quadraticTo(cx - w * (0.262f - inset), h * (0.505f + drop), cx - w * (0.210f - inset), h * (0.480f + drop))
+        }
+        val cordInner = Path().apply {
+            moveTo(cx - w * (0.238f - inset), h * (0.328f + drop))
+            quadraticTo(cx - w * (0.244f - inset), h * (0.465f + drop), cx - w * (0.214f - inset), h * (0.456f + drop))
+        }
+        drawPath(cordOuter, color = cordCol, style = Stroke(width = 4.0f, cap = StrokeCap.Round))
+        drawPath(
+            cordInner,
+            color = if (leftCordDef.id == "cord_general_aiguillette") Color(0xFFFFEA9F) else cordCol.copy(alpha = 0.85f),
+            style = Stroke(width = 2.2f, cap = StrokeCap.Round)
+        )
+        when (leftCordDef.id) {
+            "cord_valor_fourragere" -> {
+                drawPath(cordOuter, color = Color(0xFF9C2D2D), style = Stroke(width = 1.5f, cap = StrokeCap.Round))
+                drawLine(trimCol, Offset(cx - w * (0.216f - inset), h * (0.484f + drop)), Offset(cx - w * (0.212f - inset), h * (0.540f + drop)), strokeWidth = 2.4f, cap = StrokeCap.Round)
+            }
+            "cord_general_aiguillette" -> {
+                drawLine(cordCol, Offset(cx - w * (0.232f - inset), h * (0.348f + drop)), Offset(cx - w * (0.222f - inset), h * (0.515f + drop)), strokeWidth = 1.6f)
+                drawLine(Color(0xFFF5D576), Offset(cx - w * (0.222f - inset), h * (0.515f + drop)), Offset(cx - w * (0.218f - inset), h * (0.548f + drop)), strokeWidth = 2.4f, cap = StrokeCap.Round)
+            }
+            "cord_sf_emerald" -> {
+                drawPath(cordOuter, color = Color(0xFFF2D272).copy(alpha = 0.85f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+            "cord_signals_orange", "cord_medical_maroon", "cord_engineer_scarlet" -> {
+                drawPath(cordOuter, color = Color.White.copy(alpha = 0.78f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+            "cord_intel_teal" -> {
+                drawPath(cordOuter, color = Color(0xFFDDE3EC).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+            "cord_logistics_buff" -> {
+                drawPath(cordOuter, color = Color(0xFF9C2D2D).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+        }
+    }
+
+    if (rightCordDef != null) {
+        val aigCol = Color(rightCordDef.cordHex ?: 0xFFF2D272)
+        val braidOuter = Path().apply {
+            moveTo(cx + w * (0.250f - inset), h * (0.326f + drop))
+            quadraticTo(cx + w * (0.256f - inset), h * (0.520f + drop), cx + w * (0.216f - inset), h * (0.486f + drop))
+        }
+        val braidInner = Path().apply {
+            moveTo(cx + w * (0.236f - inset), h * (0.328f + drop))
+            quadraticTo(cx + w * (0.240f - inset), h * (0.472f + drop), cx + w * (0.216f - inset), h * (0.456f + drop))
+        }
+        drawPath(braidOuter, color = aigCol, style = Stroke(width = 3.8f, cap = StrokeCap.Round))
+        drawPath(
+            braidInner,
+            color = if (rightCordDef.id == "cord_general_aiguillette") Color(0xFFFFEA9F) else aigCol.copy(alpha = 0.85f),
+            style = Stroke(width = 2.0f, cap = StrokeCap.Round)
+        )
+        when (rightCordDef.id) {
+            "cord_general_aiguillette" -> {
+                drawLine(aigCol, Offset(cx + w * (0.232f - inset), h * (0.348f + drop)), Offset(cx + w * (0.222f - inset), h * (0.515f + drop)), strokeWidth = 1.6f)
+                drawLine(Color(0xFFF5D576), Offset(cx + w * (0.222f - inset), h * (0.515f + drop)), Offset(cx + w * (0.218f - inset), h * (0.548f + drop)), strokeWidth = 2.4f, cap = StrokeCap.Round)
+            }
+            "cord_valor_fourragere" -> {
+                drawPath(braidOuter, color = Color(0xFF9C2D2D), style = Stroke(width = 1.5f, cap = StrokeCap.Round))
+                drawLine(trimCol, Offset(cx + w * (0.216f - inset), h * (0.484f + drop)), Offset(cx + w * (0.212f - inset), h * (0.540f + drop)), strokeWidth = 2.4f, cap = StrokeCap.Round)
+            }
+            "cord_sf_emerald" -> {
+                drawPath(braidOuter, color = Color(0xFFF2D272).copy(alpha = 0.85f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+            "cord_signals_orange", "cord_medical_maroon", "cord_engineer_scarlet" -> {
+                drawPath(braidOuter, color = Color.White.copy(alpha = 0.78f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+            "cord_intel_teal" -> {
+                drawPath(braidOuter, color = Color(0xFFDDE3EC).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+            "cord_logistics_buff" -> {
+                drawPath(braidOuter, color = Color(0xFF9C2D2D).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+        }
+    }
 }

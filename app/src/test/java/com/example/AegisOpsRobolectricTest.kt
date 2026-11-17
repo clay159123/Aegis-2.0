@@ -828,7 +828,8 @@ class AegisOpsRobolectricTest {
                 standardDressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
                 standardMessDressStyle = DressUniformStyle.HONOR_GUARD_IVORY,
                 standardMessHeadgear = HeadgearStyle.OFFICER_PEAKED_CAP,
-                standardWhiteGloves = false
+                standardAlphasGloves = false,
+                standardMessGloves = true
             )
             repo.saveSquad(squad)
             val loaded = repo.squads.first().first { it.id == "sq_honor" }
@@ -836,7 +837,8 @@ class AegisOpsRobolectricTest {
             assertEquals(DressUniformStyle.NCO_PARADE_BLUES, loaded.standardBravosDressStyle)
             assertEquals(DressUniformStyle.HONOR_GUARD_IVORY, loaded.standardMessDressStyle)
             assertEquals(HeadgearStyle.OFFICER_PEAKED_CAP, loaded.standardMessHeadgear)
-            assertEquals(false, loaded.standardWhiteGloves)
+            assertEquals(false, loaded.standardAlphasGloves)
+            assertEquals(true, loaded.standardMessGloves)
             assertTrue(loaded.hasUniformStandard)
 
             var switchedSquadId: String? = null
@@ -882,14 +884,16 @@ class AegisOpsRobolectricTest {
             composeTestRule.waitForIdle()
             composeTestRule.onNodeWithTag("squad_standard_bravos_headgear_dropdown").performScrollTo().assertIsDisplayed()
             composeTestRule.onNodeWithTag("squad_standard_mess_dress_dropdown").performScrollTo().assertIsDisplayed()
-            composeTestRule.onNodeWithTag("squad_standard_gloves_dropdown").performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithTag("squad_standard_alphas_gloves_dropdown").performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithTag("squad_standard_mess_gloves_dropdown").performScrollTo().assertIsDisplayed()
             composeTestRule.onNodeWithTag("dialog_apply_squad_standard").performScrollTo().performClick()
             composeTestRule.waitForIdle()
 
             assertTrue(savedApplyNow)
             assertEquals(DressUniformStyle.HONOR_GUARD_IVORY, savedStandard?.messDressStyle)
             assertEquals(HeadgearStyle.TAN_BERET, savedStandard?.bravosHeadgear)
-            assertEquals(false, savedStandard?.whiteGloves)
+            assertEquals(false, savedStandard?.alphasGloves)
+            assertEquals(true, savedStandard?.messGloves)
         } finally {
             db.close()
         }

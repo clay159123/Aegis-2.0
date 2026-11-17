@@ -695,7 +695,8 @@ private fun SquadEntity.toDomain(): TacticalSquad {
         standardBravosDressStyle = standardBravosDressStyleName?.let { n -> DressUniformStyle.entries.find { it.name == n } },
         standardMessDressStyle = standardMessDressStyleName?.let { n -> DressUniformStyle.entries.find { it.name == n } },
         standardMessHeadgear = standardMessHeadgearName?.let { n -> HeadgearStyle.entries.find { it.name == n } },
-        standardWhiteGloves = standardWhiteGloves
+        standardAlphasGloves = standardAlphasGloves,
+        standardMessGloves = standardMessGloves
     )
 }
 
@@ -717,7 +718,8 @@ private fun TacticalSquad.toEntity(): SquadEntity {
         standardBravosDressStyleName = standardBravosDressStyle?.name,
         standardMessDressStyleName = standardMessDressStyle?.name,
         standardMessHeadgearName = standardMessHeadgear?.name,
-        standardWhiteGloves = standardWhiteGloves
+        standardAlphasGloves = standardAlphasGloves,
+        standardMessGloves = standardMessGloves
     )
 }
 

@@ -83,8 +83,11 @@ fun SquadEditorDialog(
     var standardMessHeadgear by remember(editingSquad?.id) {
         mutableStateOf(editingSquad?.standardMessHeadgear?.takeIf { it.kind != HeadgearKind.BERET })
     }
-    var standardWhiteGloves by remember(editingSquad?.id) {
-        mutableStateOf(editingSquad?.standardWhiteGloves)
+    var standardAlphasGloves by remember(editingSquad?.id) {
+        mutableStateOf(editingSquad?.standardAlphasGloves)
+    }
+    var standardMessGloves by remember(editingSquad?.id) {
+        mutableStateOf(editingSquad?.standardMessGloves)
     }
 
     fun buildStandard(): SquadUniformStandard = SquadUniformStandard(
@@ -96,7 +99,8 @@ fun SquadEditorDialog(
         alphasDressStyle = standardAlphasDressStyle,
         messDressStyle = standardMessDressStyle,
         messHeadgear = standardMessHeadgear,
-        whiteGloves = standardWhiteGloves
+        alphasGloves = standardAlphasGloves,
+        messGloves = standardMessGloves
     )
 
     val opsById = remember(fieldOperators) { fieldOperators.associateBy { it.id } }
@@ -493,31 +497,40 @@ fun SquadEditorDialog(
                         DropdownOptionItem<Boolean?>(
                             value = null,
                             title = "Keep Individual Gloves",
-                            subtitle = "Respect each soldier's Alphas & Mess glove setting"
+                            subtitle = "Respect each soldier's own glove setting for this uniform"
                         ),
                         DropdownOptionItem<Boolean?>(
                             value = true,
                             title = "White Parade Gloves Worn",
-                            subtitle = "Uniform white gloves in Alphas & Mess"
+                            subtitle = "Uniform white gloves for the whole squad"
                         ),
                         DropdownOptionItem<Boolean?>(
                             value = false,
                             title = "No Gloves (Bare Hands)",
-                            subtitle = "Bare hands in Alphas & Mess"
+                            subtitle = "Bare hands for the whole squad"
                         )
                     )
                 }
+                fun glovesLabel(value: Boolean?): String = when (value) {
+                    null -> "Keep Individual Gloves"
+                    true -> "White Parade Gloves Worn"
+                    false -> "No Gloves (Bare Hands)"
+                }
                 SingleChoiceDropdown(
-                    label = "Alphas & Mess • White Gloves",
-                    selectedText = when (standardWhiteGloves) {
-                        null -> "Keep Individual Gloves"
-                        true -> "White Parade Gloves Worn"
-                        false -> "No Gloves (Bare Hands)"
-                    },
+                    label = "Alphas • White Gloves",
+                    selectedText = glovesLabel(standardAlphasGloves),
                     options = glovesOptions,
-                    selectedValue = standardWhiteGloves,
-                    onSelect = { standardWhiteGloves = it },
-                    fieldTestTag = "squad_standard_gloves_dropdown"
+                    selectedValue = standardAlphasGloves,
+                    onSelect = { standardAlphasGloves = it },
+                    fieldTestTag = "squad_standard_alphas_gloves_dropdown"
+                )
+                SingleChoiceDropdown(
+                    label = "Mess • White Gloves",
+                    selectedText = glovesLabel(standardMessGloves),
+                    options = glovesOptions,
+                    selectedValue = standardMessGloves,
+                    onSelect = { standardMessGloves = it },
+                    fieldTestTag = "squad_standard_mess_gloves_dropdown"
                 )
 
                 if (editingSquad != null) {

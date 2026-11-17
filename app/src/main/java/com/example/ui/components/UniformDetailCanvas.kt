@@ -54,7 +54,8 @@ fun OperatorUniformPreview(
         else -> WardrobeKit.ALPHAS
     }
     val renderOperator = if (kitOverride != null) {
-        TacticalCalculator.resolveKitAppearance(operator, kitOverride, squads, ownedIds)
+        // An explicit kit comes from the duty resolver, which only puts HQ staff in Field at a field school
+        TacticalCalculator.resolveKitAppearance(operator, kitOverride, squads, ownedIds, allowFieldForHqStaff = true)
     } else {
         operator
     }
@@ -161,6 +162,8 @@ fun OperatorUniformPreview(
                     skinShadow = skinShadow,
                     rackDecorations = rackDecorations,
                     wornRegalia = wornRegalia,
+                    leftCordDef = leftCordDef,
+                    rightCordDef = rightCordDef,
                     hasUnitCitation = hasUnitCitation,
                     marksmanshipTier = marksmanshipTier,
                     showLeaderPin = isSquadLeader,
@@ -661,85 +664,14 @@ private fun DrawScope.drawDressUniformFigure(
     }
 
     // 8. Braided Shoulder Cords & General Staff Aiguillettes (Left = Branch/School, Right = Staff/Valor)
-    if (leftCordDef != null) {
-        val cordCol = Color(leftCordDef.cordHex ?: 0xFF2C6FB8)
-        val cordOuter = Path().apply {
-            moveTo(cx - w * 0.252f, h * 0.326f)
-            quadraticTo(cx - w * 0.262f, h * 0.505f, cx - w * 0.210f, h * 0.480f)
-        }
-        val cordInner = Path().apply {
-            moveTo(cx - w * 0.238f, h * 0.328f)
-            quadraticTo(cx - w * 0.244f, h * 0.465f, cx - w * 0.214f, h * 0.456f)
-        }
-        drawPath(cordOuter, color = cordCol, style = Stroke(width = 4.0f, cap = StrokeCap.Round))
-        drawPath(
-            cordInner,
-            color = if (leftCordDef.id == "cord_general_aiguillette") Color(0xFFFFEA9F) else cordCol.copy(alpha = 0.85f),
-            style = Stroke(width = 2.2f, cap = StrokeCap.Round)
-        )
-        when (leftCordDef.id) {
-            "cord_valor_fourragere" -> {
-                drawPath(cordOuter, color = Color(0xFF9C2D2D), style = Stroke(width = 1.5f, cap = StrokeCap.Round))
-                drawLine(trimCol, Offset(cx - w * 0.216f, h * 0.484f), Offset(cx - w * 0.212f, h * 0.540f), strokeWidth = 2.4f, cap = StrokeCap.Round)
-            }
-            "cord_general_aiguillette" -> {
-                drawLine(cordCol, Offset(cx - w * 0.232f, h * 0.348f), Offset(cx - w * 0.222f, h * 0.515f), strokeWidth = 1.6f)
-                drawLine(Color(0xFFF5D576), Offset(cx - w * 0.222f, h * 0.515f), Offset(cx - w * 0.218f, h * 0.548f), strokeWidth = 2.4f, cap = StrokeCap.Round)
-            }
-            "cord_sf_emerald" -> {
-                drawPath(cordOuter, color = Color(0xFFF2D272).copy(alpha = 0.85f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
-            }
-            "cord_signals_orange", "cord_medical_maroon", "cord_engineer_scarlet" -> {
-                drawPath(cordOuter, color = Color.White.copy(alpha = 0.78f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
-            }
-            "cord_intel_teal" -> {
-                drawPath(cordOuter, color = Color(0xFFDDE3EC).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
-            }
-            "cord_logistics_buff" -> {
-                drawPath(cordOuter, color = Color(0xFF9C2D2D).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
-            }
-        }
-    }
-
-    if (rightCordDef != null) {
-        val aigCol = Color(rightCordDef.cordHex ?: 0xFFF2D272)
-        val braidOuter = Path().apply {
-            moveTo(cx + w * 0.250f, h * 0.326f)
-            quadraticTo(cx + w * 0.256f, h * 0.520f, cx + w * 0.216f, h * 0.486f)
-        }
-        val braidInner = Path().apply {
-            moveTo(cx + w * 0.236f, h * 0.328f)
-            quadraticTo(cx + w * 0.240f, h * 0.472f, cx + w * 0.216f, h * 0.456f)
-        }
-        drawPath(braidOuter, color = aigCol, style = Stroke(width = 3.8f, cap = StrokeCap.Round))
-        drawPath(
-            braidInner,
-            color = if (rightCordDef.id == "cord_general_aiguillette") Color(0xFFFFEA9F) else aigCol.copy(alpha = 0.85f),
-            style = Stroke(width = 2.0f, cap = StrokeCap.Round)
-        )
-        when (rightCordDef.id) {
-            "cord_general_aiguillette" -> {
-                drawLine(aigCol, Offset(cx + w * 0.232f, h * 0.348f), Offset(cx + w * 0.222f, h * 0.515f), strokeWidth = 1.6f)
-                drawLine(Color(0xFFF5D576), Offset(cx + w * 0.222f, h * 0.515f), Offset(cx + w * 0.218f, h * 0.548f), strokeWidth = 2.4f, cap = StrokeCap.Round)
-            }
-            "cord_valor_fourragere" -> {
-                drawPath(braidOuter, color = Color(0xFF9C2D2D), style = Stroke(width = 1.5f, cap = StrokeCap.Round))
-                drawLine(trimCol, Offset(cx + w * 0.216f, h * 0.484f), Offset(cx + w * 0.212f, h * 0.540f), strokeWidth = 2.4f, cap = StrokeCap.Round)
-            }
-            "cord_sf_emerald" -> {
-                drawPath(braidOuter, color = Color(0xFFF2D272).copy(alpha = 0.85f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
-            }
-            "cord_signals_orange", "cord_medical_maroon", "cord_engineer_scarlet" -> {
-                drawPath(braidOuter, color = Color.White.copy(alpha = 0.78f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
-            }
-            "cord_intel_teal" -> {
-                drawPath(braidOuter, color = Color(0xFFDDE3EC).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
-            }
-            "cord_logistics_buff" -> {
-                drawPath(braidOuter, color = Color(0xFF9C2D2D).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
-            }
-        }
-    }
+    drawShoulderCords(
+        w = w,
+        h = h,
+        cx = cx,
+        leftCordDef = leftCordDef,
+        rightCordDef = rightCordDef,
+        trimCol = trimCol
+    )
 
     // 9. Wearer's Right Chest: Unit Citation Frame + Squad Leader Pin (above nameplate) + Engraved Nameplate
     val rightChestCenterX = cx - w * 0.168f

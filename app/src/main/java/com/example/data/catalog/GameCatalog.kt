@@ -1781,6 +1781,7 @@ object GameCatalog {
             scope = MissionScope.TRAINING,
             schoolRequirements = SchoolRequirements(
                 basePassRatePct = 86,
+                uniformKit = WardrobeKit.FIELD,
                 maxAttempts = null,
                 allowedSpecialties = OperatorSpecialty.entries.toSet(),
                 naturalFitSpecialties = setOf(OperatorSpecialty.ASSAULT, OperatorSpecialty.RECON, OperatorSpecialty.BREACHER),
@@ -1815,6 +1816,7 @@ object GameCatalog {
             scope = MissionScope.TRAINING,
             schoolRequirements = SchoolRequirements(
                 basePassRatePct = 66,
+                uniformKit = WardrobeKit.FIELD,
                 maxAttempts = 3,
                 minTech = 11,
                 minResilience = 14,
@@ -1851,6 +1853,7 @@ object GameCatalog {
             scope = MissionScope.TRAINING,
             schoolRequirements = SchoolRequirements(
                 basePassRatePct = 62,
+                uniformKit = WardrobeKit.FIELD,
                 maxAttempts = 3,
                 minFirepower = 13,
                 minResilience = 14,
@@ -2017,6 +2020,7 @@ object GameCatalog {
             scope = MissionScope.TRAINING,
             schoolRequirements = SchoolRequirements(
                 basePassRatePct = 50,
+                uniformKit = WardrobeKit.FIELD,
                 maxAttempts = 2,
                 prerequisiteAnyIds = setOf(
                     "msn_basic_qual",
@@ -2061,6 +2065,7 @@ object GameCatalog {
             scope = MissionScope.TRAINING,
             schoolRequirements = SchoolRequirements(
                 basePassRatePct = 36,
+                uniformKit = WardrobeKit.FIELD,
                 maxAttempts = 2,
                 prerequisiteAllIds = setOf("msn_basic_qual", "msn_night_qual"),
                 minFirepower = 16,
@@ -2108,6 +2113,7 @@ object GameCatalog {
             scope = MissionScope.TRAINING,
             schoolRequirements = SchoolRequirements(
                 basePassRatePct = 24,
+                uniformKit = WardrobeKit.FIELD,
                 maxAttempts = 2,
                 prerequisiteAllIds = setOf("msn_basic_qual", "msn_night_qual", "msn_ranger_school"),
                 minRankTier = RankTier.NCO,
@@ -2245,6 +2251,7 @@ object GameCatalog {
             scope = MissionScope.TRAINING,
             schoolRequirements = SchoolRequirements(
                 basePassRatePct = 56,
+                uniformKit = WardrobeKit.FIELD,
                 maxAttempts = null,
                 prerequisiteAnyIds = setOf(
                     "msn_basic_qual",
