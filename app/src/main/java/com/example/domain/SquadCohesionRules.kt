@@ -207,7 +207,8 @@ object SquadCohesionRules {
         squad: TacticalSquad,
         deployedOperators: List<Operator>,
         mission: MissionTemplate,
-        missionSucceeded: Boolean
+        missionSucceeded: Boolean,
+        gainMultiplier: Double = 1.0
     ): SquadCohesionGainResult? {
         val squadMemberSet = squad.memberIds.toSet()
         val participating = deployedOperators.filter {
@@ -233,7 +234,9 @@ object SquadCohesionRules {
         val teamLeaderPresent = squad.teamLeaderId != null && participating.any { it.id == squad.teamLeaderId }
         val teamLeaderBonus = if (teamLeaderPresent) TEAM_LEADER_COHESION_XP else 0
         val rawGain = baseXp + hazardBonus + leaderBonus + teamLeaderBonus
-        val finalGain = if (missionSucceeded) rawGain else (rawGain / 2).coerceAtLeast(10)
+        val baseGain = if (missionSucceeded) rawGain else (rawGain / 2).coerceAtLeast(10)
+        // DFAC boosts cohesion gains
+        val finalGain = (baseGain * gainMultiplier).roundToInt()
 
         val previousScore = squad.cohesionScore
         val nextXp = (squad.cohesionXp + finalGain).coerceIn(0, MAX_SQUAD_COHESION_XP)

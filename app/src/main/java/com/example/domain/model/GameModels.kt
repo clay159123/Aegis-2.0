@@ -2,6 +2,7 @@ package com.example.domain.model
 
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 enum class ResourceType(val label: String, val shortCode: String) {
     CREDITS("Credits", "CR"),
@@ -48,62 +49,151 @@ enum class FacilityType(
     val baseRatePerSec: Double,
     val baseCreditCost: Double,
     val baseSupplyCost: Double,
-    val perkDescription: String
+    val perkDescription: String,
+    /** Command HQ level needed before this building can be built. */
+    val unlockHqLevel: Int = 1,
+    /** Level at the start of a new game; 0 = an empty lot. */
+    val startLevel: Int = 1
 ) {
     COMMAND_HQ(
         id = "command_hq",
         title = "Command HQ",
-        subtitle = "Army Directorate Ops, Roster Slots & Staff Wing",
+        subtitle = "Directorate operations and staff wing",
         primaryResource = ResourceType.CREDITS,
         baseRatePerSec = 2.5,
         baseCreditCost = 80.0,
         baseSupplyCost = 30.0,
-        perkDescription = "+1 Roster & Staff Slot/Lv • +1 Tasking Slot at Lv.3 & Lv.6"
+        perkDescription = "+1 HQ staff slot/Lv • +1 mission slot at Lv 3 and Lv 6 • second construction crew at Lv 5 • unlocks new buildings"
+    ),
+    BARRACKS(
+        id = "barracks",
+        title = "Barracks",
+        subtitle = "Field soldier housing",
+        primaryResource = ResourceType.CREDITS,
+        baseRatePerSec = 0.0,
+        baseCreditCost = 70.0,
+        baseSupplyCost = 35.0,
+        perkDescription = "Field roster: 8 soldiers at Lv 1, +1 per level"
     ),
     LOGISTICS_DEPOT(
         id = "logistics_depot",
-        title = "Quartermaster & Medical",
-        subtitle = "Ordnance, Rations & Medevac Bay",
+        title = "Quartermaster",
+        subtitle = "Ordnance, rations and supply",
         primaryResource = ResourceType.SUPPLIES,
         baseRatePerSec = 2.0,
         baseCreditCost = 65.0,
         baseSupplyCost = 20.0,
-        perkDescription = "Boosts Supply flow • Cuts Gear & Mission Supply cost"
-    ),
-    RECON_ARRAY(
-        id = "recon_array",
-        title = "Signals & Intel Desk",
-        subtitle = "Orbital Overwatch & Mission Planning",
-        primaryResource = ResourceType.INTEL,
-        baseRatePerSec = 0.85,
-        baseCreditCost = 100.0,
-        baseSupplyCost = 45.0,
-        perkDescription = "-4% Mission Duration/Lv • +2% Survival Odds/Lv"
+        perkDescription = "Generates supplies • -3% gear and mission supply cost per level"
     ),
     ARMORY_WORKSHOP(
         id = "armory_workshop",
-        title = "Armory & Ceremonial Tailor",
-        subtitle = "Weapon Tuning & Army Dress Regalia",
+        title = "Armory",
+        subtitle = "Weapon tuning and gear requisition",
         primaryResource = ResourceType.CREDITS,
         baseRatePerSec = 1.4,
         baseCreditCost = 110.0,
         baseSupplyCost = 55.0,
-        perkDescription = "+5% Gear Stat Bonus per Lv • Generates Credits"
+        perkDescription = "+5% gear stat bonus per level • unlocks higher gear tiers • generates credits"
+    ),
+    RECON_ARRAY(
+        id = "recon_array",
+        title = "Intel Center",
+        subtitle = "Signals, overwatch and mission planning",
+        primaryResource = ResourceType.INTEL,
+        baseRatePerSec = 0.85,
+        baseCreditCost = 100.0,
+        baseSupplyCost = 45.0,
+        perkDescription = "Generates intel • -4% mission duration and +2% survival per level"
+    ),
+    DFAC(
+        id = "dfac",
+        title = "DFAC",
+        subtitle = "Dining facility",
+        primaryResource = ResourceType.CREDITS,
+        baseRatePerSec = 0.0,
+        baseCreditCost = 75.0,
+        baseSupplyCost = 40.0,
+        perkDescription = "+5% squad cohesion gains per level • fewer transfer and retirement requests",
+        unlockHqLevel = 2,
+        startLevel = 0
+    ),
+    TRAINING_RANGE(
+        id = "training_range",
+        title = "Training Range",
+        subtitle = "Ranges, lanes and qualification",
+        primaryResource = ResourceType.CREDITS,
+        baseRatePerSec = 0.0,
+        baseCreditCost = 90.0,
+        baseSupplyCost = 50.0,
+        perkDescription = "+1% school pass rate per level (+2% for SF, Ranger and EIB) • hosts Rifle Qualification and raises scores",
+        unlockHqLevel = 3,
+        startLevel = 0
+    ),
+    AID_STATION(
+        id = "aid_station",
+        title = "Aid Station",
+        subtitle = "Battalion aid and recovery",
+        primaryResource = ResourceType.SUPPLIES,
+        baseRatePerSec = 0.0,
+        baseCreditCost = 85.0,
+        baseSupplyCost = 45.0,
+        perkDescription = "-7% medbay recovery time per level • +5% chance per level a casualty is wounded instead of killed",
+        unlockHqLevel = 3,
+        startLevel = 0
+    ),
+    AIRFIELD(
+        id = "airfield",
+        title = "Airfield",
+        subtitle = "Runway, helipad and hangar",
+        primaryResource = ResourceType.CREDITS,
+        baseRatePerSec = 0.0,
+        baseCreditCost = 140.0,
+        baseSupplyCost = 70.0,
+        perkDescription = "Base for flight training and helicopter insertion (arriving with the aviation updates)",
+        unlockHqLevel = 4,
+        startLevel = 0
     );
 
-    fun productionPerSec(level: Int): Double = baseRatePerSec * (1.0 + (level - 1) * 0.45)
+    fun productionPerSec(level: Int): Double =
+        if (level <= 0) 0.0 else baseRatePerSec * (1.0 + (level - 1) * 0.45)
 
     fun upgradeCreditCost(currentLevel: Int): Double =
         (baseCreditCost * 1.48.pow(currentLevel - 1)).roundToInt().toDouble()
 
     fun upgradeSupplyCost(currentLevel: Int): Double =
         (baseSupplyCost * 1.42.pow(currentLevel - 1)).roundToInt().toDouble()
+
+    /** Seconds to build from [currentLevel] to the next level. */
+    fun buildSeconds(currentLevel: Int): Long = facilityBuildSeconds(currentLevel + 1)
+}
+
+/** Highest level any building reaches. */
+const val MAX_FACILITY_LEVEL = 10
+/** First build of an empty lot (to Lv 1). */
+const val FIRST_BUILD_SECONDS = 180L
+/** Upgrade to Lv 2 takes this long; each level after multiplies by [BUILD_TIME_GROWTH]. */
+const val LEVEL_TWO_BUILD_SECONDS = 300L
+/** 5 minutes at Lv 2 grows to about 7 hours at Lv 10. */
+const val BUILD_TIME_GROWTH = 1.74
+/** Prestige per remaining minute to finish a build now. */
+const val RUSH_PRESTIGE_PER_MINUTE = 1.0
+const val RUSH_MIN_PRESTIGE = 5
+
+fun facilityBuildSeconds(targetLevel: Int): Long = when {
+    targetLevel <= 1 -> FIRST_BUILD_SECONDS
+    else -> (LEVEL_TWO_BUILD_SECONDS * BUILD_TIME_GROWTH.pow(targetLevel - 2)).roundToLong()
 }
 
 data class FacilityState(
     val type: FacilityType,
-    val level: Int
-)
+    val level: Int,
+    /** When the running upgrade finishes; 0 when the building is idle. */
+    val upgradeEndsAtMillis: Long = 0L,
+    val upgradeStartedAtMillis: Long = 0L
+) {
+    val isUpgrading: Boolean get() = upgradeEndsAtMillis > 0L
+    val isBuilt: Boolean get() = level > 0
+}
 
 enum class OperatorRank(
     val code: String,

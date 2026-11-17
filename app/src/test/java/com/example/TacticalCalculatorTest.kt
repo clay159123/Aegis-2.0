@@ -2985,4 +2985,61 @@ class TacticalCalculatorTest {
         val hq = a.copy(status = OperatorStatus.HQ_STAFF)
         assertNull(TacticalCalculator.standardSquadFor(hq, listOf(squad)))
     }
+
+    @Test
+    fun buildingsUnlockByHqLevelCapAtTenAndBuildOnTimers() {
+        fun base(hq: Int, vararg extra: Pair<FacilityType, Int>) = FacilityType.entries.map { t ->
+            FacilityState(t, extra.toMap()[t] ?: if (t == FacilityType.COMMAND_HQ) hq else t.startLevel)
+        }
+        val start = base(1)
+        // New buildings start as empty lots behind HQ levels
+        assertEquals(0, TacticalCalculator.facilityLevel(start, FacilityType.DFAC))
+        assertEquals("Requires Command HQ Lv 2", TacticalCalculator.facilityUpgradeBlocker(FacilityType.DFAC, start))
+        assertNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.DFAC, base(2)))
+        assertNotNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.AIRFIELD, base(3)))
+        assertNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.AIRFIELD, base(4)))
+        // Cap at 10
+        assertEquals("Max level", TacticalCalculator.facilityUpgradeBlocker(FacilityType.ARMORY_WORKSHOP, base(1, FacilityType.ARMORY_WORKSHOP to 10)))
+        // Timers: 5 minutes for Lv 2, about 7 hours for Lv 10
+        assertEquals(300L, facilityBuildSeconds(2))
+        assertTrue(facilityBuildSeconds(10) in (6 * 3600L)..(8 * 3600L))
+        // One crew, a second at HQ 5
+        val busy = start.map { if (it.type == FacilityType.BARRACKS) it.copy(upgradeEndsAtMillis = 10_000L, upgradeStartedAtMillis = 1L) else it }
+        assertNotNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.ARMORY_WORKSHOP, busy))
+        val busyHq5 = busy.map { if (it.type == FacilityType.COMMAND_HQ) it.copy(level = 5) else it }
+        assertNull(TacticalCalculator.facilityUpgradeBlocker(FacilityType.ARMORY_WORKSHOP, busyHq5))
+        // Timer completion and Rush pricing
+        val done = TacticalCalculator.completedUpgrades(busy, 10_000L)
+        assertEquals(2, done.single { it.type == FacilityType.BARRACKS }.level)
+        assertTrue(TacticalCalculator.completedUpgrades(busy, 9_999L).isEmpty())
+        val running = FacilityState(FacilityType.BARRACKS, 4, upgradeEndsAtMillis = 30 * 60_000L)
+        assertEquals(30, TacticalCalculator.rushPrestigeCost(running, 0L))
+        assertEquals(RUSH_MIN_PRESTIGE, TacticalCalculator.rushPrestigeCost(running, 30 * 60_000L - 1_000L))
+    }
+
+    @Test
+    fun buildingPerksApply() {
+        fun with(t: FacilityType, lv: Int) = FacilityType.entries.map { FacilityState(it, if (it == t) lv else it.startLevel) }
+        // Barracks drives the roster
+        assertEquals(8, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 1)))
+        assertEquals(12, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 5)))
+        // Range: +1%/lv, +2%/lv for Ranger, still capped
+        val recruit = GameCatalog.createPostBasicRecruit("op_r", OperatorSpecialty.ASSAULT, emptySet(), 0)
+        val signals = GameCatalog.missions.first { it.id == "msn_signals_school" }
+        val ranger = GameCatalog.missions.first { it.id == "msn_ranger_school" }
+        assertEquals(3, TacticalCalculator.rangeSchoolBonusPct(signals, with(FacilityType.TRAINING_RANGE, 3)))
+        assertEquals(6, TacticalCalculator.rangeSchoolBonusPct(ranger, with(FacilityType.TRAINING_RANGE, 3)))
+        val noRange = TacticalCalculator.schoolPassOddsPct(signals, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 0))
+        val range3 = TacticalCalculator.schoolPassOddsPct(signals, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 3))
+        assertTrue(range3 >= noRange)
+        assertTrue(TacticalCalculator.schoolPassOddsPct(ranger, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 10)) <= 68)
+        // Aid Station and DFAC
+        assertEquals(0, TacticalCalculator.aidSaveChancePct(with(FacilityType.AID_STATION, 0)))
+        assertEquals(25, TacticalCalculator.aidSaveChancePct(with(FacilityType.AID_STATION, 5)))
+        assertTrue(TacticalCalculator.aidRecoveryMultiplier(with(FacilityType.AID_STATION, 5)) < 1.0)
+        assertEquals(1.25, TacticalCalculator.dfacCohesionMultiplier(with(FacilityType.DFAC, 5)), 0.001)
+        assertTrue(TacticalCalculator.dfacPetitionFactor(with(FacilityType.DFAC, 5)) < 1.0)
+        // Unbuilt buildings produce nothing
+        assertEquals(0.0, FacilityType.DFAC.productionPerSec(0), 0.0)
+    }
 }

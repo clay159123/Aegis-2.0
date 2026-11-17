@@ -28,7 +28,9 @@ data class CommanderStateEntity(
 @Entity(tableName = "facilities")
 data class FacilityEntity(
     @PrimaryKey val typeId: String,
-    val level: Int
+    val level: Int,
+    val upgradeEndsAtMillis: Long = 0L,
+    val upgradeStartedAtMillis: Long = 0L
 )
 
 @Entity(tableName = "operators")

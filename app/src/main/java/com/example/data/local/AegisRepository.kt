@@ -31,7 +31,12 @@ class AegisRepository(private val dao: AegisDao) {
     val facilities: Flow<List<FacilityState>> = dao.observeFacilities().map { list ->
         list.mapNotNull { entity ->
             FacilityType.entries.find { it.id == entity.typeId }?.let { type ->
-                FacilityState(type = type, level = entity.level)
+                FacilityState(
+                    type = type,
+                    level = entity.level,
+                    upgradeEndsAtMillis = entity.upgradeEndsAtMillis,
+                    upgradeStartedAtMillis = entity.upgradeStartedAtMillis
+                )
             }
         }.sortedBy { FacilityType.entries.indexOf(it.type) }
     }
@@ -150,7 +155,7 @@ class AegisRepository(private val dao: AegisDao) {
         dao.upsertCommanderState(initialState)
 
         dao.upsertFacilities(
-            FacilityType.entries.map { FacilityEntity(typeId = it.id, level = 1) }
+            FacilityType.entries.map { FacilityEntity(typeId = it.id, level = it.startLevel) }
         )
 
         dao.upsertOperators(GameCatalog.initialOperators.map { it.toEntity() })
@@ -274,7 +279,14 @@ class AegisRepository(private val dao: AegisDao) {
     }
 
     suspend fun saveFacility(facility: FacilityState) {
-        dao.upsertFacility(FacilityEntity(typeId = facility.type.id, level = facility.level))
+        dao.upsertFacility(
+            FacilityEntity(
+                typeId = facility.type.id,
+                level = facility.level,
+                upgradeEndsAtMillis = facility.upgradeEndsAtMillis,
+                upgradeStartedAtMillis = facility.upgradeStartedAtMillis
+            )
+        )
     }
 
     suspend fun saveOperator(operator: Operator) {
