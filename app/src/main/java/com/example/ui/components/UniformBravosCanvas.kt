@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
 import com.example.domain.TacticalCalculator
@@ -27,6 +29,8 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     skinShadow: Color,
     rackDecorations: List<MedalDefinition>,
     wornRegalia: TacticalCalculator.WornRegaliaSummary,
+    leftCordDef: MedalDefinition?,
+    rightCordDef: MedalDefinition?,
     hasUnitCitation: Boolean,
     marksmanshipTier: MarksmanshipBadgeTier,
     showLeaderPin: Boolean,
@@ -392,6 +396,18 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         )
     }
 
+    // 6b. Shoulder cords: same braid art as the dress coats, anchored on the shirt's armhole seam
+    drawShoulderCords(
+        w = w,
+        h = h,
+        cx = cx,
+        leftCordDef = leftCordDef,
+        rightCordDef = rightCordDef,
+        trimCol = trimCol,
+        inset = 0.006f,
+        drop = -0.004f
+    )
+
     // 7. Right Chest: Unit Citation Bar + Squad Leader Pin + Engraved Nameplate
     val rightChestCenterX = cx - w * 0.168f
     drawEngravedNameplateAndLeaderPin(
@@ -452,7 +468,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
 
     wornRegalia.chestPinAboveRack?.let { insig ->
         val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * 0.368f, h * 0.502f)
-        drawDetailedChestSchoolBadge(
+        drawBravosContrastSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
             center = Offset(leftChestCenterX, aboveY),
             badgeW = w * 0.088f,
@@ -463,7 +479,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     val showMarksmanshipOnPocket = marksmanshipTier != MarksmanshipBadgeTier.NONE
     val leftPocketSchoolPin = wornRegalia.chestPinLeftPocket
     if (leftPocketSchoolPin != null && showMarksmanshipOnPocket) {
-        drawDetailedChestSchoolBadge(
+        drawBravosContrastSchoolBadge(
             shape = leftPocketSchoolPin.insigniaShape ?: InsigniaShape.WINGS,
             center = Offset(leftChestCenterX - w * 0.029f, h * 0.638f),
             badgeW = w * 0.054f,
@@ -478,7 +494,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         )
     } else {
         leftPocketSchoolPin?.let { insig ->
-            drawDetailedChestSchoolBadge(
+            drawBravosContrastSchoolBadge(
                 shape = insig.insigniaShape ?: InsigniaShape.WINGS,
                 center = Offset(leftChestCenterX, h * 0.638f),
                 badgeW = w * 0.088f,
@@ -496,7 +512,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         }
     }
     wornRegalia.chestPinRightPocket?.let { insig ->
-        drawDetailedChestSchoolBadge(
+        drawBravosContrastSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
             center = Offset(rightChestCenterX, h * 0.638f),
             badgeW = w * 0.088f,
@@ -521,5 +537,34 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         skinShadow = skinShadow,
         headgearCol = Color(beretStyle.colorHex),
         trimCol = trimCol
+    )
+}
+
+/**
+ * School badges on the light Bravos shirts (khaki enlisted, light blue officer) wash out,
+ * so draw a dark drop shadow behind each badge and deepen very light badge colors.
+ */
+private fun DrawScope.drawBravosContrastSchoolBadge(
+    shape: InsigniaShape,
+    center: Offset,
+    badgeW: Float,
+    badgeH: Float,
+    col: Color
+) {
+    val shadow = Color(0xFF1B1F26).copy(alpha = 0.55f)
+    drawDetailedChestSchoolBadge(
+        shape = shape,
+        center = Offset(center.x + badgeW * 0.025f, center.y + badgeH * 0.05f),
+        badgeW = badgeW * 1.06f,
+        badgeH = badgeH * 1.08f,
+        col = shadow
+    )
+    val bodyCol = if (col.luminance() > 0.45f) lerp(col, Color(0xFF4F5A6B), 0.35f) else col
+    drawDetailedChestSchoolBadge(
+        shape = shape,
+        center = center,
+        badgeW = badgeW,
+        badgeH = badgeH,
+        col = bodyCol
     )
 }

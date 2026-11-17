@@ -15,6 +15,80 @@ import org.junit.Test
 class TacticalCalculatorTest {
 
     @Test
+    fun oneTimeAwardsAreCappedAtOnePerSoldierAndRepeatableAwardsAreNot() {
+        assertEquals(1, TacticalCalculator.perSoldierCapForAward("medal_basic_training"))
+        assertEquals(1, TacticalCalculator.perSoldierCapForAward("medal_sovereign_star"))
+        assertEquals(1, TacticalCalculator.perSoldierCapForAward("insig_ranger_tab"))
+        assertEquals(1, TacticalCalculator.perSoldierCapForAward("cord_infantry_blue"))
+        GameCatalog.medals
+            .filter { it.category == AwardCategory.SCHOOL_INSIGNIA || it.category == AwardCategory.SHOULDER_CORD }
+            .forEach { assertEquals(it.id, 1, TacticalCalculator.perSoldierCapForAward(it.id)) }
+        assertNull(TacticalCalculator.perSoldierCapForAward("medal_army_commendation"))
+        assertNull(TacticalCalculator.perSoldierCapForAward("medal_bronze_valor"))
+        assertNull(TacticalCalculator.perSoldierCapForAward("medal_purple_shield"))
+        assertNull(TacticalCalculator.perSoldierCapForAward("medal_good_conduct"))
+    }
+
+    @Test
+    fun schoolStatsAndOddsIgnoreEquippedGear() {
+        val recruit = GameCatalog.initialOperators.first { it.id == "op_cipher" }
+        val rifle = GameCatalog.initialGear.first { it.firepowerPerTier > 0 }
+            .copy(tier = 5, unlocked = true, equippedByOperatorId = recruit.id)
+        val facilities = FacilityType.entries.map { FacilityState(it, 5) }
+        val withGear = TacticalCalculator.operatorStats(recruit, listOf(rifle), emptyList(), facilities)
+        val own = TacticalCalculator.soldierStats(recruit, emptyList())
+        assertTrue(withGear.firepower > own.firepower)
+        assertEquals(TacticalCalculator.operatorStats(recruit, emptyList(), emptyList(), emptyList()), own)
+    }
+
+    @Test
+    fun fieldSchoolsDressInFieldAndClassroomSchoolsInBravos() {
+        val fieldSchools = setOf(
+            "msn_basic_qual", "msn_medical_school", "msn_engineer_school", "msn_night_qual",
+            "msn_ranger_school", "msn_sf_school", "msn_ocs_school"
+        )
+        GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.forEach { school ->
+            val expected = if (school.id in fieldSchools) WardrobeKit.FIELD else WardrobeKit.BRAVOS
+            assertEquals(school.id, expected, TacticalCalculator.schoolUniformKit(school))
+            assertTrue(TacticalCalculator.missionUniformRequirement(school).isMandatory)
+        }
+        val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
+        val hqKestrel = kestrel.copy(status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.CO_COMMANDING_OFFICER)
+        // Schools override the wardrobe setting, and field schools put HQ staff in Field kit
+        assertEquals(
+            WardrobeKit.FIELD,
+            TacticalCalculator.resolveEffectiveWardrobeKit(hqKestrel, smartWardrobeEnabled = false, DutyUniformContext.FIELD_SCHOOL)
+        )
+        assertEquals(
+            WardrobeKit.BRAVOS,
+            TacticalCalculator.resolveEffectiveWardrobeKit(
+                kestrel.copy(activeWardrobeKit = WardrobeKit.MESS),
+                smartWardrobeEnabled = false,
+                DutyUniformContext.TRAINING_MISSION
+            )
+        )
+        val ranger = GameCatalog.missions.first { it.id == "msn_ranger_school" }
+        assertEquals(DutyUniformContext.FIELD_SCHOOL, TacticalCalculator.schoolDutyContext(ranger))
+    }
+
+    @Test
+    fun schoolDeploymentsDoNotUseHqSlots() {
+        val school = GameCatalog.missions.first { it.scope == MissionScope.TRAINING }
+        val combat = GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT }
+        fun dep(id: String, templateId: String) = ActiveDeployment(
+            id = id,
+            templateId = templateId,
+            operatorIds = emptyList(),
+            startedAtMillis = 0L,
+            durationMillis = 1_000L,
+            efficiencyPct = 100,
+            avgSurvivalPct = 100
+        )
+        val deployments = listOf(dep("d1", school.id), dep("d2", school.id), dep("d3", combat.id))
+        assertEquals(1, TacticalCalculator.occupiedDeploymentSlots(deployments))
+    }
+
+    @Test
     fun facilityProductionAndSlotsScaleWithLevels() {
         val baseFacilities = FacilityType.entries.map { FacilityState(it, 1) }
         val baseRates = TacticalCalculator.productionRates(baseFacilities)
@@ -573,8 +647,8 @@ class TacticalCalculatorTest {
         )
 
         // Pass rate scales with school difficulty and rank/MOS suitability
-        val basicOdds = TacticalCalculator.schoolPassOddsPct(basicSchool, assaultRecruit, emptyList(), emptyList(), facilities)
-        val rangerOdds = TacticalCalculator.schoolPassOddsPct(rangerSchool, qualifiedRangerCandidate, emptyList(), emptyList(), facilities)
+        val basicOdds = TacticalCalculator.schoolPassOddsPct(basicSchool, assaultRecruit, emptyList())
+        val rangerOdds = TacticalCalculator.schoolPassOddsPct(rangerSchool, qualifiedRangerCandidate, emptyList())
         assertTrue(basicOdds > rangerOdds)
     }
 
@@ -1446,8 +1520,8 @@ class TacticalCalculatorTest {
         assertTrue(TacticalCalculator.canOperatorDeployOnMission(sfCandidate, sfSchool, emptySet()).eligible)
 
         // SFQC is harder than Ranger School (lower cap & lower odds for identical candidate)
-        val rangerOdds = TacticalCalculator.schoolPassOddsPct(rangerSchool, sfCandidate, emptyList(), emptyList(), facilities)
-        val sfOdds = TacticalCalculator.schoolPassOddsPct(sfSchool, sfCandidate, emptyList(), emptyList(), facilities)
+        val rangerOdds = TacticalCalculator.schoolPassOddsPct(rangerSchool, sfCandidate, emptyList())
+        val sfOdds = TacticalCalculator.schoolPassOddsPct(sfSchool, sfCandidate, emptyList())
         assertTrue("Expected SFQC ($sfOdds%) harder than Ranger ($rangerOdds%)", sfOdds < rangerOdds)
         val maxedGodOp = sfCandidate.copy(
             xp = OperatorRank.GEN.xpRequired,
@@ -1457,7 +1531,7 @@ class TacticalCalculatorTest {
             baseTech = 40,
             baseResilience = 40
         )
-        assertTrue(TacticalCalculator.schoolPassOddsPct(sfSchool, maxedGodOp, emptyList(), emptyList(), facilities) <= 52)
+        assertTrue(TacticalCalculator.schoolPassOddsPct(sfSchool, maxedGodOp, emptyList()) <= 52)
 
         // SFQC produces the best warriors (+11 permanent base stats) and awards SF Tab, Emerald Cord, Green Beret & SF gear
         assertEquals(11, sfSchool.schoolRequirements?.graduationStatBonus?.totalPower)
@@ -2243,8 +2317,8 @@ class TacticalCalculatorTest {
         assertEquals(DressDisplayMode.RIBBONS, bravosLook.dressDisplayMode)
         assertFalse(bravosLook.hasWhiteGloves)
         assertFalse(bravosLook.hasDressSash)
-        assertNull(bravosLook.equippedLeftCordId)
-        assertNull(bravosLook.equippedRightCordId)
+        assertEquals("cord_infantry_blue", bravosLook.equippedLeftCordId)
+        assertEquals("cord_general_aiguillette", bravosLook.equippedRightCordId)
 
         val alphasLook = TacticalCalculator.resolveKitAppearance(decoratedSquadLeader, WardrobeKit.ALPHAS, listOf(alphaSquad))
         assertTrue(alphasLook.headgearStyle.kind != HeadgearKind.BERET)
@@ -2299,13 +2373,10 @@ class TacticalCalculatorTest {
         assertTrue(oddsWithMess > oddsWithoutMess)
 
         val nightSchool = GameCatalog.missions.first { it.id == "msn_night_qual" }
-        val basePass = TacticalCalculator.schoolPassOddsPct(
-            nightSchool, fieldInFieldGear, emptyList(), emptyList(), facilities, smartWardrobeEnabled = false
-        )
-        val bravosPass = TacticalCalculator.schoolPassOddsPct(
-            nightSchool, fieldInFieldGear, emptyList(), emptyList(), facilities, smartWardrobeEnabled = true
-        )
-        assertEquals(basePass + 4, bravosPass)
+        // The uniform worn no longer changes school odds
+        val fieldPass = TacticalCalculator.schoolPassOddsPct(nightSchool, fieldInFieldGear, emptyList())
+        val messPass = TacticalCalculator.schoolPassOddsPct(nightSchool, fieldInMessGear, emptyList())
+        assertEquals(fieldPass, messPass)
     }
 
     @Test

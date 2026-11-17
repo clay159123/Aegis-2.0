@@ -52,6 +52,9 @@ data class CommandUiState(
     val rotatingMissionIds: List<String> = emptyList(),
     val rotationUpdatedAtMillis: Long = 0L
 ) {
+    /** Deployments that use an HQ tasking slot. Schools and training never take a slot. */
+    val occupiedDeploymentSlots: Int
+        get() = TacticalCalculator.occupiedDeploymentSlots(deployments)
     val veteranLegacyPctText: String get() = TacticalCalculator.formatBpsPercent(veteranLegacyBps)
     val inspectionBuffActive: Boolean get() = inspectionBuffUntilMillis > nowMillis
     val inspectionBuffRemainingSec: Long
@@ -194,7 +197,11 @@ class CommandViewModel(
     init {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            val initial = repository.ensureSeeded(now)
+            val loadResult = repository.loadOrResetSave(now)
+            val initial = loadResult.state
+            if (loadResult.wasReset) {
+                showBanner("This save was from an older version of Aegis Ops. A new command has been started.")
+            }
             val facs = repository.facilities.first()
             val ops = repository.operators.first()
             val deps = repository.activeDeployments.first()
@@ -552,7 +559,7 @@ class CommandViewModel(
         squadId: String? = null
     ) {
         val state = uiState.value
-        if (state.deployments.size >= state.maxDeploymentSlots) {
+        if (mission.scope != MissionScope.TRAINING && state.occupiedDeploymentSlots >= state.maxDeploymentSlots) {
             showBanner("All HQ tasking slots occupied.")
             return
         }
@@ -722,11 +729,8 @@ class CommandViewModel(
                 val passOdds = TacticalCalculator.schoolPassOddsPct(
                     mission = mission,
                     operator = op,
-                    gearItems = state.gearItems,
                     citations = state.citations,
-                    facilities = state.facilities,
-                    hqStaffSummary = state.hqStaffSummary,
-                    smartWardrobeEnabled = state.smartWardrobeEnabled
+                    hqStaffSummary = state.hqStaffSummary
                 )
                 val passed = Random.nextInt(100) < passOdds
                 if (passed) anyPassed = true
@@ -2235,7 +2239,8 @@ class CommandViewModel(
             alphasDressStyle = standardDressStyle,
             messDressStyle = existing?.standardMessDressStyle,
             messHeadgear = existing?.standardMessHeadgear,
-            whiteGloves = existing?.standardWhiteGloves
+            alphasGloves = existing?.standardAlphasGloves,
+            messGloves = existing?.standardMessGloves
         )
         saveSquadWithStandard(
             squadId = squadId,
@@ -2284,7 +2289,8 @@ class CommandViewModel(
                 standardBravosDressStyle = standard.bravosDressStyle,
                 standardMessDressStyle = standard.messDressStyle,
                 standardMessHeadgear = standard.messHeadgear,
-                standardWhiteGloves = standard.whiteGloves
+                standardAlphasGloves = standard.alphasGloves,
+                standardMessGloves = standard.messGloves
             )
         } else {
             TacticalSquad(
@@ -2303,7 +2309,8 @@ class CommandViewModel(
                 standardBravosDressStyle = standard.bravosDressStyle,
                 standardMessDressStyle = standard.messDressStyle,
                 standardMessHeadgear = standard.messHeadgear,
-                standardWhiteGloves = standard.whiteGloves
+                standardAlphasGloves = standard.alphasGloves,
+                standardMessGloves = standard.messGloves
             )
         }
 
@@ -2407,8 +2414,8 @@ class CommandViewModel(
                 allowFree || TacticalCalculator.evaluateDressStyleEligibility(ds, op, ownedMedalIds, WardrobeKit.MESS).eligible
             } ?: op.wardrobe.mess.dressStyle
 
-            val nextAlphasGloves = squad.standardWhiteGloves ?: op.wardrobe.alphas.hasWhiteGloves ?: op.hasWhiteGloves
-            val nextMessGloves = squad.standardWhiteGloves ?: op.wardrobe.mess.hasWhiteGloves ?: true
+            val nextAlphasGloves = squad.standardAlphasGloves ?: op.wardrobe.alphas.hasWhiteGloves ?: op.hasWhiteGloves
+            val nextMessGloves = squad.standardMessGloves ?: op.wardrobe.mess.hasWhiteGloves ?: true
 
             val nextWardrobe = op.wardrobe
                 .withKit(WardrobeKit.FIELD, op.wardrobe.field.copy(camoPattern = nextCamo))

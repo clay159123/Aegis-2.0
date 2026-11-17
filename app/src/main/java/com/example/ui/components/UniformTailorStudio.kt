@@ -407,18 +407,18 @@ fun UniformTailorStudioCard(
             TailorAccordionSection(
                 icon = Icons.Filled.MilitaryTech,
                 title = "Shoulder Cords & Aiguillettes",
-                summary = if (effectiveKit == WardrobeKit.ALPHAS) {
+                summary = if (effectiveKit == WardrobeKit.ALPHAS || effectiveKit == WardrobeKit.BRAVOS) {
                     "Left: $leftCordLabel • Right: $rightCordLabel"
                 } else {
-                    "Alphas Only (Left: $leftCordLabel • Right: $rightCordLabel)"
+                    "Alphas & Bravos Only (Left: $leftCordLabel • Right: $rightCordLabel)"
                 },
                 expanded = TailorCategoryKey.CORDS in expandedCategories,
                 onToggle = { toggleCategory(TailorCategoryKey.CORDS) },
                 testTag = "tailor_cat_cords"
             ) {
-                if (effectiveKit != WardrobeKit.ALPHAS) {
+                if (effectiveKit != WardrobeKit.ALPHAS && effectiveKit != WardrobeKit.BRAVOS) {
                     Text(
-                        text = "Regulation note: ${effectiveKit.shortLabel} omits shoulder cords — selections save to Service Alphas.",
+                        text = "Regulation note: ${effectiveKit.shortLabel} omits shoulder cords. Selections apply to Alphas and Bravos.",
                         style = MaterialTheme.typography.labelSmall,
                         color = extra.signalsCyan
                     )

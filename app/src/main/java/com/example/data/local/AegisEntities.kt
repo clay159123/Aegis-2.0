@@ -21,7 +21,8 @@ data class CommanderStateEntity(
     val completedCampaignStageIdsCsv: String = "",
     val completedCampaignIdsCsv: String = "",
     val rotatingMissionIdsCsv: String = "",
-    val rotationUpdatedAtMillis: Long = 0L
+    val rotationUpdatedAtMillis: Long = 0L,
+    val saveFormatVersion: Int = 0
 )
 
 @Entity(tableName = "facilities")
@@ -123,7 +124,8 @@ data class SquadEntity(
     val standardBravosDressStyleName: String? = null,
     val standardMessDressStyleName: String? = null,
     val standardMessHeadgearName: String? = null,
-    val standardWhiteGloves: Boolean? = null
+    val standardAlphasGloves: Boolean? = null,
+    val standardMessGloves: Boolean? = null
 )
 
 @Entity(tableName = "citations")

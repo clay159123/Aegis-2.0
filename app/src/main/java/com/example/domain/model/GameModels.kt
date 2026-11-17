@@ -396,6 +396,7 @@ enum class DutyUniformContext {
     ON_BASE,
     COMBAT_DEPLOYMENT,
     TRAINING_MISSION,
+    FIELD_SCHOOL,
     DIPLOMATIC_MISSION,
     HQ_ASSIGNMENT,
     PROMOTION_BOARD,
@@ -911,7 +912,9 @@ data class UniformTailorRequest(
             headgearStyle = op.wardrobe.forKit(kit).headgearStyle ?: op.headgearStyle,
             equippedLeftCordId = if (op.wardrobe.forKit(kit).cordCustomized) op.wardrobe.forKit(kit).equippedLeftCordId else op.equippedLeftCordId,
             equippedRightCordId = if (op.wardrobe.forKit(kit).cordCustomized) op.wardrobe.forKit(kit).equippedRightCordId else op.equippedRightCordId,
-            hasWhiteGloves = op.wardrobe.forKit(kit).hasWhiteGloves ?: op.hasWhiteGloves,
+            // Mess keeps its own default (gloves on) and never inherits the Alphas/top-level setting
+            hasWhiteGloves = op.wardrobe.forKit(kit).hasWhiteGloves
+                ?: if (kit == WardrobeKit.MESS) true else op.hasWhiteGloves,
             hasDressSash = op.wardrobe.forKit(kit).hasDressSash ?: op.hasDressSash,
             tailorOverrides = op.tailorOverrides,
             wardrobeKit = kit
@@ -957,7 +960,9 @@ data class SchoolRequirements(
     val naturalFitSpecialties: Set<OperatorSpecialty> = emptySet(),
     val suitabilitySummary: String = "Open to all MOS",
     val graduationStatBonus: StatProfile = StatProfile(0, 0, 0, 0),
-    val graduationRewardsSummary: String = ""
+    val graduationRewardsSummary: String = "",
+    /** Uniform worn while attending: FIELD for field schools, BRAVOS for classroom schools. */
+    val uniformKit: WardrobeKit = WardrobeKit.BRAVOS
 )
 
 data class TheaterCampaign(
@@ -1036,7 +1041,8 @@ data class SquadUniformStandard(
     val alphasDressStyle: DressUniformStyle? = null,
     val messDressStyle: DressUniformStyle? = null,
     val messHeadgear: HeadgearStyle? = null,
-    val whiteGloves: Boolean? = null
+    val alphasGloves: Boolean? = null,
+    val messGloves: Boolean? = null
 )
 
 data class TacticalSquad(
@@ -1055,7 +1061,8 @@ data class TacticalSquad(
     val standardBravosDressStyle: DressUniformStyle? = null,
     val standardMessDressStyle: DressUniformStyle? = null,
     val standardMessHeadgear: HeadgearStyle? = null,
-    val standardWhiteGloves: Boolean? = null
+    val standardAlphasGloves: Boolean? = null,
+    val standardMessGloves: Boolean? = null
 ) {
     val clampedCohesionXp: Int get() = cohesionXp.coerceIn(0, MAX_SQUAD_COHESION_XP)
     val cohesionScore: Int get() = (clampedCohesionXp / 10).coerceIn(0, 100)
@@ -1072,7 +1079,8 @@ data class TacticalSquad(
             alphasDressStyle = standardDressStyle,
             messDressStyle = standardMessDressStyle,
             messHeadgear = standardMessHeadgear,
-            whiteGloves = standardWhiteGloves
+            alphasGloves = standardAlphasGloves,
+            messGloves = standardMessGloves
         )
 
     val hasUniformStandard: Boolean
@@ -1084,7 +1092,8 @@ data class TacticalSquad(
             standardBravosDressStyle != null ||
             standardMessDressStyle != null ||
             standardMessHeadgear != null ||
-            standardWhiteGloves != null
+            standardAlphasGloves != null ||
+            standardMessGloves != null
 
     val standardSummaryParts: List<String>
         get() = buildList {
@@ -1096,7 +1105,8 @@ data class TacticalSquad(
             if (alphasParts.isNotEmpty()) add("Alphas: ${alphasParts.joinToString(" / ")}")
             val messParts = listOfNotNull(standardMessDressStyle?.shortLabel, standardMessHeadgear?.label)
             if (messParts.isNotEmpty()) add("Mess: ${messParts.joinToString(" / ")}")
-            standardWhiteGloves?.let { add(if (it) "White Gloves" else "No Gloves") }
+            standardAlphasGloves?.let { add(if (it) "Alphas: White Gloves" else "Alphas: No Gloves") }
+            standardMessGloves?.let { add(if (it) "Mess: White Gloves" else "Mess: No Gloves") }
         }
 }
 
