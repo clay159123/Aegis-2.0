@@ -281,7 +281,7 @@ internal fun CompactHqMissionCard(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
-                        text = "Team ${mission.minOperators}-${mission.maxOperators} • $adjustedSupplyCost SUP • ~${mission.baseSuccessRatePct}% Base",
+                        text = "${if (mission.hasClassCap) "Team" else "Class"} ${mission.teamSizeLabel} • $adjustedSupplyCost SUP${if (mission.hasClassCap) "" else "/soldier"} • ~${mission.baseSuccessRatePct}% Base",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (canAffordSupply) extra.textMuted else MaterialTheme.colorScheme.error,
                         maxLines = 1,
@@ -479,11 +479,16 @@ internal fun HqStagingSheet(
         smartWardrobeEnabled = uiState.smartWardrobeEnabled
     )
     val activeSquadBonus = SquadCohesionRules.evaluateActiveBonus(selectedOps, uiState.squads)
-    val supplyCost = (mission.supplyCost * TacticalCalculator.supplyCostMultiplier(
-        facilities = uiState.facilities,
-        hqStaffSummary = uiState.hqStaffSummary,
-        completedCampaignIds = uiState.completedCampaignIds
-    )).roundToInt()
+    // Schools charge per enrolled soldier; missions charge one fee per team
+    val supplyCost = TacticalCalculator.dispatchSupplyCost(
+        mission = mission,
+        soldierCount = selectedOperatorIds.size,
+        multiplier = TacticalCalculator.supplyCostMultiplier(
+            facilities = uiState.facilities,
+            hqStaffSummary = uiState.hqStaffSummary,
+            completedCampaignIds = uiState.completedCampaignIds
+        )
+    )
     val validCount = selectedOperatorIds.size in mission.minOperators..mission.maxOperators
     val canAfford = uiState.resources.supplies >= supplyCost
 
@@ -795,7 +800,7 @@ internal fun HqStagingSheet(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 readyOperators.forEach { op ->
                     val isSelected = op.id in selectedOperatorIds
-                    val opGear = uiState.gearItems.filter { it.equippedByOperatorId == op.id }
+                    val opGear = uiState.gearItems.equippedBy(op)
                     val opOdds = if (mission.risk.isTraining) {
                         TacticalCalculator.schoolPassOddsPct(
                             mission = mission,

@@ -35,7 +35,7 @@ fun SquadArmoryScreen(
         request: UniformTailorRequest
     ) -> Unit,
     onEquipGear: (operatorId: String, gearId: String) -> Unit,
-    onUnequipGear: (String) -> Unit,
+    onUnequipGear: (operatorId: String, gearId: String) -> Unit,
     onAutoDistributeGear: () -> Unit = {},
     onPurchaseOrUpgradeGear: (String) -> Unit,
     onEnlistPostBasicSoldier: (OperatorSpecialty) -> Unit = {},
@@ -366,7 +366,7 @@ fun SquadArmoryScreen(
         }
 
         items(fieldOps, key = { it.id }) { op ->
-            val equipped = uiState.gearItems.filter { it.equippedByOperatorId == op.id }
+            val equipped = uiState.gearItems.equippedBy(op)
             val opMedals = uiState.citations.filter { it.operatorId == op.id }
                 .mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
                 .sortedBy { it.precedenceOrder }
@@ -900,9 +900,8 @@ private fun ArmoryCatalogSheet(
                     operators = uiState.operators
                 )
                 val canAfford = uiState.resources.credits >= crCost && uiState.resources.supplies >= supCost
-                val holder = gear.equippedByOperatorId?.let { id ->
-                    uiState.operators.find { it.id == id }?.callsign
-                }
+                // Gear types are shared; show how many soldiers carry this one
+                val carrierCount = gear.carriedBy(uiState.operators.filter { it.unlocked && !it.status.isOutOfActiveService }).size
                 val qualifiedGraduates = if (gear.requiredSchoolId != null) {
                     uiState.operators
                         .filter {
@@ -950,7 +949,7 @@ private fun ArmoryCatalogSheet(
                                 )
                                 Text(
                                     text = "${gear.slot.label} • ${gear.weightKg} kg • +${gear.survivalBonusPct}% Surv" +
-                                        (if (holder != null) " • On $holder" else ""),
+                                        (if (carrierCount > 0) " • Carried by $carrierCount" else ""),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = extra.textMuted
                                 )

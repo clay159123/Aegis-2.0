@@ -9,68 +9,38 @@ import com.example.domain.model.*
  */
 object UniformRegaliaRules {
 
+    /**
+     * Left-shoulder Auto order per MOS. SF Emerald always leads once earned. Assault (11B) wears
+     * Infantry Blue next; every other MOS wears its own branch cord next and Infantry Blue last,
+     * because every soldier earns Infantry Blue at Marksmanship & Tactical Basics.
+     * Command (no billet, S-1, CO, XO, Deputy): highest command-related cord by precedence.
+     */
     private val preferredCordOrderBySpecialty: Map<OperatorSpecialty, List<String>> = mapOf(
-        OperatorSpecialty.ASSAULT to listOf(
-            "cord_infantry_blue",
-            "cord_sf_emerald",
-            "cord_airborne_crimson",
-            "cord_engineer_scarlet",
-            "cord_intel_teal",
-            "cord_medical_maroon",
-            "cord_signals_orange",
-            "cord_logistics_buff"
-        ),
-        OperatorSpecialty.RECON to listOf(
-            "cord_airborne_crimson",
-            "cord_intel_teal",
-            "cord_sf_emerald",
-            "cord_infantry_blue",
-            "cord_signals_orange",
-            "cord_engineer_scarlet",
-            "cord_medical_maroon",
-            "cord_logistics_buff"
-        ),
-        OperatorSpecialty.SIGNALS to listOf(
-            "cord_signals_orange",
-            "cord_intel_teal",
-            "cord_airborne_crimson",
-            "cord_logistics_buff",
-            "cord_engineer_scarlet",
-            "cord_infantry_blue",
-            "cord_sf_emerald",
-            "cord_medical_maroon"
-        ),
-        OperatorSpecialty.BREACHER to listOf(
-            "cord_engineer_scarlet",
-            "cord_infantry_blue",
-            "cord_sf_emerald",
-            "cord_airborne_crimson",
-            "cord_logistics_buff",
-            "cord_signals_orange",
-            "cord_intel_teal",
-            "cord_medical_maroon"
-        ),
-        OperatorSpecialty.MEDIC to listOf(
-            "cord_medical_maroon",
-            "cord_airborne_crimson",
-            "cord_infantry_blue",
-            "cord_logistics_buff",
-            "cord_sf_emerald",
-            "cord_intel_teal",
-            "cord_engineer_scarlet",
-            "cord_signals_orange"
-        ),
-        OperatorSpecialty.COMMAND to listOf(
-            "cord_infantry_blue",
-            "cord_logistics_buff",
-            "cord_intel_teal",
-            "cord_sf_emerald",
-            "cord_airborne_crimson",
-            "cord_signals_orange",
-            "cord_engineer_scarlet",
-            "cord_medical_maroon"
-        )
+        OperatorSpecialty.ASSAULT to listOf("cord_sf_emerald", "cord_infantry_blue", "cord_airborne_crimson", "cord_engineer_scarlet", "cord_intel_teal", "cord_medical_maroon", "cord_signals_orange", "cord_logistics_buff"),
+        OperatorSpecialty.RECON to listOf("cord_sf_emerald", "cord_airborne_crimson", "cord_intel_teal", "cord_engineer_scarlet", "cord_signals_orange", "cord_medical_maroon", "cord_logistics_buff", "cord_infantry_blue"),
+        OperatorSpecialty.SIGNALS to listOf("cord_sf_emerald", "cord_signals_orange", "cord_intel_teal", "cord_airborne_crimson", "cord_logistics_buff", "cord_engineer_scarlet", "cord_medical_maroon", "cord_infantry_blue"),
+        OperatorSpecialty.BREACHER to listOf("cord_sf_emerald", "cord_engineer_scarlet", "cord_airborne_crimson", "cord_intel_teal", "cord_logistics_buff", "cord_signals_orange", "cord_medical_maroon", "cord_infantry_blue"),
+        OperatorSpecialty.MEDIC to listOf("cord_sf_emerald", "cord_medical_maroon", "cord_airborne_crimson", "cord_logistics_buff", "cord_intel_teal", "cord_engineer_scarlet", "cord_signals_orange", "cord_infantry_blue"),
+        OperatorSpecialty.COMMAND to listOf("cord_sf_emerald", "cord_intel_teal", "cord_logistics_buff", "cord_infantry_blue", "cord_airborne_crimson", "cord_engineer_scarlet", "cord_signals_orange", "cord_medical_maroon")
     )
+
+    /** The cord each HQ staff billet puts first for a Command-MOS soldier (after SF Emerald). */
+    private val billetCordForCommand: Map<HqStaffRole, String> = mapOf(
+        HqStaffRole.S2_INTEL_OVERWATCH to "cord_intel_teal",
+        HqStaffRole.S3_OPS_DIRECTOR to "cord_infantry_blue",
+        HqStaffRole.S4_LOGISTICS_MEDEVAC to "cord_logistics_buff"
+    )
+
+    /**
+     * Left-shoulder Auto order for this soldier. Command-MOS soldiers in an S-2, S-3 or S-4 billet
+     * put that billet's cord first after SF Emerald; everyone else follows their MOS order.
+     */
+    fun leftCordAutoOrder(operator: Operator): List<String> {
+        val base = preferredCordOrderBySpecialty.getValue(operator.specialty)
+        if (operator.specialty != OperatorSpecialty.COMMAND || operator.status != OperatorStatus.HQ_STAFF) return base
+        val billetCord = operator.hqRole?.let { billetCordForCommand[it] } ?: return base
+        return listOf("cord_sf_emerald", billetCord) + base.filter { it != "cord_sf_emerald" && it != billetCord }
+    }
 
     const val CORD_HQ_AIGUILLETTE = "cord_general_aiguillette"
     const val CORD_VALOR = "cord_valor_fourragere"
@@ -93,7 +63,11 @@ object UniformRegaliaRules {
             val byId = owned.associateBy { it.id }
             rightCordAutoOrder(operator.status == OperatorStatus.HQ_STAFF).firstNotNullOfOrNull { byId[it] }
         } else {
-            cordsForShoulder(owned, isRightShoulder = false, specialty = operator.specialty).firstOrNull()
+            val order = leftCordAutoOrder(operator)
+            owned.minWithOrNull(
+                compareBy<MedalDefinition> { order.indexOf(it.id).let { idx -> if (idx < 0) Int.MAX_VALUE else idx } }
+                    .thenBy { it.precedenceOrder }
+            )
         }
     }
 
@@ -267,7 +241,8 @@ object UniformRegaliaRules {
     }
 
     fun isPrimaryMosCord(specialty: OperatorSpecialty, medalId: String): Boolean {
-        val leftTop = preferredCordOrderBySpecialty[specialty]?.firstOrNull()
+        // SF Emerald leads every list; the MOS signature cord is the first one after it
+        val leftTop = preferredCordOrderBySpecialty[specialty]?.firstOrNull { it != "cord_sf_emerald" }
         val rightTop = CORD_VALOR
         return medalId == leftTop || medalId == rightTop
     }
@@ -578,7 +553,7 @@ object UniformRegaliaRules {
                 opScore += 5
             }
 
-            val opGear = gearItems.filter { it.equippedByOperatorId == op.id }
+            val opGear = gearItems.equippedBy(op)
             val markTier = resolveMarksmanshipTier(op, opGear)
             if (kit == WardrobeKit.MESS || markTier != MarksmanshipBadgeTier.NONE) {
                 opScore += 5

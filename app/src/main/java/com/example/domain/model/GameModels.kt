@@ -807,6 +807,14 @@ enum class GearSlot(val label: String, val shortLabel: String) {
     UTILITY("Field Utility", "UTL")
 }
 
+/** The unlocked gear in [operator]'s own loadout. */
+fun List<GearItem>.equippedBy(operator: Operator): List<GearItem> =
+    filter { it.unlocked && operator.equippedGearIds[it.slot] == it.id }
+
+/** The ids of soldiers in [operators] who carry this gear type. */
+fun GearItem.carriedBy(operators: List<Operator>): List<Operator> =
+    operators.filter { it.equippedGearIds[slot] == id }
+
 data class GearItem(
     val id: String,
     val name: String,
@@ -820,7 +828,6 @@ data class GearItem(
     val resiliencePerTier: Int,
     val survivalBonusPct: Int,
     val unlocked: Boolean,
-    val equippedByOperatorId: String?,
     val baseCreditCost: Double,
     val baseSupplyCost: Double,
     val description: String,
@@ -901,7 +908,9 @@ data class Operator(
     val recruitCreditCost: Double,
     val recruitIntelCost: Double,
     val bio: String,
-    val authorizedTier: RankTier = OperatorRank.forXp(xp).tier
+    val authorizedTier: RankTier = OperatorRank.forXp(xp).tier,
+    /** This soldier's own loadout: one unlocked gear type per slot. Gear types are shared, so any number of soldiers can carry the same item. */
+    val equippedGearIds: Map<GearSlot, String> = emptyMap()
 ) {
     val rank: OperatorRank get() = OperatorRank.forXp(xp, authorizedTier)
 
@@ -1046,7 +1055,17 @@ data class MissionTemplate(
     val isEvergreenStandalone: Boolean = false,
     val isRotatingStandalone: Boolean = false,
     val contractTag: String? = null
-)
+) {
+    /** False for schools, which take any number of eligible soldiers in one class */
+    val hasClassCap: Boolean get() = maxOperators != NO_CLASS_CAP
+
+    /** "1-4" for missions, "1+" for schools */
+    val teamSizeLabel: String get() = if (hasClassCap) "$minOperators-$maxOperators" else "$minOperators+"
+
+    companion object {
+        const val NO_CLASS_CAP = Int.MAX_VALUE
+    }
+}
 
 const val MAX_SQUAD_SIZE = 4
 const val MAX_SQUAD_COHESION_XP = 1000

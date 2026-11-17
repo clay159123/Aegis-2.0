@@ -566,7 +566,7 @@ class CommandViewModel(
             return
         }
         if (selectedOperatorIds.size !in mission.minOperators..mission.maxOperators) {
-            showBanner("Select ${mission.minOperators}–${mission.maxOperators} soldiers for ${mission.title}.")
+            showBanner("Select ${mission.teamSizeLabel} soldiers for ${mission.title}.")
             return
         }
         val deployedIds = state.deployments.flatMap { it.operatorIds }.toSet()
@@ -623,11 +623,15 @@ class CommandViewModel(
             showBanner(msg)
             return
         }
-        val effectiveSupplyCost = (mission.supplyCost * TacticalCalculator.supplyCostMultiplier(
-            facilities = state.facilities,
-            hqStaffSummary = state.hqStaffSummary,
-            completedCampaignIds = state.completedCampaignIds
-        )).roundToInt().toDouble()
+        val effectiveSupplyCost = TacticalCalculator.dispatchSupplyCost(
+            mission = mission,
+            soldierCount = chosenOps.size,
+            multiplier = TacticalCalculator.supplyCostMultiplier(
+                facilities = state.facilities,
+                hqStaffSummary = state.hqStaffSummary,
+                completedCampaignIds = state.completedCampaignIds
+            )
+        ).toDouble()
         if (state.resources.supplies < effectiveSupplyCost) {
             showBanner("Need ${effectiveSupplyCost.toInt()} SUP to deploy.")
             return
@@ -727,7 +731,7 @@ class CommandViewModel(
         if (mission.risk.isTraining) {
             var anyPassed = false
             for (op in targetOps) {
-                val opGear = state.gearItems.filter { it.equippedByOperatorId == op.id }
+                val opGear = state.gearItems.equippedBy(op)
                 val passOdds = TacticalCalculator.schoolPassOddsPct(
                     mission = mission,
                     operator = op,
@@ -816,9 +820,9 @@ class CommandViewModel(
                         recommendedMedalId = recMedalId,
                         xpEarned = opXp,
                         promotedToRankCode = if (newRank != prevRank) newRank.code else null,
-                        readyForCategoryRankCode = OperatorRank.nextRank(newRank)
-                            ?.takeIf { it.tier != newRank.tier && newXp >= it.xpRequired }
-                            ?.code
+                        readyForCategoryRankCode = TacticalCalculator.promotionBoardReadyCode(
+                            updatedOp, state.operators, state.citations, state.gearItems, state.facilities
+                        )
                     )
                 )
             }
@@ -844,7 +848,7 @@ class CommandViewModel(
             }
 
             for (op in targetOps) {
-                val opGear = state.gearItems.filter { it.equippedByOperatorId == op.id }
+                val opGear = state.gearItems.equippedBy(op)
                 val baseSurvivalPct = (TacticalCalculator.operatorSurvivalPct(
                     mission = mission,
                     operator = op,
@@ -879,10 +883,6 @@ class CommandViewModel(
                     OperatorOutcomeType.FALLEN -> OperatorStatus.FALLEN
                 }
                 val recoveryAt = if (outcome == OperatorOutcomeType.WOUNDED) now + 45_000L else 0L
-
-                if (outcome == OperatorOutcomeType.FALLEN) {
-                    opGear.forEach { gear -> updatedGear.add(gear.copy(equippedByOperatorId = null)) }
-                }
 
                 val opXp = if (missionSucceeded) xpEach else (xpEach * 0.45).roundToInt().coerceAtLeast(15)
                 val prevRank = op.rank
@@ -1027,9 +1027,9 @@ class CommandViewModel(
                         xpEarned = opXp,
                         promotedToRankCode = if (outcome != OperatorOutcomeType.FALLEN && newRank != prevRank) newRank.code else null,
                         readyForCategoryRankCode = if (outcome != OperatorOutcomeType.FALLEN) {
-                            OperatorRank.nextRank(newRank)
-                                ?.takeIf { it.tier != newRank.tier && newXp >= it.xpRequired }
-                                ?.code
+                            TacticalCalculator.promotionBoardReadyCode(
+                                updatedOp, state.operators, state.citations, state.gearItems, state.facilities
+                            )
                         } else {
                             null
                         }
@@ -1077,12 +1077,12 @@ class CommandViewModel(
             val prevStaffRank = staff.rank
             val nextStaffXp = OperatorRank.clampXpToAuthorizedTier(staff.xp + staffXp, staff.authorizedTier)
             val nextStaffRank = OperatorRank.forXp(nextStaffXp, staff.authorizedTier)
-            val readyGateCode = OperatorRank.nextRank(nextStaffRank)
-                ?.takeIf { it.tier != nextStaffRank.tier && nextStaffXp >= it.xpRequired }
-                ?.code
             val candidateStaff = staff.copy(
                 xp = nextStaffXp,
                 staffOpsSupported = nextSupportCount
+            )
+            val readyGateCode = TacticalCalculator.promotionBoardReadyCode(
+                candidateStaff, state.operators, state.citations, state.gearItems, state.facilities
             )
             var staffPetitionBlocked = state.operators.any {
                 it.unlocked && !it.status.isOutOfActiveService && (it.transferRequested || it.retirementRequested)
@@ -1453,11 +1453,9 @@ class CommandViewModel(
             }
         }
 
-        val equippedGear = state.gearItems
-            .filter { it.equippedByOperatorId == op.id }
-            .map { it.copy(equippedByOperatorId = null) }
-
         val updatedStaffOp = op.copy(
+            // HQ staff carry no field kit
+            equippedGearIds = emptyMap(),
             status = OperatorStatus.HQ_STAFF,
             hqRole = targetRole,
             transferRequested = false,
@@ -1471,9 +1469,6 @@ class CommandViewModel(
         ).filter { updated -> state.squads.find { it.id == updated.id } != updated }
 
         viewModelScope.launch {
-            if (equippedGear.isNotEmpty()) {
-                repository.saveGearList(equippedGear)
-            }
             repository.saveOperator(updatedStaffOp)
             if (updatedSquads.isNotEmpty()) {
                 repository.saveSquads(updatedSquads)
@@ -1525,9 +1520,6 @@ class CommandViewModel(
             showBanner("Unit transfer eligibility opens at ${OperatorRank.SGT.code} (E-5).")
             return
         }
-        val returnedGear = state.gearItems
-            .filter { it.equippedByOperatorId == op.id }
-            .map { it.copy(equippedByOperatorId = null) }
 
         val updatedSquads = SquadCohesionRules.pruneUnavailableMembers(
             squads = state.squads,
@@ -1536,9 +1528,6 @@ class CommandViewModel(
 
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            if (returnedGear.isNotEmpty()) {
-                repository.saveGearList(returnedGear)
-            }
             if (updatedSquads.isNotEmpty()) {
                 repository.saveSquads(updatedSquads)
             }
@@ -1581,9 +1570,6 @@ class CommandViewModel(
             showBanner("${op.callsign} not yet eligible: ${elig.reasonText}")
             return
         }
-        val returnedGear = state.gearItems
-            .filter { it.equippedByOperatorId == op.id }
-            .map { it.copy(equippedByOperatorId = null) }
         val now = System.currentTimeMillis()
         val preview = TacticalCalculator.previewRetirementLegacy(
             operator = op,
@@ -1593,6 +1579,7 @@ class CommandViewModel(
         )
 
         val retiredOp = op.copy(
+            equippedGearIds = emptyMap(),
             status = OperatorStatus.RETIRED,
             hqRole = null,
             transferRequested = false,
@@ -1606,9 +1593,6 @@ class CommandViewModel(
         ).filter { updated -> state.squads.find { it.id == updated.id } != updated }
 
         viewModelScope.launch {
-            if (returnedGear.isNotEmpty()) {
-                repository.saveGearList(returnedGear)
-            }
             if (updatedSquads.isNotEmpty()) {
                 repository.saveSquads(updatedSquads)
             }
@@ -1993,40 +1977,30 @@ class CommandViewModel(
             showBanner("Cannot swap gear while soldier is deployed.")
             return
         }
-        if (gear.equippedByOperatorId != null && gear.equippedByOperatorId in currentlyDeployedOps) {
-            showBanner("Gear is currently in the field with another soldier.")
-            return
-        }
         val equipElig = TacticalCalculator.evaluateGearEquipEligibility(gear, operator)
         if (!equipElig.eligible) {
             showBanner("${operator.callsign} cannot equip ${gear.name}: ${equipElig.reasonText}")
             return
         }
-
-        val toUpdate = mutableListOf<GearItem>()
-        state.gearItems.find { it.equippedByOperatorId == operatorId && it.slot == gear.slot }?.let { prev ->
-            if (prev.id != gear.id) {
-                toUpdate.add(prev.copy(equippedByOperatorId = null))
-            }
-        }
-        toUpdate.add(gear.copy(equippedByOperatorId = operatorId))
-
+        // Gear types are shared: equipping never takes the item from anyone else
         viewModelScope.launch {
-            repository.saveGearList(toUpdate)
+            repository.saveOperator(operator.copy(equippedGearIds = operator.equippedGearIds + (gear.slot to gear.id)))
             showBanner("Equipped ${gear.name}")
         }
     }
 
-    fun unequipGear(gearId: String) {
+    fun unequipGear(operatorId: String, gearId: String) {
         val state = uiState.value
+        val operator = state.operators.find { it.id == operatorId } ?: return
         val gear = state.gearItems.find { it.id == gearId } ?: return
         val deployedOps = state.deployments.flatMap { it.operatorIds }.toSet()
-        if (gear.equippedByOperatorId in deployedOps) {
+        if (operatorId in deployedOps) {
             showBanner("Cannot unequip gear while deployed.")
             return
         }
+        if (operator.equippedGearIds[gear.slot] != gear.id) return
         viewModelScope.launch {
-            repository.saveGear(gear.copy(equippedByOperatorId = null))
+            repository.saveOperator(operator.copy(equippedGearIds = operator.equippedGearIds - gear.slot))
         }
     }
 
@@ -2049,12 +2023,12 @@ class CommandViewModel(
             )
             return
         }
-        if (result.changedItems.isEmpty()) {
+        if (result.changedOperators.isEmpty()) {
             showBanner("Deployable field soldiers already hold their optimal loadouts.")
             return
         }
         viewModelScope.launch {
-            repository.saveGearList(result.changedItems)
+            repository.saveOperators(result.changedOperators)
             val deployedNote = if (result.skippedDeployedCount > 0) {
                 " (${result.skippedDeployedCount} deployed kept kit)"
             } else {

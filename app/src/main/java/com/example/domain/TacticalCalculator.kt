@@ -1105,6 +1105,16 @@ object TacticalCalculator {
         return 1.0 + (armoryLevel - 1) * 0.05
     }
 
+    /**
+     * Supplies to dispatch [mission] with [soldierCount] soldiers. Schools charge per soldier;
+     * field and diplomatic missions charge one flat fee for the team.
+     */
+    fun dispatchSupplyCost(mission: MissionTemplate, soldierCount: Int, multiplier: Double): Int {
+        val perUnit = mission.supplyCost * multiplier
+        val units = if (mission.hasClassCap) 1 else soldierCount.coerceAtLeast(1)
+        return (perUnit * units).roundToInt()
+    }
+
     fun supplyCostMultiplier(
         facilities: List<FacilityState>,
         hqStaffSummary: HqStaffSummary? = null,
@@ -1131,7 +1141,7 @@ object TacticalCalculator {
         val rankBonus = rankIndex + operator.rank.tier.order * 2
         val gearMult = gearBonusMultiplier(facilities)
 
-        val equipped = gearItems.filter { it.equippedByOperatorId == operator.id }
+        val equipped = gearItems.equippedBy(operator)
         var gearFp = 0
         var gearSt = 0
         var gearTc = 0
@@ -1164,8 +1174,8 @@ object TacticalCalculator {
         )
     }
 
-    fun operatorLoadoutWeight(operatorId: String, gearItems: List<GearItem>): Double =
-        gearItems.filter { it.equippedByOperatorId == operatorId }.sumOf { it.weightKg }
+    fun operatorLoadoutWeight(operator: Operator, gearItems: List<GearItem>): Double =
+        gearItems.equippedBy(operator).sumOf { it.weightKg }
 
     fun operatorYieldBonusPct(operatorId: String, citations: List<AwardedMedal>): Int =
         citations.filter { it.operatorId == operatorId }
@@ -1183,7 +1193,7 @@ object TacticalCalculator {
     ): Int {
         if (mission.risk.isTraining) return 100
         val stats = operatorStats(operator, gearItems, citations, facilities)
-        val equipped = gearItems.filter { it.equippedByOperatorId == operator.id }
+        val equipped = gearItems.equippedBy(operator)
         val gearSurvival = equipped.sumOf { it.survivalBonusPct }
         val reconBonus = (facilityLevel(facilities, FacilityType.RECON_ARRAY) - 1) * 2
         val staffBonus = hqStaffSummary?.survivalBonusPct ?: (hqStaffCount.coerceAtLeast(0) * 2).coerceAtMost(10)
@@ -2121,6 +2131,23 @@ object TacticalCalculator {
         facilities = facilities,
         deployments = deployments
     )
+
+    /**
+     * The rank code to flag on the debrief as "ready for promotion", or null.
+     * Uses the same check as the Promotion Board, so only soldiers who meet every merit check are flagged.
+     */
+    fun promotionBoardReadyCode(
+        candidate: Operator,
+        allOperators: List<Operator>,
+        citations: List<AwardedMedal>,
+        gearItems: List<GearItem>,
+        facilities: List<FacilityState>
+    ): String? {
+        if (candidate.status == OperatorStatus.FALLEN || candidate.status.isOutOfActiveService) return null
+        val roster = allOperators.map { if (it.id == candidate.id) candidate else it }
+        val board = evaluatePromotionBoard(candidate, roster, citations, gearItems, facilities)
+        return board.nextRank?.takeIf { board.isCrossTierGate && board.allMeritsMet }?.code
+    }
 
     fun evaluatePromotionBoard(
         operator: Operator,

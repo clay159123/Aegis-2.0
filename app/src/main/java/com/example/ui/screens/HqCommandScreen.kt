@@ -655,7 +655,7 @@ fun HqCommandScreen(
         val opCitations = uiState.citations.filter { it.operatorId == opToInspect.id }
         val opMedals = opCitations.mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
             .sortedBy { it.precedenceOrder }
-        val opGear = uiState.gearItems.filter { it.equippedByOperatorId == opToInspect.id }
+        val opGear = uiState.gearItems.equippedBy(opToInspect)
         val inspectKit = TacticalCalculator.resolveEffectiveWardrobeKit(
             operator = opToInspect,
             smartWardrobeEnabled = uiState.smartWardrobeEnabled,
@@ -701,7 +701,7 @@ fun HqCommandScreen(
             .filter { it.operatorId == boardOp.id }
             .mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
             .sortedBy { it.precedenceOrder }
-        val boardGear = uiState.gearItems.filter { it.equippedByOperatorId == boardOp.id }
+        val boardGear = uiState.gearItems.equippedBy(boardOp)
         PromotionBoardDialog(
             operator = boardOp,
             evaluation = boardEval,

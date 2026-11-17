@@ -2,6 +2,7 @@ package com.example
 
 import com.example.data.catalog.GameCatalog
 import com.example.domain.BoardConsensus
+import com.example.domain.GearAutoDistributor
 import com.example.domain.SquadCohesionRules
 import com.example.domain.TacticalCalculator
 import com.example.domain.UniformRegaliaRules
@@ -41,9 +42,10 @@ class TacticalCalculatorTest {
     fun schoolStatsAndOddsIgnoreEquippedGear() {
         val recruit = GameCatalog.initialOperators.first { it.id == "op_cipher" }
         val rifle = GameCatalog.initialGear.first { it.firepowerPerTier > 0 }
-            .copy(tier = 5, unlocked = true, equippedByOperatorId = recruit.id)
+            .copy(tier = 5, unlocked = true)
         val facilities = FacilityType.entries.map { FacilityState(it, 5) }
-        val withGear = TacticalCalculator.operatorStats(recruit, listOf(rifle), emptyList(), facilities)
+        val armed = recruit.copy(equippedGearIds = mapOf(rifle.slot to rifle.id))
+        val withGear = TacticalCalculator.operatorStats(armed, listOf(rifle), emptyList(), facilities)
         val own = TacticalCalculator.soldierStats(recruit, emptyList())
         assertTrue(withGear.firepower > own.firepower)
         assertEquals(TacticalCalculator.operatorStats(recruit, emptyList(), emptyList(), emptyList()), own)
@@ -330,10 +332,10 @@ class TacticalCalculatorTest {
         )
         val armoredGear = GameCatalog.initialGear
             .filter { it.id in setOf("arm_avs_heavy", "utl_ifak_trauma", "hlm_ops_visor") }
-            .map { it.copy(unlocked = true, equippedByOperatorId = kestrel.id) }
+            .map { it.copy(unlocked = true) }
         val armoredSurvival = TacticalCalculator.operatorSurvivalPct(
             highRiskOp,
-            kestrel,
+            kestrel.copy(equippedGearIds = armoredGear.associate { it.slot to it.id }),
             armoredGear,
             emptyList(),
             facilities
@@ -1029,10 +1031,8 @@ class TacticalCalculatorTest {
         val starterSquad = listOf(kestrel, vesper, cipher)
 
         // Every pre-equipped starter loadout must be valid for its starting soldier
-        GameCatalog.initialGear
-            .filter { it.equippedByOperatorId != null }
-            .forEach { gear ->
-                val owner = starterSquad.first { it.id == gear.equippedByOperatorId }
+        starterSquad.flatMap { op -> op.equippedGearIds.values.map { op to GameCatalog.gearMetaById.getValue(it) } }
+            .forEach { (owner, gear) ->
                 assertTrue(
                     "Starter gear ${gear.id} should be equippable by ${owner.id}",
                     TacticalCalculator.evaluateGearEquipEligibility(gear, owner).eligible
@@ -1379,10 +1379,9 @@ class TacticalCalculatorTest {
             TacticalCalculator.layoutRibbonRackRows(sample.take(9))
         )
 
-        val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }.copy(
+        val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
+            .withManualCords("cord_infantry_blue", "cord_valor_fourragere").copy(
             dressDisplayMode = DressDisplayMode.RIBBONS,
-            equippedLeftCordId = "cord_infantry_blue",
-            equippedRightCordId = "cord_valor_fourragere",
             tailorOverrides = UniformTailorOverrides(
                 unitPatch = UnitPatchStyle.DIVISION_2,
                 neckSlot = UniformTailorOverrides.SLOT_NONE,
@@ -1437,7 +1436,7 @@ class TacticalCalculatorTest {
         assertTrue("cord_infantry_blue" in leftOptions)
         assertFalse("cord_general_aiguillette" in leftOptions)
         assertFalse("cord_valor_fourragere" in leftOptions)
-        assertEquals("cord_infantry_blue", leftOptions.first())
+        assertEquals("cord_sf_emerald", leftOptions.first())
 
         val rightOptions = UniformRegaliaRules.cordsForShoulder(
             medals = GameCatalog.medals,
@@ -1717,22 +1716,15 @@ class TacticalCalculatorTest {
             avgSurvivalPct = 90
         )
 
-        // Unlock specialty gear & assign an intentionally poor starting state (plus stale gear on HQ staff).
+        // Unlock everything except the SF items; nobody on standby has Ranger School
         val unlockedPool = GameCatalog.initialGear.map { gear ->
-            when (gear.id) {
-                "wpn_mk14_ebr", "opt_pvs31_nvg" ->
-                    gear.copy(unlocked = true, equippedByOperatorId = vesperDeployed.id) // locked on deployed
-                "arm_jpc_light" ->
-                    gear.copy(unlocked = true, equippedByOperatorId = kestrelHq.id) // stale on HQ staff
-                "wpn_sf_urg_i", "arm_sf_spear" ->
-                    gear.copy(unlocked = false, equippedByOperatorId = null) // still locked in Armory
-                "wpn_mk20_ssr", "arm_ranger_crye" ->
-                    gear.copy(unlocked = true, equippedByOperatorId = null) // Ranger-gated (nobody in standby field has Ranger)
-                else -> gear.copy(unlocked = true, equippedByOperatorId = null)
-            }
+            gear.copy(unlocked = gear.id !in setOf("wpn_sf_urg_i", "arm_sf_spear"))
         }
+        val deployedKit = mapOf(GearSlot.WEAPON to "wpn_mk14_ebr", GearSlot.OPTICS to "opt_pvs31_nvg")
+        val vesperWithKit = vesperDeployed.copy(equippedGearIds = deployedKit)
+        val hqWithStaleKit = kestrelHq.copy(equippedGearIds = mapOf(GearSlot.ARMOR to "arm_jpc_light"))
 
-        val operators = listOf(kestrelHq, vesperDeployed, cipherField, bastionField, rookField, retiredOp)
+        val operators = listOf(hqWithStaleKit, vesperWithKit, cipherField, bastionField, rookField, retiredOp)
         val result = TacticalCalculator.autoDistributeFieldGear(
             operators = operators,
             gearItems = unlockedPool,
@@ -1740,63 +1732,69 @@ class TacticalCalculatorTest {
             facilities = facilities,
             deployments = listOf(deployment)
         )
-
-        val gearById = result.updatedGear.associateBy { it.id }
+        val byId = result.updatedOperators.associateBy { it.id }
+        fun kit(op: Operator) = byId.getValue(op.id).equippedGearIds
 
         // 1. Deployed soldier keeps existing kit untouched
-        assertEquals(vesperDeployed.id, gearById.getValue("wpn_mk14_ebr").equippedByOperatorId)
-        assertEquals(vesperDeployed.id, gearById.getValue("opt_pvs31_nvg").equippedByOperatorId)
+        assertEquals(deployedKit, kit(vesperDeployed))
 
-        // 2. HQ Staff & Retired/Locked operators hold zero gear
-        assertTrue(result.updatedGear.none { it.equippedByOperatorId == kestrelHq.id })
-        assertTrue(result.updatedGear.none { it.equippedByOperatorId == retiredOp.id })
-        assertNull(gearById.getValue("wpn_sf_urg_i").equippedByOperatorId)
-        assertNull(gearById.getValue("arm_sf_spear").equippedByOperatorId)
+        // 2. HQ staff and retired soldiers carry nothing
+        assertTrue(kit(kestrelHq).isEmpty())
+        assertTrue(kit(retiredOp).isEmpty())
 
-        // 3. School-gated Ranger items remain unequipped when no standby soldier graduated Ranger School
-        assertNull(gearById.getValue("wpn_mk20_ssr").equippedByOperatorId)
-        assertNull(gearById.getValue("arm_ranger_crye").equippedByOperatorId)
+        // 3. Locked and Ranger-gated items go to nobody
+        val carried = result.updatedOperators.flatMap { it.equippedGearIds.values }.toSet()
+        assertFalse("wpn_sf_urg_i" in carried)
+        assertFalse("arm_sf_spear" in carried)
+        assertFalse("wpn_mk20_ssr" in carried)
+        assertFalse("arm_ranger_crye" in carried)
 
-        // 4. Specialty & training matching routes specialist kit to the right MOS/graduates
-        assertEquals(rookField.id, gearById.getValue("utl_cls_aid_bag").equippedByOperatorId)
-        assertEquals(bastionField.id, gearById.getValue("arm_avs_heavy").equippedByOperatorId)
-        assertEquals(bastionField.id, gearById.getValue("utl_breacher_kit").equippedByOperatorId)
-        assertEquals(cipherField.id, gearById.getValue("opt_sigint_lrf").equippedByOperatorId)
-        assertEquals(cipherField.id, gearById.getValue("hlm_ops_visor").equippedByOperatorId)
+        // 4. Specialist kit routes to the right MOS and graduates
+        assertEquals("utl_cls_aid_bag", kit(rookField)[GearSlot.UTILITY])
+        assertEquals("arm_avs_heavy", kit(bastionField)[GearSlot.ARMOR])
+        assertEquals("utl_breacher_kit", kit(bastionField)[GearSlot.UTILITY])
+        assertEquals("opt_sigint_lrf", kit(cipherField)[GearSlot.OPTICS])
+        assertEquals("hlm_ops_visor", kit(cipherField)[GearSlot.HELMET])
 
-        // 5. Each standby field operator holds at most 1 item per slot
-        for (opId in listOf(cipherField.id, bastionField.id, rookField.id)) {
-            val opSlots = result.updatedGear.filter { it.equippedByOperatorId == opId }.map { it.slot }
-            assertEquals(opSlots.distinct().size, opSlots.size)
+        // 5. Every slot is filled whenever the soldier qualifies for something unlocked in it
+        for (op in listOf(cipherField, bastionField, rookField)) {
+            for (slot in GearSlot.entries) {
+                val reason = GearAutoDistributor.emptySlotReason(op, slot, unlockedPool)
+                assertEquals("${op.id} $slot", reason == null, slot in kit(op))
+            }
         }
 
-        // 6. Repeating auto-distribute on the optimized output is strictly idempotent (0 changes)
+        // 6. Repeating auto-distribute on the optimized output changes nothing
         val secondPass = TacticalCalculator.autoDistributeFieldGear(
-            operators = operators,
-            gearItems = result.updatedGear,
+            operators = result.updatedOperators,
+            gearItems = unlockedPool,
             citations = emptyList(),
             facilities = facilities,
             deployments = listOf(deployment)
         )
-        assertTrue("Expected idempotent zero-change second pass", secondPass.changedItems.isEmpty())
+        assertTrue("Expected idempotent zero-change second pass", secondPass.changedOperators.isEmpty())
 
-        // 7. When an identical standby soldier is READY vs RECOVERING, READY takes the higher-tier rifle
-        val readyAssault = GameCatalog.createPostBasicRecruit("op_r1", OperatorSpecialty.ASSAULT, emptySet(), 1)
+        // 7. Gear is shared: two identical soldiers both carry the best rifle
+        val r1 = GameCatalog.createPostBasicRecruit("op_r1", OperatorSpecialty.ASSAULT, emptySet(), 1)
             .copy(completedMissionIds = setOf("msn_basic_qual"))
-        val medbayAssault = GameCatalog.createPostBasicRecruit("op_r2", OperatorSpecialty.ASSAULT, setOf(readyAssault.callsign), 2)
-            .copy(status = OperatorStatus.RECOVERING, completedMissionIds = setOf("msn_basic_qual"))
-        val xm7 = GameCatalog.gearMetaById.getValue("wpn_hk416_cqb").copy(unlocked = true, equippedByOperatorId = null)
-        val m4 = GameCatalog.gearMetaById.getValue("wpn_m4_carbine").copy(unlocked = true, equippedByOperatorId = null)
-        val priorityResult = TacticalCalculator.autoDistributeFieldGear(
-            operators = listOf(medbayAssault, readyAssault),
-            gearItems = listOf(xm7, m4),
-            citations = emptyList(),
-            facilities = facilities,
-            deployments = emptyList()
-        )
-        val prioById = priorityResult.updatedGear.associateBy { it.id }
-        assertEquals(readyAssault.id, prioById.getValue("wpn_hk416_cqb").equippedByOperatorId)
-        assertEquals(medbayAssault.id, prioById.getValue("wpn_m4_carbine").equippedByOperatorId)
+        val r2 = GameCatalog.createPostBasicRecruit("op_r2", OperatorSpecialty.ASSAULT, setOf(r1.callsign), 2)
+            .copy(completedMissionIds = setOf("msn_basic_qual"))
+        val rifles = listOf("wpn_hk416_cqb", "wpn_m4_carbine").map { GameCatalog.gearMetaById.getValue(it).copy(unlocked = true) }
+        val shared = TacticalCalculator.autoDistributeFieldGear(listOf(r1, r2), rifles, emptyList(), facilities, emptyList())
+        val picks = shared.updatedOperators.map { it.equippedGearIds[GearSlot.WEAPON] }
+        assertEquals(1, picks.distinct().size)
+        assertTrue(picks.all { it != null })
+    }
+
+    @Test
+    fun emptySlotExplainsWhy() {
+        val cipher = GameCatalog.initialOperators.first { it.id == "op_cipher" }.copy(completedMissionIds = setOf("msn_basic_qual"))
+        val rangerOnly = listOf(GameCatalog.gearMetaById.getValue("wpn_mk20_ssr").copy(unlocked = true))
+        val reason = GearAutoDistributor.emptySlotReason(cipher, GearSlot.WEAPON, rangerOnly)
+        assertTrue(reason, reason!!.contains("Ranger"))
+        val nothingUnlocked = GearAutoDistributor.emptySlotReason(cipher, GearSlot.WEAPON, rangerOnly.map { it.copy(unlocked = false) })
+        assertTrue(nothingUnlocked!!.contains("unlocked"))
+        assertNull(GearAutoDistributor.emptySlotReason(cipher, GearSlot.WEAPON, listOf(GameCatalog.gearMetaById.getValue("wpn_m4_carbine").copy(unlocked = true))))
     }
 
     @Test
@@ -2741,5 +2739,95 @@ class TacticalCalculatorTest {
         assertEquals("cord_general_aiguillette", manualWorn.rightCord?.id)
         // "None Worn" is respected
         assertNull(TacticalCalculator.resolveWornRegalia(base.withManualCords(null, null), owned).leftCord)
+    }
+
+    @Test
+    fun debriefFlagsPromotionOnlyWhenBoardMeritsAreMet() {
+        val facilities = FacilityType.entries.map { FacilityState(it, 3) }
+        // Enough XP for Sergeant, but no NCO Academy: the board blocks, so the debrief must not flag
+        val specialist = GameCatalog.createPostBasicRecruit("op_spc", OperatorSpecialty.ASSAULT, emptySet(), 0)
+            .copy(xp = OperatorRank.SGT.xpRequired, authorizedTier = RankTier.SOLDIER, missionsCompleted = 12)
+        val board = TacticalCalculator.evaluatePromotionBoard(specialist, listOf(specialist), emptyList(), emptyList(), facilities)
+        assertTrue(board.isCrossTierGate)
+        assertFalse(board.allMeritsMet)
+        assertNull(TacticalCalculator.promotionBoardReadyCode(specialist, listOf(specialist), emptyList(), emptyList(), facilities))
+        // Fallen soldiers are never flagged
+        assertNull(
+            TacticalCalculator.promotionBoardReadyCode(
+                specialist.copy(status = OperatorStatus.FALLEN), listOf(specialist), emptyList(), emptyList(), facilities
+            )
+        )
+    }
+
+    @Test
+    fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
+        val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
+        assertEquals(15, schools.size)
+        schools.forEach { school ->
+            assertFalse(school.id, school.hasClassCap)
+            assertTrue(school.id, 15 in school.minOperators..school.maxOperators)
+            assertEquals("1+", school.teamSizeLabel)
+        }
+        GameCatalog.missions.filter { it.scope != MissionScope.TRAINING }.forEach { mission ->
+            assertTrue(mission.id, mission.hasClassCap)
+            assertTrue(mission.id, mission.maxOperators <= 6)
+        }
+        // A class of 15 fills from the roster without being trimmed
+        val fifteen = (1..15).map { "op_$it" }
+        val squad = TacticalSquad(id = "sq", name = "Big", memberIds = fifteen, leaderId = "op_1")
+        val sf = GameCatalog.missions.first { it.id == "msn_sf_school" }
+        assertEquals(15, SquadCohesionRules.orderedMembersForDeployment(squad, fifteen.toSet(), sf.maxOperators).size)
+    }
+
+    @Test
+    fun leftCordAutoOrderPutsSfFirstAndFollowsMosAndBillet() {
+        val medals = GameCatalog.medals.associateBy { it.id }
+        fun cords(vararg ids: String) = ids.map { medals.getValue(it) }
+        val base = GameCatalog.initialOperators.first { it.id == "op_kestrel" }.copy(status = OperatorStatus.READY, hqRole = null)
+        fun left(op: Operator, owned: List<MedalDefinition>) = TacticalCalculator.resolveWornRegalia(op, owned).leftCord?.id
+
+        // 11B keeps Infantry Blue over other school cords, until SF
+        val assault = base.copy(specialty = OperatorSpecialty.ASSAULT)
+        val schoolCords = cords("cord_infantry_blue", "cord_engineer_scarlet", "cord_intel_teal")
+        assertEquals("cord_infantry_blue", left(assault, schoolCords))
+        assertEquals("cord_sf_emerald", left(assault, schoolCords + cords("cord_sf_emerald")))
+
+        // Other MOSs show a school cord before Infantry Blue; their own branch cord leads
+        assertEquals("cord_intel_teal", left(base.copy(specialty = OperatorSpecialty.BREACHER), cords("cord_infantry_blue", "cord_intel_teal")))
+        assertEquals("cord_engineer_scarlet", left(base.copy(specialty = OperatorSpecialty.BREACHER), schoolCords))
+        assertEquals("cord_sf_emerald", left(base.copy(specialty = OperatorSpecialty.RECON), cords("cord_airborne_crimson", "cord_sf_emerald")))
+        assertEquals("cord_infantry_blue", left(base.copy(specialty = OperatorSpecialty.MEDIC), cords("cord_infantry_blue")))
+
+        // Command: no billet takes the highest command-related cord (Intel, Logistics, Infantry)
+        val command = base.copy(specialty = OperatorSpecialty.COMMAND)
+        val commandCords = cords("cord_infantry_blue", "cord_logistics_buff", "cord_intel_teal", "cord_airborne_crimson")
+        assertEquals("cord_intel_teal", left(command, commandCords))
+        assertEquals("cord_logistics_buff", left(command, cords("cord_infantry_blue", "cord_logistics_buff")))
+        // Billets: S-3 Infantry, S-4 Logistics, S-2 Intel; S-1, CO and XO use the no-billet order
+        fun inBillet(role: HqStaffRole) = command.copy(status = OperatorStatus.HQ_STAFF, hqRole = role)
+        assertEquals("cord_infantry_blue", left(inBillet(HqStaffRole.S3_OPS_DIRECTOR), commandCords))
+        assertEquals("cord_logistics_buff", left(inBillet(HqStaffRole.S4_LOGISTICS_MEDEVAC), commandCords))
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.S2_INTEL_OVERWATCH), commandCords))
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.S1_PERSONNEL_HONORS), commandCords))
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.CO_COMMANDING_OFFICER), commandCords))
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.XO_CHIEF_OF_STAFF), commandCords))
+        // Billet cord not earned yet falls back to the no-billet order; SF still wins
+        assertEquals("cord_intel_teal", left(inBillet(HqStaffRole.S3_OPS_DIRECTOR), cords("cord_intel_teal", "cord_airborne_crimson")))
+        assertEquals("cord_sf_emerald", left(inBillet(HqStaffRole.S4_LOGISTICS_MEDEVAC), commandCords + cords("cord_sf_emerald")))
+        // A CO from another MOS keeps their MOS cord
+        val medicCo = base.copy(specialty = OperatorSpecialty.MEDIC, status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.CO_COMMANDING_OFFICER)
+        assertEquals("cord_medical_maroon", left(medicCo, cords("cord_infantry_blue", "cord_medical_maroon", "cord_intel_teal")))
+    }
+
+    @Test
+    fun schoolsChargeSuppliesPerSoldierAndMissionsPerTeam() {
+        val school = GameCatalog.missions.first { it.id == "msn_ranger_school" }
+        val mission = GameCatalog.missions.first { it.scope != MissionScope.TRAINING }
+        val one = TacticalCalculator.dispatchSupplyCost(school, 1, 1.0)
+        assertEquals(one * 15, TacticalCalculator.dispatchSupplyCost(school, 15, 1.0))
+        assertEquals(
+            TacticalCalculator.dispatchSupplyCost(mission, 1, 1.0),
+            TacticalCalculator.dispatchSupplyCost(mission, 4, 1.0)
+        )
     }
 }

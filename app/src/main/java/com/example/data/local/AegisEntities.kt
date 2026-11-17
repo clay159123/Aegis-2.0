@@ -70,6 +70,7 @@ data class OperatorEntity(
     val highestRiskName: String? = null,
     val timesWounded: Int = 0,
     val combatPatchHistoryCsv: String = "",
+    val equippedGearCsv: String = "",
     val unlocked: Boolean,
     val recruitCreditCost: Double,
     val recruitIntelCost: Double,
@@ -90,7 +91,6 @@ data class GearEntity(
     val resiliencePerTier: Int,
     val survivalBonusPct: Int,
     val unlocked: Boolean,
-    val equippedByOperatorId: String?,
     val baseCreditCost: Double,
     val baseSupplyCost: Double,
     val description: String

@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 4
+        const val SAVE_FORMAT_VERSION = 5
     }
 
     private val commanderMutex = Mutex()
@@ -411,6 +411,7 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     highestRiskSurvived = highestRiskName?.let { name -> MissionRisk.entries.find { it.name == name } },
     timesWounded = timesWounded,
     combatPatchHistory = decodeCombatPatchHistoryCsv(combatPatchHistoryCsv),
+    equippedGearIds = decodeEquippedGearCsv(equippedGearCsv),
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -420,6 +421,17 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
         if (parsed == RankTier.NCO && xp > OperatorRank.SFC.xpRequired) RankTier.SNCO else parsed
     }
 )
+
+/** Loadout stored as "SLOT=gearId;SLOT=gearId" */
+private fun encodeEquippedGearCsv(ids: Map<GearSlot, String>): String =
+    ids.entries.sortedBy { it.key.ordinal }.joinToString(";") { "${it.key.name}=${it.value}" }
+
+private fun decodeEquippedGearCsv(csv: String): Map<GearSlot, String> =
+    csv.split(";").mapNotNull { part ->
+        val (slotName, gearId) = part.split("=", limit = 2).takeIf { it.size == 2 } ?: return@mapNotNull null
+        val slot = GearSlot.entries.find { it.name == slotName } ?: return@mapNotNull null
+        gearId.takeIf { it.isNotBlank() }?.let { slot to it }
+    }.toMap()
 
 private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     id = id,
@@ -459,6 +471,7 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     highestRiskName = highestRiskSurvived?.name,
     timesWounded = timesWounded,
     combatPatchHistoryCsv = encodeCombatPatchHistoryCsv(combatPatchHistory),
+    equippedGearCsv = encodeEquippedGearCsv(equippedGearIds),
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -643,7 +656,6 @@ private fun GearEntity.toDomain(): GearItem {
         resiliencePerTier = resiliencePerTier,
         survivalBonusPct = survivalBonusPct,
         unlocked = unlocked,
-        equippedByOperatorId = equippedByOperatorId,
         baseCreditCost = baseCreditCost,
         baseSupplyCost = baseSupplyCost,
         description = meta?.description ?: description,
@@ -666,7 +678,6 @@ private fun GearItem.toEntity(): GearEntity = GearEntity(
     resiliencePerTier = resiliencePerTier,
     survivalBonusPct = survivalBonusPct,
     unlocked = unlocked,
-    equippedByOperatorId = equippedByOperatorId,
     baseCreditCost = baseCreditCost,
     baseSupplyCost = baseSupplyCost,
     description = description
