@@ -1055,7 +1055,17 @@ data class MissionTemplate(
     val isEvergreenStandalone: Boolean = false,
     val isRotatingStandalone: Boolean = false,
     val contractTag: String? = null
-)
+) {
+    /** False for schools, which take any number of eligible soldiers in one class */
+    val hasClassCap: Boolean get() = maxOperators != NO_CLASS_CAP
+
+    /** "1-4" for missions, "1+" for schools */
+    val teamSizeLabel: String get() = if (hasClassCap) "$minOperators-$maxOperators" else "$minOperators+"
+
+    companion object {
+        const val NO_CLASS_CAP = Int.MAX_VALUE
+    }
+}
 
 const val MAX_SQUAD_SIZE = 4
 const val MAX_SQUAD_COHESION_XP = 1000

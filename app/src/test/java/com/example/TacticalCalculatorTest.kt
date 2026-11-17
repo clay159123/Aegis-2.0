@@ -2741,4 +2741,42 @@ class TacticalCalculatorTest {
         // "None Worn" is respected
         assertNull(TacticalCalculator.resolveWornRegalia(base.withManualCords(null, null), owned).leftCord)
     }
+
+    @Test
+    fun debriefFlagsPromotionOnlyWhenBoardMeritsAreMet() {
+        val facilities = FacilityType.entries.map { FacilityState(it, 3) }
+        // Enough XP for Sergeant, but no NCO Academy: the board blocks, so the debrief must not flag
+        val specialist = GameCatalog.createPostBasicRecruit("op_spc", OperatorSpecialty.ASSAULT, emptySet(), 0)
+            .copy(xp = OperatorRank.SGT.xpRequired, authorizedTier = RankTier.SOLDIER, missionsCompleted = 12)
+        val board = TacticalCalculator.evaluatePromotionBoard(specialist, listOf(specialist), emptyList(), emptyList(), facilities)
+        assertTrue(board.isCrossTierGate)
+        assertFalse(board.allMeritsMet)
+        assertNull(TacticalCalculator.promotionBoardReadyCode(specialist, listOf(specialist), emptyList(), emptyList(), facilities))
+        // Fallen soldiers are never flagged
+        assertNull(
+            TacticalCalculator.promotionBoardReadyCode(
+                specialist.copy(status = OperatorStatus.FALLEN), listOf(specialist), emptyList(), emptyList(), facilities
+            )
+        )
+    }
+
+    @Test
+    fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
+        val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
+        assertEquals(15, schools.size)
+        schools.forEach { school ->
+            assertFalse(school.id, school.hasClassCap)
+            assertTrue(school.id, 15 in school.minOperators..school.maxOperators)
+            assertEquals("1+", school.teamSizeLabel)
+        }
+        GameCatalog.missions.filter { it.scope != MissionScope.TRAINING }.forEach { mission ->
+            assertTrue(mission.id, mission.hasClassCap)
+            assertTrue(mission.id, mission.maxOperators <= 6)
+        }
+        // A class of 15 fills from the roster without being trimmed
+        val fifteen = (1..15).map { "op_$it" }
+        val squad = TacticalSquad(id = "sq", name = "Big", memberIds = fifteen, leaderId = "op_1")
+        val sf = GameCatalog.missions.first { it.id == "msn_sf_school" }
+        assertEquals(15, SquadCohesionRules.orderedMembersForDeployment(squad, fifteen.toSet(), sf.maxOperators).size)
+    }
 }

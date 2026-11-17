@@ -566,7 +566,7 @@ class CommandViewModel(
             return
         }
         if (selectedOperatorIds.size !in mission.minOperators..mission.maxOperators) {
-            showBanner("Select ${mission.minOperators}–${mission.maxOperators} soldiers for ${mission.title}.")
+            showBanner("Select ${mission.teamSizeLabel} soldiers for ${mission.title}.")
             return
         }
         val deployedIds = state.deployments.flatMap { it.operatorIds }.toSet()
@@ -816,9 +816,9 @@ class CommandViewModel(
                         recommendedMedalId = recMedalId,
                         xpEarned = opXp,
                         promotedToRankCode = if (newRank != prevRank) newRank.code else null,
-                        readyForCategoryRankCode = OperatorRank.nextRank(newRank)
-                            ?.takeIf { it.tier != newRank.tier && newXp >= it.xpRequired }
-                            ?.code
+                        readyForCategoryRankCode = TacticalCalculator.promotionBoardReadyCode(
+                            updatedOp, state.operators, state.citations, state.gearItems, state.facilities
+                        )
                     )
                 )
             }
@@ -1023,9 +1023,9 @@ class CommandViewModel(
                         xpEarned = opXp,
                         promotedToRankCode = if (outcome != OperatorOutcomeType.FALLEN && newRank != prevRank) newRank.code else null,
                         readyForCategoryRankCode = if (outcome != OperatorOutcomeType.FALLEN) {
-                            OperatorRank.nextRank(newRank)
-                                ?.takeIf { it.tier != newRank.tier && newXp >= it.xpRequired }
-                                ?.code
+                            TacticalCalculator.promotionBoardReadyCode(
+                                updatedOp, state.operators, state.citations, state.gearItems, state.facilities
+                            )
                         } else {
                             null
                         }
@@ -1073,12 +1073,12 @@ class CommandViewModel(
             val prevStaffRank = staff.rank
             val nextStaffXp = OperatorRank.clampXpToAuthorizedTier(staff.xp + staffXp, staff.authorizedTier)
             val nextStaffRank = OperatorRank.forXp(nextStaffXp, staff.authorizedTier)
-            val readyGateCode = OperatorRank.nextRank(nextStaffRank)
-                ?.takeIf { it.tier != nextStaffRank.tier && nextStaffXp >= it.xpRequired }
-                ?.code
             val candidateStaff = staff.copy(
                 xp = nextStaffXp,
                 staffOpsSupported = nextSupportCount
+            )
+            val readyGateCode = TacticalCalculator.promotionBoardReadyCode(
+                candidateStaff, state.operators, state.citations, state.gearItems, state.facilities
             )
             var staffPetitionBlocked = state.operators.any {
                 it.unlocked && !it.status.isOutOfActiveService && (it.transferRequested || it.retirementRequested)

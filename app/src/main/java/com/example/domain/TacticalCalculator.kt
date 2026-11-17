@@ -2122,6 +2122,23 @@ object TacticalCalculator {
         deployments = deployments
     )
 
+    /**
+     * The rank code to flag on the debrief as "ready for promotion", or null.
+     * Uses the same check as the Promotion Board, so only soldiers who meet every merit check are flagged.
+     */
+    fun promotionBoardReadyCode(
+        candidate: Operator,
+        allOperators: List<Operator>,
+        citations: List<AwardedMedal>,
+        gearItems: List<GearItem>,
+        facilities: List<FacilityState>
+    ): String? {
+        if (candidate.status == OperatorStatus.FALLEN || candidate.status.isOutOfActiveService) return null
+        val roster = allOperators.map { if (it.id == candidate.id) candidate else it }
+        val board = evaluatePromotionBoard(candidate, roster, citations, gearItems, facilities)
+        return board.nextRank?.takeIf { board.isCrossTierGate && board.allMeritsMet }?.code
+    }
+
     fun evaluatePromotionBoard(
         operator: Operator,
         allOperators: List<Operator>,

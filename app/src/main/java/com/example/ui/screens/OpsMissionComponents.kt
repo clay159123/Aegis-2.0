@@ -281,7 +281,7 @@ internal fun CompactHqMissionCard(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
-                        text = "Team ${mission.minOperators}-${mission.maxOperators} • $adjustedSupplyCost SUP • ~${mission.baseSuccessRatePct}% Base",
+                        text = "${if (mission.hasClassCap) "Team" else "Class"} ${mission.teamSizeLabel} • $adjustedSupplyCost SUP • ~${mission.baseSuccessRatePct}% Base",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (canAffordSupply) extra.textMuted else MaterialTheme.colorScheme.error,
                         maxLines = 1,
