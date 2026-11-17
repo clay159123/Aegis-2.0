@@ -291,7 +291,8 @@ class AegisOpsRobolectricTest {
         composeTestRule.onNodeWithTag("dropdown_pin_slot_3").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("dropdown_pin_slot_3_opt_insig_staff_crest").assertExists()
-        composeTestRule.onNodeWithTag("dropdown_pin_slot_3_opt_insig_eib_rifle").assertDoesNotExist()
+        // Slot 3 is the catch-all, so it lists every chest badge
+        composeTestRule.onNodeWithTag("dropdown_pin_slot_3_opt_insig_eib_rifle").assertExists()
         composeTestRule.onNodeWithTag("dropdown_pin_slot_3_opt_auto").performClick()
         composeTestRule.waitForIdle()
 

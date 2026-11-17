@@ -95,8 +95,9 @@ fun UniformTailorStudioCard(
         if (!freeOverride) reg else (reg + allChestBadges.filter { it !in reg })
     }
     val rightPocketCatalog = remember(operator.specialty, freeOverride) {
+        // Slot 3 is the catch-all: crests first, then every other chest badge
         val reg = UniformRegaliaRules.chestBadgesForSlot(GameCatalog.medals, ChestBadgeSlot.RIGHT_POCKET, operator.specialty)
-        if (!freeOverride) reg else (reg + allChestBadges.filter { it !in reg })
+        reg + allChestBadges.filter { it !in reg }
     }
     val neckCatalog = remember {
         GameCatalog.medals.filter {

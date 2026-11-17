@@ -45,7 +45,8 @@ class TacticalCalculatorTest {
     fun fieldSchoolsDressInFieldAndClassroomSchoolsInBravos() {
         val fieldSchools = setOf(
             "msn_basic_qual", "msn_medical_school", "msn_engineer_school", "msn_night_qual",
-            "msn_ranger_school", "msn_sf_school", "msn_ocs_school"
+            "msn_ranger_school", "msn_sf_school", "msn_ocs_school",
+            "msn_sapper_school", "msn_pathfinder_school", "msn_eib_testing"
         )
         GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.forEach { school ->
             val expected = if (school.id in fieldSchools) WardrobeKit.FIELD else WardrobeKit.BRAVOS
@@ -112,6 +113,68 @@ class TacticalCalculatorTest {
             UnitPatchStyle.DIVISION_2,
             UnitPatchStyle.firstUnusedDivision(listOf(squadA.copy(standardPatch = UnitPatchStyle.DIVISION_1), squadB))
         )
+    }
+
+    @Test
+    fun combatAndExpertBadgesFollowMosAndTakeSlotOne() {
+        val base = GameCatalog.initialOperators.first { it.id == "op_cipher" }
+        val infantry = base.copy(specialty = OperatorSpecialty.ASSAULT, combatMissionsCompleted = 1)
+        val medic = base.copy(specialty = OperatorSpecialty.MEDIC, combatMissionsCompleted = 1)
+        val signals = base.copy(specialty = OperatorSpecialty.SIGNALS, combatMissionsCompleted = 1)
+        val sfSignals = signals.copy(completedMissionIds = setOf("msn_sf_school"))
+        fun eligible(id: String, op: Operator) =
+            TacticalCalculator.evaluateAwardEligibility(GameCatalog.medals.first { it.id == id }, op, emptySet()).eligible
+
+        assertEquals("insig_cib", TacticalCalculator.combatBadgeIdFor(infantry))
+        assertEquals("insig_combat_medic", TacticalCalculator.combatBadgeIdFor(medic))
+        assertEquals("insig_cab", TacticalCalculator.combatBadgeIdFor(signals))
+        assertEquals("insig_cib", TacticalCalculator.combatBadgeIdFor(sfSignals))
+        assertTrue(eligible("insig_cib", infantry))
+        assertFalse(eligible("insig_cib", infantry.copy(combatMissionsCompleted = 0)))
+        assertFalse(eligible("insig_cab", infantry))
+        assertTrue(eligible("insig_cab", signals))
+        assertTrue(eligible("insig_combat_medic", medic))
+        // The EIB needs EIB Testing, not just the Marksmanship school
+        assertFalse(eligible("insig_eib_rifle", infantry.copy(completedMissionIds = setOf("msn_basic_qual"))))
+        assertTrue(eligible("insig_eib_rifle", infantry.copy(completedMissionIds = setOf("msn_eib_testing"))))
+        assertFalse(eligible("insig_eib_rifle", signals.copy(completedMissionIds = setOf("msn_eib_testing"))))
+
+        // Slot 1 wears CIB over EIB for infantry, and the jump wings move down to slot 2
+        val badges = GameCatalog.medals.filter { it.id in setOf("insig_eib_rifle", "insig_cib", "insig_master_para") }
+        val worn = TacticalCalculator.resolveWornRegalia(infantry, badges)
+        assertEquals("insig_cib", worn.chestPinAboveRack?.id)
+        assertEquals("insig_master_para", worn.chestPinLeftPocket?.id)
+        // Slot 3 catches the leftover EIB instead of sitting empty
+        assertEquals("insig_eib_rifle", worn.chestPinRightPocket?.id)
+    }
+
+    @Test
+    fun sapperRangerAndPathfinderComeFromTheirOwnSchools() {
+        val cipher = GameCatalog.initialOperators.first { it.id == "op_cipher" }
+        fun eligible(id: String, done: Set<String>) = TacticalCalculator.evaluateAwardEligibility(
+            GameCatalog.medals.first { it.id == id }, cipher.copy(completedMissionIds = done, missionsCompleted = 1), emptySet()
+        ).eligible
+        assertFalse(eligible("insig_sapper_tab", setOf("msn_engineer_school")))
+        assertFalse(eligible("insig_sapper_tab", setOf("msn_ranger_school")))
+        assertTrue(eligible("insig_sapper_tab", setOf("msn_sapper_school")))
+        val sapper = GameCatalog.missions.first { it.id == "msn_sapper_school" }
+        assertEquals(setOf(OperatorSpecialty.ASSAULT, OperatorSpecialty.BREACHER), sapper.schoolRequirements?.allowedSpecialties)
+        val sf = GameCatalog.missions.first { it.id == "msn_sf_school" }
+        assertFalse("msn_ranger_school" in sf.schoolRequirements!!.prerequisiteAllIds)
+        assertEquals(
+            setOf(OperatorSpecialty.ASSAULT, OperatorSpecialty.RECON, OperatorSpecialty.BREACHER),
+            sf.schoolRequirements!!.naturalFitSpecialties
+        )
+        // Ranger graduation awards only the Ranger Tab, even for Engineers
+        val ranger = GameCatalog.missions.first { it.id == "msn_ranger_school" }
+        val (rangerAward, _) = TacticalCalculator.recommendedMedalForMissionDeed(
+            mission = ranger,
+            operator = cipher.copy(specialty = OperatorSpecialty.BREACHER),
+            outcome = OperatorOutcomeType.TRAINING_PASSED,
+            equippedGear = emptyList(),
+            existingCitationMedalIds = emptySet()
+        )
+        assertEquals("insig_ranger_tab", rangerAward)
     }
 
     @Test
@@ -713,13 +776,24 @@ class TacticalCalculatorTest {
         )
         assertNull(failedSchoolMedal)
 
-        // Failed combat mission returns null award for uninjured soldier
-        val (failedSafeMedal, _) = TacticalCalculator.recommendedMedalForMissionDeed(
+        // Surviving a first combat op earns the combat badge even if the mission failed
+        val (firstCombatBadge, _) = TacticalCalculator.recommendedMedalForMissionDeed(
             mission = deepOp,
             operator = kestrel,
             outcome = OperatorOutcomeType.SAFE,
             equippedGear = emptyList(),
             existingCitationMedalIds = emptySet(),
+            missionSucceeded = false
+        )
+        assertEquals(TacticalCalculator.combatBadgeIdFor(kestrel), firstCombatBadge)
+
+        // Failed combat mission returns null award for an uninjured soldier who already has the combat badge
+        val (failedSafeMedal, _) = TacticalCalculator.recommendedMedalForMissionDeed(
+            mission = deepOp,
+            operator = kestrel,
+            outcome = OperatorOutcomeType.SAFE,
+            equippedGear = emptyList(),
+            existingCitationMedalIds = setOf(TacticalCalculator.combatBadgeIdFor(kestrel)),
             missionSucceeded = false
         )
         assertNull(failedSafeMedal)
@@ -740,7 +814,7 @@ class TacticalCalculatorTest {
             operator = kestrel,
             outcome = OperatorOutcomeType.WOUNDED,
             equippedGear = emptyList(),
-            existingCitationMedalIds = setOf("medal_purple_shield"),
+            existingCitationMedalIds = setOf("medal_purple_shield", TacticalCalculator.combatBadgeIdFor(kestrel)),
             missionSucceeded = false
         )
         assertNull(failedWoundedRepeat)
@@ -751,7 +825,7 @@ class TacticalCalculatorTest {
             operator = kestrel,
             outcome = OperatorOutcomeType.SAFE,
             equippedGear = emptyList(),
-            existingCitationMedalIds = emptySet(),
+            existingCitationMedalIds = setOf(TacticalCalculator.combatBadgeIdFor(kestrel)),
             missionSucceeded = true,
             rollSeedPct = 80
         )
@@ -1483,7 +1557,7 @@ class TacticalCalculatorTest {
             if (it.type == FacilityType.ARMORY_WORKSHOP) it.copy(level = 3) else it
         }
 
-        // All 12 schools must exist with distinct IDs
+        // All 15 schools must exist with distinct IDs
         val schoolIds = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.map { it.id }.toSet()
         assertEquals(
             setOf(
@@ -1498,7 +1572,10 @@ class TacticalCalculatorTest {
                 "msn_sf_school",
                 "msn_nco_school",
                 "msn_snco_school",
-                "msn_ocs_school"
+                "msn_ocs_school",
+                "msn_sapper_school",
+                "msn_pathfinder_school",
+                "msn_eib_testing"
             ),
             schoolIds
         )
@@ -1521,7 +1598,10 @@ class TacticalCalculatorTest {
         val intelGrad = cipher.copy(completedMissionIds = setOf("msn_intel_school"), missionsCompleted = 1)
         assertTrue(TacticalCalculator.evaluateAwardEligibility(GameCatalog.medals.first { it.id == "cord_intel_teal" }, intelGrad, emptySet()).eligible)
         assertTrue(TacticalCalculator.evaluateAwardEligibility(GameCatalog.medals.first { it.id == "insig_intel_crest" }, intelGrad, emptySet()).eligible)
-        assertTrue(TacticalCalculator.evaluateAwardEligibility(GameCatalog.medals.first { it.id == "insig_pathfinder" }, intelGrad, emptySet()).eligible)
+        // Pathfinder now comes only from Pathfinder School
+        assertFalse(TacticalCalculator.evaluateAwardEligibility(GameCatalog.medals.first { it.id == "insig_pathfinder" }, intelGrad, emptySet()).eligible)
+        val pathfinderGrad = cipher.copy(completedMissionIds = setOf("msn_pathfinder_school"), missionsCompleted = 1)
+        assertTrue(TacticalCalculator.evaluateAwardEligibility(GameCatalog.medals.first { it.id == "insig_pathfinder" }, pathfinderGrad, emptySet()).eligible)
 
         // Airborne School grants Airborne Tab, Jump Wings, Airborne Crimson Cord & Maroon Beret
         val abnGrad = cipher.copy(completedMissionIds = setOf("msn_night_qual"), missionsCompleted = 1)
@@ -1545,7 +1625,7 @@ class TacticalCalculatorTest {
         )
         assertFalse(TacticalCalculator.canOperatorDeployOnMission(soldierHighStats, sfSchool, emptySet()).eligible)
 
-        // Blocked if missing Ranger School or Moderate+ combat risk
+        // Blocked without Moderate+ combat risk; Ranger School is no longer required
         val ncoMissingCombat = kestrel.copy(highestRiskSurvived = MissionRisk.LOW, baseFirepower = 20, baseStealth = 20, baseResilience = 20)
         assertFalse(TacticalCalculator.canOperatorDeployOnMission(ncoMissingCombat, sfSchool, emptySet()).eligible)
 
@@ -1556,7 +1636,7 @@ class TacticalCalculatorTest {
             baseStealth = 20,
             baseResilience = 20
         )
-        assertFalse(TacticalCalculator.canOperatorDeployOnMission(ncoMissingRanger, sfSchool, emptySet()).eligible)
+        assertTrue(TacticalCalculator.canOperatorDeployOnMission(ncoMissingRanger, sfSchool, emptySet()).eligible)
 
         // Qualified Ranger NCO/Officer with Moderate+ combat survival & high stats IS eligible for SFQC
         val sfCandidate = kestrel.copy(
@@ -1790,17 +1870,17 @@ class TacticalCalculatorTest {
             )
         }
 
-        // Ranger Course & SFQC: ASSAULT, RECON, BREACHER, COMMAND (excludes MEDIC & SIGNALS)
-        val eliteCombatAllowed = setOf(OperatorSpecialty.ASSAULT, OperatorSpecialty.RECON, OperatorSpecialty.BREACHER, OperatorSpecialty.COMMAND)
+        // Ranger Course is open to every MOS
         for (mos in OperatorSpecialty.entries) {
             assertEquals(
                 "Ranger MOS check for ${mos.name}",
-                mos in eliteCombatAllowed,
+                true,
                 TacticalCalculator.canOperatorDeployOnMission(maxedOp(mos).copy(completedMissionIds = setOf("msn_basic_qual", "msn_night_qual")), rangerSchool, emptySet()).eligible
             )
+            // SFQC: combat MOS (Infantry, Recon, Engineer) plus Command and Medic; not Signals
             assertEquals(
                 "SFQC MOS check for ${mos.name}",
-                mos in eliteCombatAllowed,
+                mos != OperatorSpecialty.SIGNALS,
                 TacticalCalculator.canOperatorDeployOnMission(maxedOp(mos), sfSchool, emptySet()).eligible
             )
         }

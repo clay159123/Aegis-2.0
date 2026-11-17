@@ -424,9 +424,12 @@ fun AwardVisualThumbnail(
                             drawStar(Offset(cx, h * 0.22f), h * 0.15f, h * 0.065f, Color(0xFFF2D272))
                         }
                     }
-                    InsigniaShape.RIFLE_BADGE -> {
+                    // EIB: rifle bar only. CIB: rifle bar inside an oak wreath.
+                    InsigniaShape.RIFLE_BADGE, InsigniaShape.CIB_BADGE -> {
                         val silver = Color(0xFFDDE3EC)
-                        drawLaurelWreathArcs(Offset(cx, cy), h * 0.42f, silver, (h * 0.09f).coerceAtLeast(2.5f))
+                        if (medal.insigniaShape == InsigniaShape.CIB_BADGE) {
+                            drawLaurelWreathArcs(Offset(cx, cy), h * 0.42f, silver, (h * 0.09f).coerceAtLeast(2.5f))
+                        }
                         drawRoundRect(
                             color = col,
                             topLeft = Offset(w * 0.14f, h * 0.28f),
@@ -444,11 +447,31 @@ fun AwardVisualThumbnail(
                         drawLine(silver, Offset(w * 0.20f, cy + 1f), Offset(w * 0.80f, cy - 1f), strokeWidth = (h * 0.09f).coerceAtLeast(2.8f), cap = StrokeCap.Round)
                         drawLine(silver, Offset(w * 0.22f, cy + 4f), Offset(w * 0.34f, cy + 1f), strokeWidth = (h * 0.11f).coerceAtLeast(3.2f), cap = StrokeCap.Round)
                     }
-                    InsigniaShape.MEDICAL_BADGE -> {
-                        drawLaurelWreathArcs(Offset(cx, cy), h * 0.44f, Color(0xFFDDE3EC), (h * 0.08f).coerceAtLeast(2.2f))
+                    // CAB: bayonet over a grenade inside an oak wreath
+                    InsigniaShape.CAB_BADGE -> {
+                        val silver = Color(0xFFDDE3EC)
+                        drawLaurelWreathArcs(Offset(cx, cy), h * 0.44f, silver, (h * 0.08f).coerceAtLeast(2.2f))
+                        drawOval(col, topLeft = Offset(cx - h * 0.14f, cy - h * 0.04f), size = Size(h * 0.28f, h * 0.32f))
+                        drawLine(silver, Offset(cx, h * 0.12f), Offset(cx, h * 0.80f), strokeWidth = (w * 0.05f).coerceAtLeast(2.4f), cap = StrokeCap.Round)
+                        drawLine(silver, Offset(cx - h * 0.10f, cy - h * 0.10f), Offset(cx + h * 0.10f, cy - h * 0.10f), strokeWidth = (w * 0.04f).coerceAtLeast(2.0f), cap = StrokeCap.Round)
+                    }
+                    // EFMB: cross over a stretcher. CMB: cross and caduceus inside an oak wreath.
+                    InsigniaShape.MEDICAL_BADGE, InsigniaShape.COMBAT_MEDICAL_BADGE -> {
+                        val combat = medal.insigniaShape == InsigniaShape.COMBAT_MEDICAL_BADGE
+                        if (combat) {
+                            drawLaurelWreathArcs(Offset(cx, cy), h * 0.44f, Color(0xFFDDE3EC), (h * 0.08f).coerceAtLeast(2.2f))
+                        } else {
+                            drawLine(Color(0xFFDDE3EC), Offset(w * 0.10f, cy - h * 0.08f), Offset(w * 0.90f, cy - h * 0.08f), strokeWidth = (h * 0.05f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
+                            drawLine(Color(0xFFDDE3EC), Offset(w * 0.10f, cy + h * 0.08f), Offset(w * 0.90f, cy + h * 0.08f), strokeWidth = (h * 0.05f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
+                        }
                         drawCircle(col.copy(alpha = 0.28f), radius = h * 0.35f, center = Offset(cx, cy))
                         drawLine(col, Offset(cx, h * 0.22f), Offset(cx, h * 0.78f), strokeWidth = (w * 0.08f).coerceAtLeast(3.2f))
                         drawLine(col, Offset(cx - w * 0.16f, cy), Offset(cx + w * 0.16f, cy), strokeWidth = (w * 0.08f).coerceAtLeast(3.2f))
+                        if (combat) {
+                            val gold = Color(0xFFF2D272)
+                            drawLine(gold, Offset(cx, h * 0.16f), Offset(cx, h * 0.84f), strokeWidth = (w * 0.025f).coerceAtLeast(1.4f))
+                            drawLine(gold, Offset(cx - h * 0.12f, h * 0.24f), Offset(cx + h * 0.12f, h * 0.24f), strokeWidth = (w * 0.025f).coerceAtLeast(1.4f), cap = StrokeCap.Round)
+                        }
                     }
                     InsigniaShape.TORCH_CREST -> {
                         drawLine(col, Offset(w * 0.12f, cy + h * 0.06f), Offset(w * 0.88f, cy + h * 0.06f), strokeWidth = (h * 0.09f).coerceAtLeast(2.8f), cap = StrokeCap.Round)

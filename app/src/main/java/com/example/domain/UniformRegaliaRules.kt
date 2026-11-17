@@ -79,13 +79,11 @@ object UniformRegaliaRules {
     private val preferredBadgesBySpecialtyAndSlot: Map<OperatorSpecialty, Map<ChestBadgeSlot, List<String>>> = mapOf(
         OperatorSpecialty.ASSAULT to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
-                "insig_eib_rifle",
                 "insig_master_para",
                 "insig_air_assault",
                 "insig_parachutist",
                 "insig_eod_badge",
-                "insig_pathfinder",
-                "insig_cmb_medic"
+                "insig_pathfinder"
             ),
             ChestBadgeSlot.LEFT_POCKET to listOf(
                 "insig_master_para",
@@ -105,11 +103,9 @@ object UniformRegaliaRules {
         ),
         OperatorSpecialty.MEDIC to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
-                "insig_cmb_medic",
                 "insig_air_assault",
                 "insig_master_para",
                 "insig_parachutist",
-                "insig_eib_rifle",
                 "insig_pathfinder",
                 "insig_eod_badge"
             ),
@@ -132,12 +128,10 @@ object UniformRegaliaRules {
         OperatorSpecialty.BREACHER to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
                 "insig_eod_badge",
-                "insig_eib_rifle",
                 "insig_master_para",
                 "insig_air_assault",
                 "insig_parachutist",
-                "insig_pathfinder",
-                "insig_cmb_medic"
+                "insig_pathfinder"
             ),
             ChestBadgeSlot.LEFT_POCKET to listOf(
                 "insig_eod_badge",
@@ -161,9 +155,7 @@ object UniformRegaliaRules {
                 "insig_pathfinder",
                 "insig_parachutist",
                 "insig_air_assault",
-                "insig_eib_rifle",
-                "insig_eod_badge",
-                "insig_cmb_medic"
+                "insig_eod_badge"
             ),
             ChestBadgeSlot.LEFT_POCKET to listOf(
                 "insig_pathfinder",
@@ -187,9 +179,7 @@ object UniformRegaliaRules {
                 "insig_eod_badge",
                 "insig_master_para",
                 "insig_air_assault",
-                "insig_parachutist",
-                "insig_eib_rifle",
-                "insig_cmb_medic"
+                "insig_parachutist"
             ),
             ChestBadgeSlot.LEFT_POCKET to listOf(
                 "insig_cyber_crest",
@@ -209,13 +199,11 @@ object UniformRegaliaRules {
         ),
         OperatorSpecialty.COMMAND to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
-                "insig_eib_rifle",
                 "insig_master_para",
                 "insig_air_assault",
                 "insig_eod_badge",
                 "insig_pathfinder",
-                "insig_parachutist",
-                "insig_cmb_medic"
+                "insig_parachutist"
             ),
             ChestBadgeSlot.LEFT_POCKET to listOf(
                 "insig_intel_crest",
@@ -315,6 +303,22 @@ object UniformRegaliaRules {
      * 2. Remaining AUTO slots (or invalid legacy overrides) select the top unused legal badge
      *    ranked by MOS priority first, then catalog precedence.
      */
+    /**
+     * Combat and expert badges, best first, for this soldier's MOS. These always take
+     * Pin Slot 1 on Auto, ahead of every skill badge:
+     * Infantry and SF-qualified: CIB then EIB; Medics: CMB then EFMB; everyone else: CAB.
+     */
+    fun combatExpertBadgeOrder(operator: Operator): List<String> = when {
+        operator.specialty == OperatorSpecialty.MEDIC -> listOf("insig_combat_medic", "insig_cmb_medic")
+        TacticalCalculator.isInfantryOrSfQualified(operator) -> listOf("insig_cib", "insig_eib_rifle")
+        else -> listOf("insig_cab")
+    }
+
+    /** Every combat/expert badge id, for keeping them out of the skill-badge fallbacks. */
+    val COMBAT_EXPERT_BADGE_IDS: Set<String> = setOf(
+        "insig_cib", "insig_eib_rifle", "insig_cab", "insig_combat_medic", "insig_cmb_medic"
+    )
+
     fun resolveChestBadgeSlots(
         operator: Operator,
         ownedBadgeMedals: List<MedalDefinition>,
@@ -335,8 +339,10 @@ object UniformRegaliaRules {
                 UniformTailorOverrides.SLOT_NONE -> Unit
                 UniformTailorOverrides.SLOT_AUTO -> needsAuto[idx] = true
                 else -> {
+                    // Slot 3 (right pocket) accepts any owned badge, so a manual pick there is always legal
                     val match = ownedById[raw]?.takeIf {
-                        (overrides.freeTailorOverride || it.isAllowedInChestSlot(slot)) && it.id !in usedIds
+                        (overrides.freeTailorOverride || slot == ChestBadgeSlot.RIGHT_POCKET || it.isAllowedInChestSlot(slot)) &&
+                            it.id !in usedIds
                     }
                     if (match != null) {
                         result[idx] = match
@@ -350,8 +356,24 @@ object UniformRegaliaRules {
 
         slots.forEachIndexed { idx, (slot, _) ->
             if (needsAuto[idx]) {
-                val pick = chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
-                    .firstOrNull { it.id !in usedIds }
+                val pick = when (slot) {
+                    // Slot 1: the soldier's best combat/expert badge, else the best skill badge
+                    ChestBadgeSlot.ABOVE_RACK ->
+                        combatExpertBadgeOrder(operator).firstNotNullOfOrNull { id -> ownedById[id]?.takeIf { id !in usedIds } }
+                            // any other combat/expert badge held (for example after a change of MOS)
+                            ?: ownedBadgeMedals.sortedBy { it.precedenceOrder }
+                                .firstOrNull { it.id in COMBAT_EXPERT_BADGE_IDS && it.id !in usedIds }
+                            ?: chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
+                                .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS }
+                    // Slot 2: best skill badge not already worn
+                    ChestBadgeSlot.LEFT_POCKET ->
+                        chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
+                            .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS }
+                    // Slot 3: an identification crest, else a catch-all for any unworn badge
+                    ChestBadgeSlot.RIGHT_POCKET ->
+                        chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty).firstOrNull { it.id !in usedIds }
+                            ?: ownedBadgeMedals.sortedBy { it.precedenceOrder }.firstOrNull { it.id !in usedIds }
+                }
                 if (pick != null) {
                     result[idx] = pick
                     usedIds += pick.id

@@ -43,6 +43,19 @@ object TacticalCalculator {
         }
     }
 
+    /** SF-qualified soldiers count as infantry for the CIB and EIB, whatever their MOS. */
+    fun isSfQualified(operator: Operator): Boolean = "msn_sf_school" in operator.completedMissionIds
+
+    fun isInfantryOrSfQualified(operator: Operator): Boolean =
+        operator.specialty == OperatorSpecialty.ASSAULT || isSfQualified(operator)
+
+    /** The combat badge this soldier earns by surviving combat: CIB, CMB or CAB. */
+    fun combatBadgeIdFor(operator: Operator): String = when {
+        operator.specialty == OperatorSpecialty.MEDIC -> "insig_combat_medic"
+        isInfantryOrSfQualified(operator) -> "insig_cib"
+        else -> "insig_cab"
+    }
+
     fun isAllCampaignsCleared(completedCampaignIds: Set<String>): Boolean =
         GameCatalog.campaigns.isNotEmpty() &&
             GameCatalog.campaigns.all { it.id in completedCampaignIds }
@@ -478,6 +491,9 @@ object TacticalCalculator {
                     val allowedLabels = req.allowedSpecialties.joinToString(" / ") { it.label }
                     missing += "MOS Ineligible (${operator.specialty.roleTag}): Requires $allowedLabels"
                 }
+                if (mission.id == "msn_eib_testing" && !isInfantryOrSfQualified(operator)) {
+                    missing += "Infantry or SF-qualified only"
+                }
                 val attemptsUsed = operator.schoolAttempts[mission.id] ?: 0
                 if (req.maxAttempts != null && attemptsUsed >= req.maxAttempts) {
                     missing += "Washed out ($attemptsUsed/${req.maxAttempts} attempts used)"
@@ -867,6 +883,9 @@ object TacticalCalculator {
         val maxCap = when (mission.id) {
             "msn_sf_school" -> 52
             "msn_ranger_school" -> 68
+            "msn_sapper_school" -> 72
+            "msn_eib_testing" -> 50
+            "msn_pathfinder_school" -> 80
             "msn_night_qual" -> 76
             "msn_intel_school", "msn_ocs_school" -> 80
             "msn_signals_school", "msn_medical_school", "msn_engineer_school", "msn_logistics_school" -> 84
@@ -1554,7 +1573,7 @@ object TacticalCalculator {
             }
             "cord_engineer_scarlet" -> {
                 if ("msn_engineer_school" !in operator.completedMissionIds) {
-                    missing += "Graduate Combat Engineer, Sapper & EOD School"
+                    missing += "Graduate Combat Engineer & EOD School"
                 }
             }
             "cord_signals_orange" -> {
@@ -1564,7 +1583,7 @@ object TacticalCalculator {
             }
             "cord_intel_teal" -> {
                 if ("msn_intel_school" !in operator.completedMissionIds) {
-                    missing += "Graduate Military Intelligence & Pathfinder School"
+                    missing += "Graduate Military Intelligence School"
                 }
             }
             "cord_medical_maroon" -> {
@@ -1606,10 +1625,8 @@ object TacticalCalculator {
                 }
             }
             "insig_sapper_tab" -> {
-                val sapperOk = "msn_engineer_school" in operator.completedMissionIds ||
-                    "msn_ranger_school" in operator.completedMissionIds
-                if (!sapperOk) {
-                    missing += "Graduate Combat Engineer & EOD School or Army Ranger Course"
+                if ("msn_sapper_school" !in operator.completedMissionIds) {
+                    missing += "Graduate the Sapper Leader Course"
                 }
             }
             "insig_airborne_tab" -> {
@@ -1619,7 +1636,7 @@ object TacticalCalculator {
             }
             "insig_eod_badge" -> {
                 if ("msn_engineer_school" !in operator.completedMissionIds) {
-                    missing += "Graduate Combat Engineer, Sapper & EOD School"
+                    missing += "Graduate Combat Engineer & EOD School"
                 }
             }
             "insig_cyber_crest" -> {
@@ -1629,7 +1646,7 @@ object TacticalCalculator {
             }
             "insig_intel_crest" -> {
                 if ("msn_intel_school" !in operator.completedMissionIds) {
-                    missing += "Graduate Military Intelligence & Pathfinder School"
+                    missing += "Graduate Military Intelligence School"
                 }
             }
             "insig_air_assault" -> {
@@ -1638,9 +1655,24 @@ object TacticalCalculator {
                 }
             }
             "insig_eib_rifle" -> {
-                if ("msn_basic_qual" !in operator.completedMissionIds) {
-                    missing += "Graduate Marksmanship & Tactical Basics School"
+                if (!isInfantryOrSfQualified(operator)) missing += "Infantry or SF-qualified only"
+                if ("msn_eib_testing" !in operator.completedMissionIds) {
+                    missing += "Pass Expert Infantryman Badge Testing"
                 }
+            }
+            "insig_cib" -> {
+                if (!isInfantryOrSfQualified(operator)) missing += "Infantry or SF-qualified only"
+                if (operator.combatMissionsCompleted < 1) missing += "Survive a field combat operation"
+            }
+            "insig_combat_medic" -> {
+                if (operator.specialty != OperatorSpecialty.MEDIC) missing += "Medics only"
+                if (operator.combatMissionsCompleted < 1) missing += "Survive a field combat operation"
+            }
+            "insig_cab" -> {
+                if (operator.specialty == OperatorSpecialty.MEDIC || isInfantryOrSfQualified(operator)) {
+                    missing += "Not for Infantry, SF-qualified or Medics (they earn the CIB or CMB)"
+                }
+                if (operator.combatMissionsCompleted < 1) missing += "Survive a field combat operation"
             }
             "insig_cmb_medic" -> {
                 if ("msn_medical_school" !in operator.completedMissionIds) {
@@ -1653,14 +1685,8 @@ object TacticalCalculator {
                 }
             }
             "insig_pathfinder" -> {
-                val intelGrad = "msn_intel_school" in operator.completedMissionIds
-                val airborneRecon = "msn_night_qual" in operator.completedMissionIds && (
-                    "msn_ridge_patrol" in operator.completedMissionIds ||
-                        "msn_harbor_overwatch" in operator.completedMissionIds ||
-                        "msn_deep_expedition" in operator.completedMissionIds
-                    )
-                if (!intelGrad && !airborneRecon) {
-                    missing += "Graduate Military Intel School, or Airborne School & Recon Op"
+                if ("msn_pathfinder_school" !in operator.completedMissionIds) {
+                    missing += "Graduate Pathfinder School"
                 }
             }
             "insig_parachutist" -> {
@@ -1765,8 +1791,8 @@ object TacticalCalculator {
             OperatorOutcomeType.WOUNDED -> {
                 val candidates = buildList {
                     add("medal_purple_shield")
+                    if (isCombatMission) add(combatBadgeIdFor(operator))
                     if (missionSucceeded && isCombatMission) {
-                        if (operator.specialty == OperatorSpecialty.MEDIC) add("insig_cmb_medic")
                         add("medal_bronze_valor")
                     }
                 }
@@ -1788,6 +1814,13 @@ object TacticalCalculator {
                 null to "Did not meet graduation standard on ${mission.title}."
             }
             OperatorOutcomeType.TRAINING_PASSED, OperatorOutcomeType.SAFE -> {
+                // Surviving a combat op (won or lost) earns the soldier's combat badge the first time
+                if (isCombatMission && outcome == OperatorOutcomeType.SAFE) {
+                    val combatBadge = firstEligibleUnowned(listOf(combatBadgeIdFor(operator)), includeGeneralFallback = false)
+                    if (combatBadge != null) {
+                        return combatBadge to "Engaged the enemy under fire during ${mission.title}."
+                    }
+                }
                 if (!missionSucceeded) {
                     return null to "Objective not achieved on ${mission.title}. Counted toward service record & promotion XP; no award warranted."
                 }
@@ -1804,20 +1837,12 @@ object TacticalCalculator {
                                 medalId to "Graduated ${mission.title} trauma stabilization, triage & combat medevac lanes."
                             }
                             "msn_engineer_school" -> {
-                                val candidates = when (operator.specialty) {
-                                    OperatorSpecialty.BREACHER -> listOf(
-                                        "insig_eod_badge",
-                                        "insig_sapper_tab",
-                                        "cord_engineer_scarlet"
-                                    )
-                                    else -> listOf(
-                                        "insig_sapper_tab",
-                                        "insig_eod_badge",
-                                        "cord_engineer_scarlet"
-                                    )
-                                }
+                                val candidates = listOf(
+                                    "insig_eod_badge",
+                                    "cord_engineer_scarlet"
+                                )
                                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
-                                medalId to "Graduated ${mission.title} ordnance render-safe, breaching & Sapper demolition lanes."
+                                medalId to "Graduated ${mission.title} ordnance render-safe and breaching lanes."
                             }
                             "msn_logistics_school" -> {
                                 val candidates = listOf(
@@ -1838,11 +1863,10 @@ object TacticalCalculator {
                             "msn_intel_school" -> {
                                 val candidates = listOf(
                                     "insig_intel_crest",
-                                    "insig_pathfinder",
                                     "cord_intel_teal"
                                 )
                                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
-                                medalId to "Graduated ${mission.title} imagery fusion, SIGINT & clandestine pathfinder boards."
+                                medalId to "Graduated ${mission.title} imagery fusion and SIGINT boards."
                             }
                             "msn_night_qual" -> {
                                 val candidates = listOf(
@@ -1850,24 +1874,14 @@ object TacticalCalculator {
                                     "insig_parachutist",
                                     "cord_airborne_crimson",
                                     "medal_night_owl",
-                                    "insig_air_assault",
-                                    "insig_pathfinder"
+                                    "insig_air_assault"
                                 )
                                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} static-line jump, fast-rope air assault & night drop zones — Maroon Beret authorized."
                             }
                             "msn_ranger_school" -> {
-                                val candidates = when (operator.specialty) {
-                                    OperatorSpecialty.BREACHER -> listOf(
-                                        "insig_sapper_tab",
-                                        "insig_ranger_tab"
-                                    )
-                                    else -> listOf(
-                                        "insig_ranger_tab",
-                                        "insig_sapper_tab"
-                                    )
-                                }
-                                val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
+                                // Ranger awards the Ranger Tab only, for every MOS
+                                val medalId = firstEligibleUnowned(listOf("insig_ranger_tab"), includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} in small-unit tactics, mountaineering & patrol leadership — Tan Beret authorized."
                             }
                             "msn_sf_school" -> {
@@ -1877,6 +1891,18 @@ object TacticalCalculator {
                                 )
                                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} SFAS & Robin Sage unconventional warfare board — Green Beret authorized."
+                            }
+                            "msn_sapper_school" -> {
+                                val medalId = firstEligibleUnowned(listOf("insig_sapper_tab"), includeGeneralFallback = false)
+                                medalId to "Graduated ${mission.title} demolitions, breaching and mountaineering lanes."
+                            }
+                            "msn_pathfinder_school" -> {
+                                val medalId = firstEligibleUnowned(listOf("insig_pathfinder"), includeGeneralFallback = false)
+                                medalId to "Graduated ${mission.title} drop zone, landing zone and sling-load lanes."
+                            }
+                            "msn_eib_testing" -> {
+                                val medalId = firstEligibleUnowned(listOf("insig_eib_rifle"), includeGeneralFallback = false)
+                                medalId to "Passed every ${mission.title} lane to standard and earned the Expert Infantryman Badge."
                             }
                             "msn_nco_school" -> {
                                 val candidates = listOf("medal_nco_dev")
@@ -1896,8 +1922,7 @@ object TacticalCalculator {
                             else -> {
                                 val candidates = listOf(
                                     "medal_basic_training",
-                                    "cord_infantry_blue",
-                                    "insig_eib_rifle"
+                                    "cord_infantry_blue"
                                 )
                                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
                                 medalId to "Passed range qualification, land navigation, and uniform inspection in ${mission.title}."

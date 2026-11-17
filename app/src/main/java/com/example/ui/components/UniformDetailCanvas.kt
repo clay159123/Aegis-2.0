@@ -1690,8 +1690,11 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
     val darkBack = Color(0xFF121722)
 
     when (shape) {
-        InsigniaShape.RIFLE_BADGE -> {
-            drawLaurelWreathArcs(center, badgeH * 0.62f, silver, (badgeH * 0.11f).coerceAtLeast(1.3f))
+        // EIB: musket on an infantry-blue bar, no wreath. CIB: the same inside an oak wreath.
+        InsigniaShape.RIFLE_BADGE, InsigniaShape.CIB_BADGE -> {
+            if (shape == InsigniaShape.CIB_BADGE) {
+                drawLaurelWreathArcs(center, badgeH * 0.62f, silver, (badgeH * 0.11f).coerceAtLeast(1.3f))
+            }
             drawRoundRect(
                 color = col,
                 topLeft = Offset(cx - badgeW * 0.44f, cy - badgeH * 0.28f),
@@ -1709,12 +1712,35 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
             drawLine(silver, Offset(cx - badgeW * 0.34f, cy + badgeH * 0.03f), Offset(cx + badgeW * 0.34f, cy - badgeH * 0.03f), strokeWidth = 1.9f, cap = StrokeCap.Round)
             drawLine(silver, Offset(cx - badgeW * 0.32f, cy + badgeH * 0.12f), Offset(cx - badgeW * 0.16f, cy + badgeH * 0.02f), strokeWidth = 2.2f, cap = StrokeCap.Round)
         }
-        InsigniaShape.MEDICAL_BADGE -> {
-            drawLaurelWreathArcs(center, badgeH * 0.58f, silver, (badgeH * 0.11f).coerceAtLeast(1.3f))
+        // CAB: bayonet over a grenade inside an oak wreath
+        InsigniaShape.CAB_BADGE -> {
+            drawLaurelWreathArcs(center, badgeH * 0.62f, silver, (badgeH * 0.11f).coerceAtLeast(1.3f))
+            drawOval(col, topLeft = Offset(cx - badgeH * 0.17f, cy - badgeH * 0.06f), size = Size(badgeH * 0.34f, badgeH * 0.40f))
+            drawOval(silver, topLeft = Offset(cx - badgeH * 0.17f, cy - badgeH * 0.06f), size = Size(badgeH * 0.34f, badgeH * 0.40f), style = Stroke(1.0f))
+            drawLine(silver, Offset(cx, cy - badgeH * 0.46f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = 1.8f, cap = StrokeCap.Round)
+            drawLine(silver, Offset(cx - badgeH * 0.12f, cy - badgeH * 0.12f), Offset(cx + badgeH * 0.12f, cy - badgeH * 0.12f), strokeWidth = 1.4f, cap = StrokeCap.Round)
+        }
+        // EFMB: medical cross over a stretcher, no wreath. CMB: cross and caduceus inside an oak wreath.
+        InsigniaShape.MEDICAL_BADGE, InsigniaShape.COMBAT_MEDICAL_BADGE -> {
+            val combat = shape == InsigniaShape.COMBAT_MEDICAL_BADGE
+            if (combat) {
+                drawLaurelWreathArcs(center, badgeH * 0.58f, silver, (badgeH * 0.11f).coerceAtLeast(1.3f))
+            } else {
+                // Stretcher: two poles with handles behind the cross
+                drawLine(silver, Offset(cx - badgeW * 0.44f, cy - badgeH * 0.10f), Offset(cx + badgeW * 0.44f, cy - badgeH * 0.10f), strokeWidth = 1.4f, cap = StrokeCap.Round)
+                drawLine(silver, Offset(cx - badgeW * 0.44f, cy + badgeH * 0.10f), Offset(cx + badgeW * 0.44f, cy + badgeH * 0.10f), strokeWidth = 1.4f, cap = StrokeCap.Round)
+            }
             drawCircle(darkBack, radius = badgeH * 0.42f, center = center)
             drawCircle(col, radius = badgeH * 0.42f, center = center, style = Stroke(1.2f))
             drawLine(col, Offset(cx, cy - badgeH * 0.26f), Offset(cx, cy + badgeH * 0.26f), strokeWidth = 2.4f)
             drawLine(col, Offset(cx - badgeH * 0.26f, cy), Offset(cx + badgeH * 0.26f, cy), strokeWidth = 2.4f)
+            if (combat) {
+                // Caduceus: gold staff with a wing bar and a coiled snake
+                drawLine(gold, Offset(cx, cy - badgeH * 0.34f), Offset(cx, cy + badgeH * 0.34f), strokeWidth = 1.2f)
+                drawLine(gold, Offset(cx - badgeH * 0.14f, cy - badgeH * 0.28f), Offset(cx + badgeH * 0.14f, cy - badgeH * 0.28f), strokeWidth = 1.1f, cap = StrokeCap.Round)
+                drawArc(gold, startAngle = 90f, sweepAngle = 180f, useCenter = false, topLeft = Offset(cx - badgeH * 0.08f, cy - badgeH * 0.18f), size = Size(badgeH * 0.16f, badgeH * 0.16f), style = Stroke(1.0f))
+                drawArc(gold, startAngle = -90f, sweepAngle = 180f, useCenter = false, topLeft = Offset(cx - badgeH * 0.08f, cy - badgeH * 0.02f), size = Size(badgeH * 0.16f, badgeH * 0.16f), style = Stroke(1.0f))
+            }
         }
         InsigniaShape.WINGS, InsigniaShape.STAR_WINGS -> {
             // Tapered 3-feather swept wings + ribbed parachute canopy + shroud lines

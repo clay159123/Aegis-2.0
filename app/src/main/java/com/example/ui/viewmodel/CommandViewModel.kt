@@ -1780,9 +1780,9 @@ class CommandViewModel(
                 it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape != InsigniaShape.TAB &&
                     (freeOverride || it.isAllowedInChestSlot(ChestBadgeSlot.LEFT_POCKET))
             },
+            // Slot 3 accepts any owned chest badge
             pinSlot3 = sanitizeSlot(ov.pinSlot3) {
-                it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape != InsigniaShape.TAB &&
-                    (freeOverride || it.isAllowedInChestSlot(ChestBadgeSlot.RIGHT_POCKET))
+                it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape != InsigniaShape.TAB
             },
             medalSlot1 = sanitizeSlot(ov.medalSlot1) {
                 it.category == AwardCategory.MEDAL || it.category == AwardCategory.RIBBON
