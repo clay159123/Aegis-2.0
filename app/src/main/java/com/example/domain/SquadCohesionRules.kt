@@ -67,6 +67,59 @@ object SquadCohesionRules {
         return id.takeIf { teamLeaderBlocker(squad, operators.find { it.id == id }) == null }
     }
 
+    /** Extra cohesion lost when the squad leader changes. */
+    const val LEADER_CHANGE_COHESION_FACTOR = 0.85
+
+    /**
+     * Cohesion XP after a roster change: scaled by the share of original members who remain,
+     * with an extra cut when the leader changes. No original members left resets it to 0.
+     */
+    fun cohesionAfterRosterChange(squad: TacticalSquad, newMemberIds: List<String>, newLeaderId: String?): Int {
+        if (squad.memberIds.isEmpty()) return squad.cohesionXp
+        val kept = squad.memberIds.count { it in newMemberIds }
+        if (kept == 0) return 0
+        val share = kept.toDouble() / squad.memberIds.size
+        val leaderChanged = squad.leaderId != null && newLeaderId != squad.leaderId
+        val factor = share * if (leaderChanged) LEADER_CHANGE_COHESION_FACTOR else 1.0
+        return (squad.cohesionXp * factor).roundToInt()
+    }
+
+    /** [squad] with a new roster, its cohesion scaled for turnover. */
+    fun applyRosterChange(squad: TacticalSquad, newMemberIds: List<String>, newLeaderId: String?): TacticalSquad {
+        if (newMemberIds == squad.memberIds && newLeaderId == squad.leaderId) return squad
+        val kept = squad.memberIds.count { it in newMemberIds }
+        return squad.copy(
+            memberIds = newMemberIds,
+            leaderId = newLeaderId,
+            cohesionXp = cohesionAfterRosterChange(squad, newMemberIds, newLeaderId),
+            missionsTogether = if (kept == 0) 0 else squad.missionsTogether
+        )
+    }
+
+    /**
+     * A unit citation for a successful High or Extreme combat op where every squad member
+     * who deployed came home, or null.
+     */
+    fun earnedUnitCitation(
+        squad: TacticalSquad,
+        deployedAfterMission: List<Operator>,
+        mission: MissionTemplate,
+        missionSucceeded: Boolean,
+        nowMillis: Long
+    ): UnitCitation? {
+        if (!missionSucceeded || mission.risk.isTraining || mission.scope == MissionScope.STAFF_DIPLOMATIC) return null
+        if (mission.risk != MissionRisk.HIGH && mission.risk != MissionRisk.EXTREME) return null
+        val squadDeployed = deployedAfterMission.filter { it.id in squad.memberIds }
+        if (squadDeployed.size < MIN_SQUAD_SIZE) return null
+        if (squadDeployed.any { it.status == OperatorStatus.FALLEN }) return null
+        return UnitCitation(
+            missionId = mission.id,
+            missionTitle = mission.title,
+            earnedAtMillis = nowMillis,
+            memberIds = squad.memberIds
+        )
+    }
+
     fun isOperatorEligibleForFieldSquad(operator: Operator): Boolean =
         operator.unlocked &&
             !operator.status.isOutOfActiveService &&
@@ -222,7 +275,7 @@ object SquadCohesionRules {
             if (validMembers == squad.memberIds && validLeader == squad.leaderId && validTeamLeader == squad.teamLeaderId) {
                 squad
             } else {
-                squad.copy(memberIds = validMembers, leaderId = validLeader, teamLeaderId = validTeamLeader)
+                applyRosterChange(squad, validMembers, validLeader).copy(teamLeaderId = validTeamLeader)
             }
         }
     }

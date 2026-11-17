@@ -446,6 +446,10 @@ object UniformRegaliaRules {
         }
     }
 
+    /** True when the soldier was a member of a squad when it earned a unit citation. */
+    fun hasUnitCitation(operator: Operator, squads: List<TacticalSquad>): Boolean =
+        squads.any { squad -> squad.unitCitations.any { operator.id in it.memberIds } }
+
     fun isLeaderPinShown(operator: Operator, squads: List<TacticalSquad>): Boolean =
         resolveLeaderRole(operator, squads) != LeaderRole.NONE
 

@@ -711,6 +711,25 @@ private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
     squadId = squadId
 )
 
+/** Citations stored as "missionId|title|millis|member+member;..." */
+private fun encodeUnitCitationsCsv(citations: List<UnitCitation>): String =
+    citations.joinToString(";") { c ->
+        val title = c.missionTitle.replace(Regex("[|;+]"), " ")
+        "${c.missionId}|$title|${c.earnedAtMillis}|${c.memberIds.joinToString("+")}"
+    }
+
+private fun decodeUnitCitationsCsv(csv: String): List<UnitCitation> =
+    csv.split(";").mapNotNull { entry ->
+        val parts = entry.split("|")
+        if (parts.size != 4) return@mapNotNull null
+        UnitCitation(
+            missionId = parts[0],
+            missionTitle = parts[1],
+            earnedAtMillis = parts[2].toLongOrNull() ?: 0L,
+            memberIds = parts[3].split("+").filter { it.isNotBlank() }
+        )
+    }
+
 private fun SquadEntity.toDomain(): TacticalSquad {
     val members = memberIdsCsv.split(",").filter { it.isNotBlank() }.distinct().take(MAX_SQUAD_SIZE)
     return TacticalSquad(
@@ -719,6 +738,7 @@ private fun SquadEntity.toDomain(): TacticalSquad {
         memberIds = members,
         leaderId = leaderId?.takeIf { it in members } ?: members.firstOrNull(),
         teamLeaderId = teamLeaderId?.takeIf { it in members && members.size >= TEAM_LEADER_MIN_SQUAD_SIZE },
+        unitCitations = decodeUnitCitationsCsv(unitCitationsCsv),
         cohesionXp = cohesionXp,
         missionsTogether = missionsTogether,
         createdAtMillis = createdAtMillis,
@@ -744,6 +764,7 @@ private fun TacticalSquad.toEntity(): SquadEntity {
         memberIdsCsv = members.joinToString(","),
         leaderId = leaderId?.takeIf { it in members } ?: members.firstOrNull(),
         teamLeaderId = teamLeaderId?.takeIf { it in members },
+        unitCitationsCsv = encodeUnitCitationsCsv(unitCitations),
         cohesionXp = cohesionXp.coerceIn(0, MAX_SQUAD_COHESION_XP),
         missionsTogether = missionsTogether.coerceAtLeast(0),
         createdAtMillis = createdAtMillis,

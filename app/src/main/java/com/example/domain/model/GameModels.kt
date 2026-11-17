@@ -1112,6 +1112,15 @@ enum class LeaderRole(val label: String) {
     SQUAD_LEADER("Squad Leader")
 }
 
+/** A gold-framed unit citation earned by a squad on a demanding combat op. */
+data class UnitCitation(
+    val missionId: String,
+    val missionTitle: String,
+    val earnedAtMillis: Long,
+    /** Squad members at the time; they keep wearing it after transferring out. */
+    val memberIds: List<String>
+)
+
 /** A squad can name a Team Leader once it has this many members. */
 const val TEAM_LEADER_MIN_SQUAD_SIZE = 5
 
@@ -1164,6 +1173,8 @@ data class TacticalSquad(
     val standardPatch: UnitPatchStyle = UnitPatchStyle.DIVISION_1,
     /** Second-in-command for squads of 5+: SGT or above, never the squad leader. */
     val teamLeaderId: String? = null,
+    /** Unit citations this squad earned; each lists who was a member when it was earned. */
+    val unitCitations: List<UnitCitation> = emptyList(),
     val standardCamo: CamoPattern? = null,
     val standardHeadgear: HeadgearStyle? = null,
     val standardDressStyle: DressUniformStyle? = null,

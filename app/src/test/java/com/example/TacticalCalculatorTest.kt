@@ -9,6 +9,7 @@ import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -2912,5 +2913,45 @@ class TacticalCalculatorTest {
         val withTl = SquadCohesionRules.calculateCohesionGain(five, ops, mission, true)!!.gainedXp
         val withoutTl = SquadCohesionRules.calculateCohesionGain(five.copy(teamLeaderId = null), ops, mission, true)!!.gainedXp
         assertEquals(SquadCohesionRules.TEAM_LEADER_COHESION_XP, withTl - withoutTl)
+    }
+
+    @Test
+    fun cohesionDropsWithTurnoverAndResetsWhenNobodyRemains() {
+        val squad = TacticalSquad("sq_c", "Alpha", listOf("a", "b", "c", "d"), "a", cohesionXp = 800, missionsTogether = 9)
+        // Swap one member: keeps 75%
+        assertEquals(600, SquadCohesionRules.cohesionAfterRosterChange(squad, listOf("a", "b", "c", "e"), "a"))
+        // Swap the leader too: an extra 15% off
+        assertEquals(510, SquadCohesionRules.cohesionAfterRosterChange(squad, listOf("e", "b", "c", "d"), "b"))
+        // Nobody left: reset
+        val fresh = SquadCohesionRules.applyRosterChange(squad, listOf("x", "y"), "x")
+        assertEquals(0, fresh.cohesionXp)
+        assertEquals(0, fresh.missionsTogether)
+        // Losing a member to the memorial costs cohesion too
+        val ops = listOf("a", "b", "c").map { id ->
+            GameCatalog.createPostBasicRecruit(id, OperatorSpecialty.ASSAULT, emptySet(), 0).copy(id = id)
+        }
+        val pruned = SquadCohesionRules.pruneUnavailableMembers(listOf(squad), ops).first()
+        assertEquals(600, pruned.cohesionXp)
+    }
+
+    @Test
+    fun unitCitationIsEarnedBySquadsAndWornAfterTransfer() {
+        val ops = (1..4).map { GameCatalog.createPostBasicRecruit("op_u$it", OperatorSpecialty.ASSAULT, emptySet(), it).copy(id = "op_u$it") }
+        val squad = TacticalSquad("sq_u", "Alpha", ops.map { it.id }, ops[0].id)
+        val high = GameCatalog.missions.first { it.id == "msn_citadel_recovery" }
+        val moderate = GameCatalog.missions.first { it.id == "msn_convoy_escort" }
+        val citation = SquadCohesionRules.earnedUnitCitation(squad, ops, high, true, 1L)
+        assertNotNull(citation)
+        assertNull(SquadCohesionRules.earnedUnitCitation(squad, ops, moderate, true, 1L))
+        assertNull(SquadCohesionRules.earnedUnitCitation(squad, ops, high, false, 1L))
+        val oneFallen = ops.mapIndexed { i, o -> if (i == 3) o.copy(status = OperatorStatus.FALLEN) else o }
+        assertNull(SquadCohesionRules.earnedUnitCitation(squad, oneFallen, high, true, 1L))
+        // Members wear it; a soldier who transfers out keeps it; newcomers don't get it
+        val cited = squad.copy(unitCitations = listOf(citation!!))
+        val afterTransfer = cited.copy(memberIds = ops.take(3).map { it.id } + "op_new")
+        assertTrue(UniformRegaliaRules.hasUnitCitation(ops[3], listOf(afterTransfer)))
+        assertFalse(UniformRegaliaRules.hasUnitCitation(ops[0].copy(id = "op_new"), listOf(afterTransfer)))
+        // Valor medals alone no longer show it
+        assertFalse(UniformRegaliaRules.hasUnitCitation(ops[0], emptyList()))
     }
 }

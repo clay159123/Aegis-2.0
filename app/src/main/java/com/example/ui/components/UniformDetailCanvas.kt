@@ -90,8 +90,9 @@ fun OperatorUniformPreview(
     val leftCordDef = wornRegalia.leftCord
     val rightCordDef = wornRegalia.rightCord
     val neckMedalDef = wornRegalia.neckMedal
+    // The gold-framed unit citation is a squad award: worn by everyone who was in the squad when it was earned
     val hasUnitCitation = renderOperator.tailorOverrides.showUnitCitation &&
-        awardedMedals.any { it.tier == MedalTier.SUPREME || it.tier == MedalTier.VALOR }
+        UniformRegaliaRules.hasUnitCitation(renderOperator, squads)
     val combatPatch = UniformRegaliaRules.resolveCombatPatch(renderOperator)
     val marksmanshipTier = UniformRegaliaRules.resolveMarksmanshipTier(renderOperator, equippedGear)
     val overseasBars = UniformRegaliaRules.resolveOverseasBars(renderOperator)

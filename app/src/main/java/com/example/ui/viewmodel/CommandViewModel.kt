@@ -1211,7 +1211,19 @@ class CommandViewModel(
                 missionSucceeded = missionSucceeded
             )
         }
-        val updatedSquadMap = cohesionResults.associate { it.updatedSquad.id to it.updatedSquad }
+        val postMissionDeployed = targetOps.map { updatedOpsById[it.id] ?: it }
+        val citedSquads = participatingSquads.mapNotNull { squad ->
+            SquadCohesionRules.earnedUnitCitation(squad, postMissionDeployed, mission, missionSucceeded, now)?.let { squad.id to it }
+        }.toMap()
+        val updatedSquadMap = (cohesionResults.associate { it.updatedSquad.id to it.updatedSquad } + participatingSquads
+            .filter { it.id in citedSquads && cohesionResults.none { r -> r.updatedSquad.id == it.id } }
+            .associateBy { it.id })
+            .mapValues { (id, squad) ->
+                citedSquads[id]?.let { squad.copy(unitCitations = squad.unitCitations + it) } ?: squad
+            }
+        val unitCitationNote = citedSquads.keys.mapNotNull { id -> state.squads.find { it.id == id }?.name }
+            .takeIf { it.isNotEmpty() }
+            ?.let { names -> "${names.joinToString(", ")} earned the Unit Citation" }
         val sanitizedSquadsToSave = SquadCohesionRules.pruneUnavailableMembers(
             squads = state.squads.map { updatedSquadMap[it.id] ?: it },
             operators = effectiveRoster
@@ -1221,6 +1233,7 @@ class CommandViewModel(
         val kitDebriefNote = kitBonus.summaryLabel?.takeIf { kitBonus.allMatched }
         val cohesionSummaryNote = listOfNotNull(
             cohesionResults.maxByOrNull { it.gainedXp }?.summaryNote,
+            unitCitationNote,
             kitDebriefNote
         ).joinToString(" • ").ifBlank { null }
 
@@ -2253,10 +2266,9 @@ class CommandViewModel(
             ?: existing?.standardPatch?.takeIf { it.isDivision }
             ?: UnitPatchStyle.firstUnusedDivision(state.squads, excludingSquadId = existing?.id)
         val targetSquad = if (existing != null) {
-            existing.copy(
+            // Turnover costs cohesion in proportion to the original members who leave
+            SquadCohesionRules.applyRosterChange(existing, validIds, resolvedLeaderId).copy(
                 name = resolvedName,
-                memberIds = validIds,
-                leaderId = resolvedLeaderId,
                 teamLeaderId = resolvedTeamLeaderId,
                 standardPatch = resolvedPatch,
                 standardCamo = standard.camo,
@@ -2299,7 +2311,7 @@ class CommandViewModel(
                 val remaining = other.memberIds.filter { it !in validIds }
                 val nextLeader = other.leaderId?.takeIf { it in remaining }
                     ?: SquadCohesionRules.pickDefaultLeaderId(remaining, state.operators)
-                val trimmed = other.copy(memberIds = remaining, leaderId = nextLeader)
+                val trimmed = SquadCohesionRules.applyRosterChange(other, remaining, nextLeader)
                 trimmed.copy(teamLeaderId = SquadCohesionRules.validTeamLeaderId(trimmed, state.operators))
             }
 
