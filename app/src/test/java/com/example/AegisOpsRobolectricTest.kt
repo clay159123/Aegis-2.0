@@ -29,6 +29,7 @@ import com.example.data.local.AegisRepository
 import com.example.domain.PromotionEndorsementFocus
 import com.example.domain.model.AwardedMedal
 import com.example.domain.model.CamoPattern
+import com.example.domain.model.CombatPatchRecord
 import com.example.domain.model.DressUniformStyle
 import com.example.domain.model.HeadgearStyle
 import com.example.domain.model.MissionRisk
@@ -675,7 +676,7 @@ class AegisOpsRobolectricTest {
         val op = GameCatalog.initialOperators.first { it.id == "op_kestrel" }.copy(
             missionsCompleted = 6,
             highestRiskSurvived = MissionRisk.MODERATE,
-            tailorOverrides = UniformTailorOverrides(combatPatch = UnitPatchStyle.SPECIAL_FORCES)
+            combatPatchHistory = listOf(CombatPatchRecord("camp_test", UnitPatchStyle.DIVISION_2, 10L))
         )
         val medal = GameCatalog.medals.first { it.id == "medal_army_commendation" }
         val repeatCitations = listOf(
@@ -820,7 +821,7 @@ class AegisOpsRobolectricTest {
                 name = "Honor Guard",
                 memberIds = listOf("op_kestrel", "op_vesper"),
                 leaderId = "op_kestrel",
-                standardPatch = UnitPatchStyle.SUPREME_HQ,
+                standardPatch = UnitPatchStyle.DIVISION_3,
                 standardCamo = CamoPattern.NIGHT_CHARCOAL,
                 standardBravosHeadgear = HeadgearStyle.TAN_BERET,
                 standardBravosDressStyle = DressUniformStyle.NCO_PARADE_BLUES,

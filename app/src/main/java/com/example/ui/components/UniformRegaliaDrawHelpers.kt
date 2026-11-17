@@ -20,8 +20,23 @@ import com.example.domain.model.MarksmanshipBadgeTier
 import com.example.domain.model.MedalDefinition
 import com.example.domain.model.OperatorSpecialty
 import com.example.domain.model.UnitPatchStyle
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+
+/**
+ * Top edge of the breast pockets as a fraction of figure height, shared by every dress
+ * coat and the Bravos shirt. Ribbons, medals, nameplate, unit citation, leader pin and
+ * pocket badges are all placed relative to it, so changing this one value moves the
+ * pockets and everything on them together.
+ */
+internal const val CHEST_POCKET_TOP_FRACTION = 0.505f
+
+/** Pocket top the original chest offsets were tuned against. */
+private const val LEGACY_CHEST_POCKET_TOP_FRACTION = 0.565f
+
+/** How far the chest group sits above its original position. */
+internal const val CHEST_LIFT = LEGACY_CHEST_POCKET_TOP_FRACTION - CHEST_POCKET_TOP_FRACTION
 
 internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     rightChestCenterX: Float,
@@ -35,7 +50,7 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
 ) {
     // 1. Unit Citation Bar shifted cleanly higher if Leader Pin is present so all 3 items breathe
     if (hasUnitCitation) {
-        val citTop = if (showLeaderPin) h * 0.514f else h * 0.526f
+        val citTop = if (showLeaderPin) h * (0.514f - CHEST_LIFT) else h * (0.526f - CHEST_LIFT)
         drawRect(
             color = Color(0xFF1E4C8E),
             topLeft = Offset(rightChestCenterX - w * 0.042f, citTop),
@@ -51,7 +66,7 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
 
     // 2. Small Brass/Enamel Squad Leader Pin directly above the nameplate
     if (showLeaderPin) {
-        val pinCenterY = h * 0.552f
+        val pinCenterY = h * (0.552f - CHEST_LIFT)
         val pinHalfW = (w * 0.024f).coerceAtLeast(3.5f)
         val pinHalfH = (h * 0.0085f).coerceAtLeast(1.8f)
         // Shield bar backing in command crimson & antique brass
@@ -79,7 +94,7 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
 
     // 3. Engraved Callsign Nameplate
     val plateX = rightChestCenterX - w * 0.056f
-    val plateY = h * 0.568f
+    val plateY = h * (0.568f - CHEST_LIFT)
     val plateW = w * 0.112f
     val plateH = h * 0.026f
 
@@ -536,5 +551,111 @@ internal fun DrawScope.drawShoulderCords(
                 drawPath(braidOuter, color = Color(0xFF9C2D2D).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
             }
         }
+    }
+}
+
+/**
+ * Emblem in the upper field of a unit shoulder patch. [unitW]/[unitH] are the figure's
+ * width and height, so emblems scale with the uniform drawing.
+ */
+internal fun DrawScope.drawUnitPatchEmblem(
+    patchStyle: UnitPatchStyle,
+    center: Offset,
+    unitW: Float,
+    unitH: Float,
+    accent: Color
+) {
+    val rx = unitW * 0.012f
+    val ry = unitH * 0.011f
+    val stroke = (unitW * 0.0045f).coerceAtLeast(1.2f)
+    when (patchStyle) {
+        // 1st: single star
+        UnitPatchStyle.DIVISION_1 -> drawStar(center, rx * 1.05f, rx * 0.45f, accent)
+
+        // 2nd: crossed sabers with hilts
+        UnitPatchStyle.DIVISION_2 -> {
+            val a1 = Offset(center.x - rx, center.y + ry)
+            val b1 = Offset(center.x + rx, center.y - ry)
+            val a2 = Offset(center.x + rx, center.y + ry)
+            val b2 = Offset(center.x - rx, center.y - ry)
+            drawLine(accent, a1, b1, strokeWidth = stroke, cap = StrokeCap.Round)
+            drawLine(accent, a2, b2, strokeWidth = stroke, cap = StrokeCap.Round)
+            val guard = rx * 0.35f
+            drawLine(accent, Offset(a1.x - guard * 0.2f, a1.y - guard), Offset(a1.x + guard, a1.y + guard * 0.2f), strokeWidth = stroke * 0.8f)
+            drawLine(accent, Offset(a2.x - guard, a2.y + guard * 0.2f), Offset(a2.x + guard * 0.2f, a2.y - guard), strokeWidth = stroke * 0.8f)
+        }
+
+        // 3rd: lion head (mane ring with a face and ears)
+        UnitPatchStyle.DIVISION_3 -> {
+            for (i in 0 until 10) {
+                val ang = (i / 10f) * 2f * PI.toFloat()
+                val inner = Offset(center.x + cos(ang) * rx * 0.55f, center.y + sin(ang) * ry * 0.55f)
+                val outer = Offset(center.x + cos(ang) * rx * 1.05f, center.y + sin(ang) * ry * 1.05f)
+                drawLine(accent, inner, outer, strokeWidth = stroke * 0.8f, cap = StrokeCap.Round)
+            }
+            drawCircle(accent, radius = rx * 0.55f, center = center)
+            drawCircle(Color.Black.copy(alpha = 0.7f), radius = rx * 0.10f, center = Offset(center.x - rx * 0.2f, center.y - ry * 0.1f))
+            drawCircle(Color.Black.copy(alpha = 0.7f), radius = rx * 0.10f, center = Offset(center.x + rx * 0.2f, center.y - ry * 0.1f))
+        }
+
+        // 4th: oak leaf with a midrib
+        UnitPatchStyle.DIVISION_4 -> {
+            val leaf = Path().apply {
+                moveTo(center.x, center.y - ry * 1.1f)
+                quadraticTo(center.x + rx * 1.1f, center.y - ry * 0.4f, center.x + rx * 0.5f, center.y)
+                quadraticTo(center.x + rx * 1.0f, center.y + ry * 0.4f, center.x, center.y + ry * 1.1f)
+                quadraticTo(center.x - rx * 1.0f, center.y + ry * 0.4f, center.x - rx * 0.5f, center.y)
+                quadraticTo(center.x - rx * 1.1f, center.y - ry * 0.4f, center.x, center.y - ry * 1.1f)
+                close()
+            }
+            drawPath(leaf, color = accent)
+            drawLine(Color.Black.copy(alpha = 0.45f), Offset(center.x, center.y - ry * 0.9f), Offset(center.x, center.y + ry * 1.3f), strokeWidth = stroke * 0.6f)
+        }
+
+        // 5th: castle tower with crenellations
+        UnitPatchStyle.DIVISION_5 -> {
+            val left = center.x - rx * 0.7f
+            val top = center.y - ry * 0.6f
+            val width = rx * 1.4f
+            val height = ry * 1.6f
+            drawRect(accent, Offset(left, top), Size(width, height))
+            val merlonW = width / 5f
+            for (i in 0 until 3) {
+                drawRect(accent, Offset(left + i * 2 * merlonW, top - ry * 0.45f), Size(merlonW, ry * 0.45f))
+            }
+            drawRect(Color.Black.copy(alpha = 0.55f), Offset(center.x - merlonW * 0.5f, top + height * 0.5f), Size(merlonW, height * 0.5f))
+        }
+
+        // 6th: eagle with spread wings
+        UnitPatchStyle.DIVISION_6 -> {
+            val wings = Path().apply {
+                moveTo(center.x - rx * 1.1f, center.y - ry * 0.5f)
+                quadraticTo(center.x - rx * 0.5f, center.y + ry * 0.1f, center.x, center.y + ry * 0.2f)
+                quadraticTo(center.x + rx * 0.5f, center.y + ry * 0.1f, center.x + rx * 1.1f, center.y - ry * 0.5f)
+                quadraticTo(center.x + rx * 0.6f, center.y + ry * 0.6f, center.x, center.y + ry * 0.7f)
+                quadraticTo(center.x - rx * 0.6f, center.y + ry * 0.6f, center.x - rx * 1.1f, center.y - ry * 0.5f)
+                close()
+            }
+            drawPath(wings, color = accent)
+            drawCircle(accent, radius = rx * 0.28f, center = Offset(center.x, center.y - ry * 0.25f))
+            drawLine(accent, Offset(center.x, center.y + ry * 0.5f), Offset(center.x, center.y + ry * 1.1f), strokeWidth = stroke)
+        }
+
+        // High Command: gold star over a white sword line
+        UnitPatchStyle.SUPREME_HQ -> {
+            drawStar(center, rx, rx * 0.43f, Color(0xFFF5D576))
+            drawLine(
+                Color.White.copy(alpha = 0.9f),
+                Offset(center.x, center.y + ry * 1.1f),
+                Offset(center.x, center.y + ry * 2.2f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        }
+
+        // Unassigned: plain ring
+        UnitPatchStyle.UNASSIGNED -> drawCircle(accent, radius = rx * 0.75f, center = center, style = Stroke(width = stroke))
+
+        UnitPatchStyle.AUTO_MOS, UnitPatchStyle.NONE -> Unit
     }
 }

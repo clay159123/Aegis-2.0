@@ -235,10 +235,15 @@ object UniformRegaliaRules {
         )
     )
 
-    private val preferredTabOrderBySpecialty: Map<OperatorSpecialty, List<String>> = mapOf(
-        OperatorSpecialty.BREACHER to listOf("insig_sapper_tab", "insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab"),
-        OperatorSpecialty.RECON to listOf("insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab", "insig_sapper_tab"),
-        OperatorSpecialty.ASSAULT to listOf("insig_sf_tab", "insig_ranger_tab", "insig_airborne_tab", "insig_sapper_tab")
+    /**
+     * Real-world tab order, top to bottom, for every MOS: Special Forces, Ranger, Sapper,
+     * then Airborne. The stack always draws in this order.
+     */
+    val TAB_PRECEDENCE: List<String> = listOf(
+        "insig_sf_tab",
+        "insig_ranger_tab",
+        "insig_sapper_tab",
+        "insig_airborne_tab"
     )
 
     fun isCordAllowedOnShoulder(medal: MedalDefinition, isRightShoulder: Boolean): Boolean =
@@ -294,23 +299,15 @@ object UniformRegaliaRules {
                 .thenBy { it.precedenceOrder }
         )
 
-    fun mosTabPriority(specialty: OperatorSpecialty, medalId: String): Int {
-        val idx = preferredTabOrderBySpecialty[specialty]?.indexOf(medalId) ?: -1
+    fun tabPrecedence(medalId: String): Int {
+        val idx = TAB_PRECEDENCE.indexOf(medalId)
         return if (idx >= 0) idx else 999
     }
 
-    fun primaryTabIdsForSpecialty(specialty: OperatorSpecialty): Set<String> =
-        preferredTabOrderBySpecialty[specialty]?.firstOrNull()?.let { setOf(it) } ?: emptySet()
-
-    fun tabsForSpecialty(
-        medals: List<MedalDefinition>,
-        specialty: OperatorSpecialty
-    ): List<MedalDefinition> = medals
+    /** Shoulder tabs from [medals], in [TAB_PRECEDENCE] order. */
+    fun tabsInPrecedenceOrder(medals: List<MedalDefinition>): List<MedalDefinition> = medals
         .filter { it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape == InsigniaShape.TAB }
-        .sortedWith(
-            compareBy<MedalDefinition> { mosTabPriority(specialty, it.id) }
-                .thenBy { it.precedenceOrder }
-        )
+        .sortedWith(compareBy<MedalDefinition> { tabPrecedence(it.id) }.thenBy { it.precedenceOrder })
 
     /**
      * Resolves the 3 distinct chest badge slots (ABOVE_RACK, LEFT_POCKET, RIGHT_POCKET):
@@ -365,20 +362,38 @@ object UniformRegaliaRules {
         return result.toList()
     }
 
+    /**
+     * Left shoulder (unit patch). Auto follows the soldier's situation at render time:
+     * HQ staff wear High Command, squad members wear their squad's division patch, and
+     * anyone else wears the Unassigned patch. A Tailor Studio pick overrides Auto.
+     */
+    fun resolveUnitPatch(operator: Operator, squads: List<TacticalSquad>): UnitPatchStyle {
+        val chosen = operator.tailorOverrides.unitPatch
+        if (chosen != UnitPatchStyle.AUTO_MOS) return chosen
+        if (operator.status == OperatorStatus.HQ_STAFF) return UnitPatchStyle.SUPREME_HQ
+        return squads.firstOrNull { operator.id in it.memberIds }?.standardPatch
+            ?.takeIf { it.isDivision }
+            ?: UnitPatchStyle.UNASSIGNED
+    }
+
+    /** Combat patches the soldier has earned, newest campaign first. */
+    fun earnedCombatPatches(operator: Operator): List<UnitPatchStyle> =
+        operator.combatPatchHistory
+            .sortedByDescending { it.recordedAtMillis }
+            .map { it.patch }
+            .distinct()
+
+    /**
+     * Right shoulder (combat patch): the squad patch worn in the soldier's most recent
+     * campaign. No campaign history means no combat patch. A manual pick must be one the
+     * soldier actually earned.
+     */
     fun resolveCombatPatch(operator: Operator): UnitPatchStyle {
         val chosen = operator.tailorOverrides.combatPatch
         if (chosen == UnitPatchStyle.NONE) return UnitPatchStyle.NONE
-        if (chosen != UnitPatchStyle.AUTO_MOS) return chosen
-        val combatQualified = (operator.highestRiskSurvived?.baseDangerPenalty ?: 0) >= MissionRisk.MODERATE.baseDangerPenalty
-        if (!combatQualified) return UnitPatchStyle.NONE
-        return when (operator.specialty) {
-            OperatorSpecialty.ASSAULT -> UnitPatchStyle.AEGIS_VANGUARD
-            OperatorSpecialty.RECON -> UnitPatchStyle.SKYWARD_AIRBORNE
-            OperatorSpecialty.SIGNALS -> UnitPatchStyle.SIGNAL_DIRECTORATE
-            OperatorSpecialty.BREACHER -> UnitPatchStyle.SAPPER_CITADEL
-            OperatorSpecialty.MEDIC -> UnitPatchStyle.MEDICAL_COMMAND
-            OperatorSpecialty.COMMAND -> UnitPatchStyle.SUPREME_HQ
-        }
+        val earned = earnedCombatPatches(operator)
+        if (chosen != UnitPatchStyle.AUTO_MOS && chosen in earned) return chosen
+        return earned.firstOrNull() ?: UnitPatchStyle.NONE
     }
 
     fun resolveMarksmanshipTier(
@@ -541,7 +556,7 @@ object UniformRegaliaRules {
         if (subjectSquad != null) {
             val targetPatch = subjectSquad.standardPatch
             val alignedPatchCount = activeSubjects.count {
-                targetPatch == UnitPatchStyle.AUTO_MOS || it.tailorOverrides.unitPatch == targetPatch
+                resolveUnitPatch(it, listOf(subjectSquad)) == targetPatch
             }
             val alignedCamoCount = if (subjectSquad.standardCamo == null) activeSubjects.size else {
                 activeSubjects.count { it.camoPattern == subjectSquad.standardCamo }

@@ -384,38 +384,43 @@ fun ShoulderCordDropdown(
 @Composable
 fun UnitPatchDropdown(
     selectedPatch: UnitPatchStyle,
-    specialty: OperatorSpecialty,
+    autoPatch: UnitPatchStyle,
+    isHqStaff: Boolean,
     onSelect: (UnitPatchStyle) -> Unit,
     modifier: Modifier = Modifier,
     testTag: String = "dropdown_unit_patch"
 ) {
-    val options = remember(specialty) {
-        UnitPatchStyle.entries.map { patch ->
-            DropdownOptionItem(
-                value = patch,
-                title = if (patch == UnitPatchStyle.AUTO_MOS) {
-                    "Auto (${specialty.label} MOS Shield)"
-                } else {
-                    patch.label
-                },
-                subtitle = patch.subtitle,
-                primaryColor = Color(patch.primaryHex),
-                trimColor = Color(patch.accentHex),
-                enabled = true,
-                testTag = "unit_patch_${patch.name.lowercase()}"
-            )
+    // High Command is reserved for HQ staff
+    val choices = remember(isHqStaff) {
+        buildList {
+            add(UnitPatchStyle.AUTO_MOS)
+            addAll(UnitPatchStyle.DIVISIONS)
+            if (isHqStaff) add(UnitPatchStyle.SUPREME_HQ)
+            add(UnitPatchStyle.UNASSIGNED)
+            add(UnitPatchStyle.NONE)
         }
     }
+    fun titleFor(patch: UnitPatchStyle): String =
+        if (patch == UnitPatchStyle.AUTO_MOS) "Auto (${autoPatch.label})" else patch.label
+    val options = choices.map { patch ->
+        val shown = if (patch == UnitPatchStyle.AUTO_MOS) autoPatch else patch
+        DropdownOptionItem(
+            value = patch,
+            title = titleFor(patch),
+            subtitle = patch.subtitle,
+            primaryColor = Color(shown.primaryHex),
+            trimColor = Color(shown.accentHex),
+            enabled = true,
+            testTag = "unit_patch_${patch.name.lowercase()}"
+        )
+    }
+    val shownSelected = if (selectedPatch == UnitPatchStyle.AUTO_MOS) autoPatch else selectedPatch
     SingleChoiceDropdown(
         label = "Unit Shoulder Patch (SSI)",
-        selectedText = if (selectedPatch == UnitPatchStyle.AUTO_MOS) {
-            "Auto (${specialty.label} MOS Shield)"
-        } else {
-            selectedPatch.label
-        },
-        selectedPrimaryColor = Color(selectedPatch.primaryHex),
-        selectedTrimColor = Color(selectedPatch.accentHex),
-        supportingHint = selectedPatch.subtitle,
+        selectedText = titleFor(selectedPatch),
+        selectedPrimaryColor = Color(shownSelected.primaryHex),
+        selectedTrimColor = Color(shownSelected.accentHex),
+        supportingHint = "Auto follows the soldier's squad, HQ assignment, or Unassigned",
         options = options,
         selectedValue = selectedPatch,
         onSelect = onSelect,
@@ -641,42 +646,46 @@ fun RecruitMosDropdown(
 @Composable
 fun CombatPatchDropdown(
     selectedPatch: UnitPatchStyle,
-    specialty: OperatorSpecialty,
+    earnedPatches: List<UnitPatchStyle>,
     onSelect: (UnitPatchStyle) -> Unit,
     modifier: Modifier = Modifier,
     testTag: String = "dropdown_combat_patch"
 ) {
-    val options = remember(specialty) {
-        UnitPatchStyle.entries.map { patch ->
-            DropdownOptionItem(
-                value = patch,
-                title = if (patch == UnitPatchStyle.AUTO_MOS) {
-                    "Auto (Combat-Qualified ${specialty.roleTag})"
-                } else {
-                    patch.label
-                },
-                subtitle = if (patch == UnitPatchStyle.AUTO_MOS) {
-                    "Auto-displays right-sleeve patch once operator survives Moderate+ combat"
-                } else {
-                    patch.subtitle
-                },
-                primaryColor = Color(patch.primaryHex),
-                trimColor = Color(patch.accentHex),
-                enabled = true,
-                testTag = "combat_patch_${patch.name.lowercase()}"
-            )
-        }
+    // Only patches earned in a campaign can be worn on the right shoulder
+    val latest = earnedPatches.firstOrNull()
+    val autoTitle = if (latest != null) "Auto (${latest.label})" else "Auto (None Earned Yet)"
+    val choices = buildList {
+        add(UnitPatchStyle.AUTO_MOS)
+        addAll(earnedPatches)
+        add(UnitPatchStyle.NONE)
+    }
+    val options = choices.map { patch ->
+        val shown = if (patch == UnitPatchStyle.AUTO_MOS) (latest ?: UnitPatchStyle.NONE) else patch
+        DropdownOptionItem(
+            value = patch,
+            title = if (patch == UnitPatchStyle.AUTO_MOS) autoTitle else patch.label,
+            subtitle = if (patch == UnitPatchStyle.AUTO_MOS) {
+                "Squad patch worn in the most recent campaign"
+            } else {
+                patch.subtitle
+            },
+            primaryColor = Color(shown.primaryHex),
+            trimColor = Color(shown.accentHex),
+            enabled = true,
+            testTag = "combat_patch_${patch.name.lowercase()}"
+        )
+    }
+    val shownSelected = when {
+        selectedPatch == UnitPatchStyle.AUTO_MOS -> latest ?: UnitPatchStyle.NONE
+        selectedPatch in earnedPatches || selectedPatch == UnitPatchStyle.NONE -> selectedPatch
+        else -> latest ?: UnitPatchStyle.NONE
     }
     SingleChoiceDropdown(
-        label = "Wartime Combat Patch (Right Sleeve)",
-        selectedText = if (selectedPatch == UnitPatchStyle.AUTO_MOS) {
-            "Auto (Combat-Qualified ${specialty.roleTag})"
-        } else {
-            selectedPatch.label
-        },
-        selectedPrimaryColor = Color(selectedPatch.primaryHex),
-        selectedTrimColor = Color(selectedPatch.accentHex),
-        supportingHint = "SSI-FWTS former wartime service patch on wearer's right sleeve",
+        label = "Combat Patch (Right Sleeve)",
+        selectedText = if (selectedPatch == UnitPatchStyle.AUTO_MOS) autoTitle else shownSelected.label,
+        selectedPrimaryColor = Color(shownSelected.primaryHex),
+        selectedTrimColor = Color(shownSelected.accentHex),
+        supportingHint = "Earned by fighting in a campaign with a squad",
         options = options,
         selectedValue = selectedPatch,
         onSelect = onSelect,

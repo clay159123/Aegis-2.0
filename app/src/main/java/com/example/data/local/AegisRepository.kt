@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 1
+        const val SAVE_FORMAT_VERSION = 2
     }
 
     private val commanderMutex = Mutex()
@@ -410,6 +410,7 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     schoolAttempts = decodeAttemptsCsv(schoolAttemptsCsv),
     highestRiskSurvived = highestRiskName?.let { name -> MissionRisk.entries.find { it.name == name } },
     timesWounded = timesWounded,
+    combatPatchHistory = decodeCombatPatchHistoryCsv(combatPatchHistoryCsv),
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -457,6 +458,7 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     schoolAttemptsCsv = encodeAttemptsCsv(schoolAttempts),
     highestRiskName = highestRiskSurvived?.name,
     timesWounded = timesWounded,
+    combatPatchHistoryCsv = encodeCombatPatchHistoryCsv(combatPatchHistory),
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -477,6 +479,7 @@ private fun encodeTailorOverridesCsv(o: UniformTailorOverrides): String {
         "neck:${o.neckSlot}",
         "tab1:${o.tabSlot1}",
         "tab2:${o.tabSlot2}",
+        "tab3:${o.tabSlot3}",
         "pin1:${o.pinSlot1}",
         "pin2:${o.pinSlot2}",
         "pin3:${o.pinSlot3}",
@@ -510,6 +513,7 @@ private fun decodeTailorOverridesCsv(csv: String): UniformTailorOverrides {
         neckSlot = map["neck"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
         tabSlot1 = map["tab1"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
         tabSlot2 = map["tab2"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
+        tabSlot3 = map["tab3"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
         pinSlot1 = map["pin1"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
         pinSlot2 = map["pin2"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
         pinSlot3 = map["pin3"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
@@ -596,6 +600,19 @@ private fun decodeOperatorWardrobeCsv(csv: String): OperatorWardrobe {
     }
     return result
 }
+
+/** "campaignId|PATCH|millis" records separated by ';' */
+private fun encodeCombatPatchHistoryCsv(records: List<CombatPatchRecord>): String =
+    records.joinToString(";") { "${it.campaignId}|${it.patch.name}|${it.recordedAtMillis}" }
+
+private fun decodeCombatPatchHistoryCsv(csv: String): List<CombatPatchRecord> =
+    csv.split(";").filter { it.isNotBlank() }.mapNotNull { raw ->
+        val parts = raw.split("|")
+        if (parts.size != 3) return@mapNotNull null
+        val patch = UnitPatchStyle.entries.find { it.name == parts[1] } ?: return@mapNotNull null
+        val at = parts[2].toLongOrNull() ?: return@mapNotNull null
+        CombatPatchRecord(campaignId = parts[0], patch = patch, recordedAtMillis = at)
+    }
 
 private fun encodeAttemptsCsv(map: Map<String, Int>): String =
     map.entries.filter { it.key.isNotBlank() && it.value > 0 }
@@ -687,7 +704,8 @@ private fun SquadEntity.toDomain(): TacticalSquad {
         cohesionXp = cohesionXp,
         missionsTogether = missionsTogether,
         createdAtMillis = createdAtMillis,
-        standardPatch = UnitPatchStyle.entries.find { it.name == standardPatchName } ?: UnitPatchStyle.AUTO_MOS,
+        standardPatch = UnitPatchStyle.entries.find { it.name == standardPatchName }?.takeIf { it.isDivision }
+            ?: UnitPatchStyle.DIVISION_1,
         standardCamo = standardCamoName?.let { n -> CamoPattern.entries.find { it.name == n } },
         standardHeadgear = standardHeadgearName?.let { n -> HeadgearStyle.entries.find { it.name == n } },
         standardDressStyle = standardDressStyleName?.let { n -> DressUniformStyle.entries.find { it.name == n } },

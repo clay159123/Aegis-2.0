@@ -53,11 +53,14 @@ fun OperatorUniformPreview(
         operator.activeWardrobeKit == WardrobeKit.BRAVOS -> WardrobeKit.BRAVOS
         else -> WardrobeKit.ALPHAS
     }
-    val renderOperator = if (kitOverride != null) {
+    val renderOperator = (if (kitOverride != null) {
         // An explicit kit comes from the duty resolver, which only puts HQ staff in Field at a field school
         TacticalCalculator.resolveKitAppearance(operator, kitOverride, squads, ownedIds, allowFieldForHqStaff = true)
     } else {
         operator
+    }).let { op ->
+        // Left-shoulder patch follows squad membership (or HQ / Unassigned) at render time
+        op.copy(tailorOverrides = op.tailorOverrides.copy(unitPatch = UniformRegaliaRules.resolveUnitPatch(op, squads)))
     }
 
     val bgTop = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -456,7 +459,7 @@ private fun DrawScope.drawDressUniformFigure(
         val leftPocketX = cx + w * 0.104f
         val rightPocketX = cx - w * 0.232f
         val pocketW = w * 0.128f
-        val pocketTopY = h * 0.565f
+        val pocketTopY = h * CHEST_POCKET_TOP_FRACTION
         val pocketH = h * 0.125f
         val flapH = h * 0.032f
 
@@ -587,28 +590,22 @@ private fun DrawScope.drawDressUniformFigure(
     }
 
     // 7. Crisp Wrapped Shoulder Tabs + Directorate Heraldic SSI Shield on Outer Upper Deltoid (Wearer's Left Sleeve = +1f)
-    wornRegalia.tabSlot1?.let { tab1 ->
+    // Up to 3 tabs stack top-down in precedence order; a full stack uses slightly slimmer tabs
+    val wornTabs = wornRegalia.shoulderTabs.take(TacticalCalculator.MAX_WORN_SHOULDER_TABS)
+    val tabHeightFrac = if (wornTabs.size >= 3) 0.019f else 0.021f
+    val tabStepFrac = tabHeightFrac + 0.004f
+    wornTabs.forEachIndexed { idx, tab ->
         drawWrappedShoulderTab(
             sideSign = 1f,
-            topFrac = 0.344f,
-            tabColor = Color(tab1.insigniaColorHex),
+            topFrac = 0.344f + idx * tabStepFrac,
+            tabColor = Color(tab.insigniaColorHex),
             sleeveFaceX = ::sleeveFaceX,
-            h = h
-        )
-    }
-    wornRegalia.tabSlot2?.let { tab2 ->
-        val slot2Frac = if (wornRegalia.tabSlot1 != null) 0.369f else 0.344f
-        drawWrappedShoulderTab(
-            sideSign = 1f,
-            topFrac = slot2Frac,
-            tabColor = Color(tab2.insigniaColorHex),
-            sleeveFaceX = ::sleeveFaceX,
-            h = h
+            h = h,
+            heightFrac = tabHeightFrac
         )
     }
 
-    val wornTabCount = listOfNotNull(wornRegalia.tabSlot1, wornRegalia.tabSlot2).size
-    val ssiTopFrac = 0.350f + wornTabCount * 0.026f
+    val ssiTopFrac = if (wornTabs.isEmpty()) 0.350f else 0.344f + wornTabs.size * tabStepFrac + 0.006f
     val chosenPatch = operator.tailorOverrides.unitPatch
     if (chosenPatch != UnitPatchStyle.NONE) {
         drawWrappedUnitShoulderPatch(
@@ -905,10 +902,10 @@ private fun DrawScope.drawDressUniformFigure(
 
     // 12. Wearer's Left Chest: Mess Miniature Medals, Full Hanging Medals, Ribbon Rack, OR Clean Tunic
     val leftChestCenterX = cx + w * 0.168f
-    var topDecorationY = h * 0.528f
+    var topDecorationY = h * (0.528f - CHEST_LIFT)
     if (operator.dressDisplayMode == DressDisplayMode.CLEAN) {
         // Clean tunic chest: no hanging medals or ribbon rack mounted
-        topDecorationY = h * 0.528f
+        topDecorationY = h * (0.528f - CHEST_LIFT)
     } else if (style.isCutawayMess && (hangingMedals.isNotEmpty() || rackDecorations.isNotEmpty())) {
         // Cutaway Mess Dress wears compact anodized Miniature Medals pinned on the left lapel/chest
         val miniAwards = (hangingMedals + rackDecorations).distinctBy { it.id }.take(6)
@@ -925,7 +922,7 @@ private fun DrawScope.drawDressUniformFigure(
         val linkH = h * 0.004f
         val medalTotalH = broochH + ribH + linkH + (medRadius * 2f)
         val rowStepY = medalTotalH + h * 0.008f
-        val startTopY = h * 0.468f
+        val startTopY = h * (0.468f - CHEST_LIFT)
         topDecorationY = startTopY
 
         miniRows.forEachIndexed { rowIdx, rowItems ->
@@ -971,7 +968,7 @@ private fun DrawScope.drawDressUniformFigure(
         val rowStepY = medalTotalH * 0.92f
 
         val totalRows = 1
-        val bottomRowBroochY = h * 0.556f - medalTotalH
+        val bottomRowBroochY = h * (0.556f - CHEST_LIFT) - medalTotalH
         val startTopY = bottomRowBroochY - (totalRows - 1) * rowStepY
         topDecorationY = startTopY
 
@@ -1031,7 +1028,7 @@ private fun DrawScope.drawDressUniformFigure(
         val gapY = h * 0.003f
         val totalRackW = rackCols * ribW + (rackCols - 1) * gapX
         val rackLeftEdge = leftChestCenterX - totalRackW / 2f
-        val baseBottomY = h * 0.532f
+        val baseBottomY = h * (0.532f - CHEST_LIFT)
         val displayMedals = rackDecorations.take(TacticalCalculator.MAX_WORN_RIBBONS)
         // AR 670-1 row partitioning: partial counts (1 or 2) sit centered on the TOP row over full 3-ribbon lower rows
         val rows = TacticalCalculator.layoutRibbonRackRows(displayMedals, rackCols)
@@ -1068,7 +1065,7 @@ private fun DrawScope.drawDressUniformFigure(
 
     // 13. Positional Specialty School Insignia Badges (Slot 1: Above Rack, Slot 2: Left Pocket, Slot 3: Right Pocket)
     wornRegalia.chestPinAboveRack?.let { insig ->
-        val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * 0.368f, h * 0.502f)
+        val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * (0.368f - CHEST_LIFT), h * (0.502f - CHEST_LIFT))
         drawDetailedChestSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
             center = Offset(leftChestCenterX, aboveY),
@@ -1083,14 +1080,14 @@ private fun DrawScope.drawDressUniformFigure(
         // AR 670-1 two-badge pocket wear: specialty badge medial, marksmanship badge lateral on left pocket
         drawDetailedChestSchoolBadge(
             shape = leftPocketSchoolPin.insigniaShape ?: InsigniaShape.WINGS,
-            center = Offset(leftChestCenterX - w * 0.029f, h * 0.638f),
+            center = Offset(leftChestCenterX - w * 0.029f, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.054f,
             badgeH = h * 0.036f,
             col = Color(leftPocketSchoolPin.insigniaColorHex)
         )
         drawMarksmanshipBadge(
             tier = marksmanshipTier,
-            center = Offset(leftChestCenterX + w * 0.031f, h * 0.638f),
+            center = Offset(leftChestCenterX + w * 0.031f, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.050f,
             badgeH = h * 0.038f
         )
@@ -1098,7 +1095,7 @@ private fun DrawScope.drawDressUniformFigure(
         leftPocketSchoolPin?.let { insig ->
             drawDetailedChestSchoolBadge(
                 shape = insig.insigniaShape ?: InsigniaShape.WINGS,
-                center = Offset(leftChestCenterX, h * 0.638f),
+                center = Offset(leftChestCenterX, h * (0.638f - CHEST_LIFT)),
                 badgeW = w * 0.088f,
                 badgeH = h * 0.044f,
                 col = Color(insig.insigniaColorHex)
@@ -1107,7 +1104,7 @@ private fun DrawScope.drawDressUniformFigure(
         if (showMarksmanshipOnPocket) {
             drawMarksmanshipBadge(
                 tier = marksmanshipTier,
-                center = Offset(leftChestCenterX, h * 0.638f),
+                center = Offset(leftChestCenterX, h * (0.638f - CHEST_LIFT)),
                 badgeW = w * 0.068f,
                 badgeH = h * 0.042f
             )
@@ -1116,7 +1113,7 @@ private fun DrawScope.drawDressUniformFigure(
     wornRegalia.chestPinRightPocket?.let { insig ->
         drawDetailedChestSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
-            center = Offset(rightChestCenterX, h * 0.638f),
+            center = Offset(rightChestCenterX, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.088f,
             badgeH = h * 0.044f,
             col = Color(insig.insigniaColorHex)
@@ -1392,9 +1389,10 @@ private fun DrawScope.drawWrappedShoulderTab(
     topFrac: Float,
     tabColor: Color,
     sleeveFaceX: (Float, Float, Float) -> Float,
-    h: Float
+    h: Float,
+    heightFrac: Float = 0.021f
 ) {
-    val botFrac = topFrac + 0.021f
+    val botFrac = topFrac + heightFrac
     val yTop = h * topFrac
     val yBot = h * botFrac
     val rise = h * 0.007f
@@ -1489,21 +1487,8 @@ private fun DrawScope.drawWrappedUnitShoulderPatch(
         close()
     }
 
-    val shieldPrimary = when (patchStyle) {
-        UnitPatchStyle.AUTO_MOS -> when (specialty) {
-            OperatorSpecialty.ASSAULT -> Color(0xFF1D4E89)   // Infantry Cobalt Blue
-            OperatorSpecialty.RECON -> Color(0xFF23533A)     // Airborne/Recon Hunter Green
-            OperatorSpecialty.SIGNALS -> Color(0xFF1A3A5C)   // Signal Corps Deep Azure
-            OperatorSpecialty.BREACHER -> Color(0xFF7A2229)  // Engineer Scarlet
-            OperatorSpecialty.MEDIC -> Color(0xFF4F2442)     // Medical Maroon
-            OperatorSpecialty.COMMAND -> Color(0xFF1B2E4B)   // HQ Command Sapphire
-        }
-        else -> Color(patchStyle.primaryHex)
-    }
-    val patchFlashCol = when (patchStyle) {
-        UnitPatchStyle.AUTO_MOS -> accentCol
-        else -> Color(patchStyle.accentHex)
-    }
+    val shieldPrimary = Color(patchStyle.primaryHex)
+    val patchFlashCol = Color(patchStyle.accentHex)
 
     drawPath(shieldPath, color = shieldPrimary)
 
@@ -1535,61 +1520,13 @@ private fun DrawScope.drawWrappedUnitShoulderPatch(
     // Gold merrowed embroidered border + distinct emblem motif inside shield
     drawPath(shieldPath, color = trimCol, style = Stroke(width = (w * 0.007f).coerceAtLeast(1.5f), join = StrokeJoin.Round))
     val emblemCenter = Offset(midX, h * (topFrac + 0.022f))
-    when (patchStyle) {
-        UnitPatchStyle.MEDICAL_COMMAND -> {
-            drawLine(Color.White, Offset(midX, emblemCenter.y - h * 0.010f), Offset(midX, emblemCenter.y + h * 0.010f), strokeWidth = 2.0f)
-            drawLine(Color.White, Offset(midX - w * 0.011f, emblemCenter.y), Offset(midX + w * 0.011f, emblemCenter.y), strokeWidth = 2.0f)
-        }
-        UnitPatchStyle.SIGNAL_DIRECTORATE -> {
-            val bolt = Path().apply {
-                moveTo(midX + w * 0.006f, emblemCenter.y - h * 0.011f)
-                lineTo(midX - w * 0.007f, emblemCenter.y + h * 0.001f)
-                lineTo(midX + w * 0.003f, emblemCenter.y + h * 0.001f)
-                lineTo(midX - w * 0.006f, emblemCenter.y + h * 0.013f)
-            }
-            drawPath(bolt, color = Color(0xFF5AC8FA), style = Stroke(width = 1.8f, cap = StrokeCap.Round))
-        }
-        UnitPatchStyle.INTEL_OVERWATCH -> {
-            val diamond = Path().apply {
-                moveTo(midX, emblemCenter.y - h * 0.012f)
-                lineTo(midX + w * 0.011f, emblemCenter.y)
-                lineTo(midX, emblemCenter.y + h * 0.012f)
-                lineTo(midX - w * 0.011f, emblemCenter.y)
-                close()
-            }
-            drawPath(diamond, color = Color(0xFF63B8D6), style = Stroke(width = 1.5f))
-            drawCircle(Color.White, radius = w * 0.0035f, center = emblemCenter)
-        }
-        UnitPatchStyle.SPECIAL_FORCES -> {
-            // Iconic SF dagger flanked by three lightning/chevron flashes
-            drawLine(Color(0xFFF2D272), Offset(midX, emblemCenter.y - h * 0.012f), Offset(midX, yBot - h * 0.008f), strokeWidth = 1.9f, cap = StrokeCap.Round)
-            drawLine(Color(0xFFF2D272), Offset(midX - w * 0.010f, emblemCenter.y + h * 0.003f), Offset(midX + w * 0.010f, emblemCenter.y + h * 0.003f), strokeWidth = 1.6f)
-            drawStar(Offset(midX, emblemCenter.y - h * 0.010f), w * 0.0065f, w * 0.003f, Color(0xFFF2D272))
-        }
-        UnitPatchStyle.SAPPER_CITADEL -> {
-            drawRect(Color(0xFFF2D272), Offset(midX - w * 0.012f, emblemCenter.y - h * 0.006f), Size(w * 0.024f, h * 0.014f), style = Stroke(1.5f))
-            drawLine(Color(0xFFF2D272), Offset(midX, emblemCenter.y - h * 0.006f), Offset(midX, emblemCenter.y + h * 0.008f), strokeWidth = 1.4f)
-        }
-        UnitPatchStyle.LOGISTICS_CORPS -> {
-            drawCircle(Color(0xFFF2D272), radius = w * 0.012f, center = emblemCenter, style = Stroke(1.5f))
-            drawLine(Color(0xFFF2D272), Offset(midX - w * 0.009f, emblemCenter.y), Offset(midX + w * 0.009f, emblemCenter.y), strokeWidth = 1.3f)
-            drawLine(Color(0xFFF2D272), Offset(midX, emblemCenter.y - h * 0.009f), Offset(midX, emblemCenter.y + h * 0.009f), strokeWidth = 1.3f)
-        }
-        UnitPatchStyle.SKYWARD_AIRBORNE -> {
-            drawLine(Color.White, Offset(midX - w * 0.015f, emblemCenter.y), Offset(midX + w * 0.015f, emblemCenter.y), strokeWidth = 1.9f, cap = StrokeCap.Round)
-            drawStar(emblemCenter, w * 0.009f, w * 0.004f, Color(0xFFF5D576))
-        }
-        else -> {
-            drawStar(emblemCenter, w * 0.012f, w * 0.0052f, Color(0xFFF5D576))
-            drawLine(
-                color = Color.White.copy(alpha = 0.9f),
-                start = Offset(midX, h * (topFrac + 0.036f)),
-                end = Offset(apexX, yBot - h * 0.007f),
-                strokeWidth = 1.4f,
-                cap = StrokeCap.Round
-            )
-        }
-    }
+    drawUnitPatchEmblem(
+        patchStyle = patchStyle,
+        center = emblemCenter,
+        unitW = w,
+        unitH = h,
+        accent = patchFlashCol
+    )
 }
 
 internal fun DrawScope.drawWrappedSleeveRankInsignia(
@@ -1985,7 +1922,7 @@ private fun DrawScope.drawFieldTacticalFigure(
             endX = cx + w * 0.364f
         )
     )
-    wornRegalia.shoulderTabs.take(2).forEachIndexed { idx, tab ->
+    wornRegalia.shoulderTabs.take(TacticalCalculator.MAX_WORN_SHOULDER_TABS).forEachIndexed { idx, tab ->
         val tabYShift = idx * h * 0.012f
         val arcCol = if (tab.id == "insig_sf_tab") Color(0xFFF2D272) else Color(tab.insigniaColorHex)
         drawLine(
@@ -2000,7 +1937,7 @@ private fun DrawScope.drawFieldTacticalFigure(
     if (chosenPatch != UnitPatchStyle.NONE) {
         val patchColor = if (chosenPatch == UnitPatchStyle.AUTO_MOS) accentCamo else Color(chosenPatch.primaryHex)
         val patchBorder = if (chosenPatch == UnitPatchStyle.AUTO_MOS) Color(0xFFD8B24C) else Color(chosenPatch.accentHex)
-        val patchTopY = h * (0.470f + wornRegalia.shoulderTabs.size.coerceAtMost(2) * 0.008f)
+        val patchTopY = h * (0.470f + wornRegalia.shoulderTabs.size.coerceAtMost(TacticalCalculator.MAX_WORN_SHOULDER_TABS) * 0.008f)
         drawRoundRect(
             color = patchColor,
             topLeft = Offset(cx + w * 0.298f, patchTopY),

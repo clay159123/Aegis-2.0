@@ -448,18 +448,45 @@ enum class UnitPatchStyle(
     val primaryHex: Long,
     val accentHex: Long
 ) {
-    AUTO_MOS("Auto (Branch MOS Shield)", "Matches soldier's assigned Army branch", 0xFF1D4E89, 0xFFD8B24C),
-    AEGIS_VANGUARD("1st Aegis Vanguard Shield", "Infantry cobalt shield with gold sword-star", 0xFF1D4E89, 0xFFD8B24C),
-    SKYWARD_AIRBORNE("82nd Skyward Airborne Patch", "Hunter green airborne shield with parachute wing", 0xFF23533A, 0xFFDDE3EC),
-    SPECIAL_FORCES("1st Special Forces Arrowhead", "SF teal spearhead dagger & lightning shield", 0xFF1B5B63, 0xFFF2D272),
-    SIGNAL_DIRECTORATE("Cyber & Signals Crest Patch", "Deep azure electronic warfare shield", 0xFF1A3A5C, 0xFF5AC8FA),
-    INTEL_OVERWATCH("Military Intel Overwatch Patch", "Oriental-blue reconnaissance diamond shield", 0xFF1D3E5E, 0xFF63B8D6),
-    SAPPER_CITADEL("Sapper & Engineer Patch", "Engineer scarlet & brass bastion shield", 0xFF7A2229, 0xFFF2D272),
-    MEDICAL_COMMAND("Medical Sustainment Patch", "Medical maroon & silver cross shield", 0xFF4F2442, 0xFFE6ECF2),
-    LOGISTICS_CORPS("Quartermaster Sustainment Patch", "Buff & crimson logistics wheel shield", 0xFF6E572C, 0xFFD8B24C),
-    SUPREME_HQ("Aegis High Command Patch", "Obsidian-sapphire Directorate command shield", 0xFF141E33, 0xFFF5D576),
-    NONE("None Worn", "Plain sleeve with no unit shoulder patch", 0xFF1C222D, 0xFF4A5568)
+    /** Tailor setting only: wear the squad patch, High Command for HQ staff, or Unassigned. */
+    AUTO_MOS("Auto (Squad Patch)", "Squad patch; High Command for HQ staff; Unassigned without a squad", 0xFF3A4556, 0xFFD8B24C),
+    DIVISION_1("1st Aegis Division", "Cobalt and gold shield with a single star", 0xFF1D4E89, 0xFFD8B24C),
+    DIVISION_2("2nd Aegis Division", "Crimson and silver shield with crossed sabers", 0xFF8A1F2B, 0xFFD9DEE6),
+    DIVISION_3("3rd Aegis Division", "Black and gold shield with a lion head", 0xFF15171C, 0xFFD8B24C),
+    DIVISION_4("4th Aegis Division", "Forest green and white shield with an oak leaf", 0xFF234A2E, 0xFFF2F4F2),
+    DIVISION_5("5th Aegis Division", "Slate gray and orange shield with a tower", 0xFF4A5563, 0xFFE8862A),
+    DIVISION_6("6th Aegis Division", "Navy and silver shield with an eagle", 0xFF13213F, 0xFFC9D1DC),
+    SUPREME_HQ("Aegis High Command", "Worn by HQ staff only", 0xFF141E33, 0xFFF5D576),
+    UNASSIGNED("Unassigned", "Generic Aegis patch for field soldiers without a squad", 0xFF5B6472, 0xFFB8C0CC),
+    NONE("None Worn", "Plain sleeve with no unit shoulder patch", 0xFF1C222D, 0xFF4A5568);
+
+    val isDivision: Boolean get() = this in DIVISIONS
+
+    companion object {
+        val DIVISIONS: List<UnitPatchStyle> = listOf(DIVISION_1, DIVISION_2, DIVISION_3, DIVISION_4, DIVISION_5, DIVISION_6)
+
+        /** First division patch no other squad is using, for a newly formed squad. */
+        fun firstUnusedDivision(squads: List<TacticalSquad>, excludingSquadId: String? = null): UnitPatchStyle {
+            val used = squads.filter { it.id != excludingSquadId }.map { it.standardPatch }.toSet()
+            return DIVISIONS.firstOrNull { it !in used } ?: DIVISION_1
+        }
+    }
 }
+
+/** The squad patch a soldier wore in one campaign; the newest record becomes their combat patch. */
+data class CombatPatchRecord(
+    val campaignId: String,
+    val patch: UnitPatchStyle,
+    val recordedAtMillis: Long
+)
+
+/** Replaces this campaign's record (latest mission in a campaign wins) and keeps one per campaign. */
+fun List<CombatPatchRecord>.recordCampaignPatch(
+    campaignId: String,
+    patch: UnitPatchStyle,
+    atMillis: Long
+): List<CombatPatchRecord> =
+    filterNot { it.campaignId == campaignId } + CombatPatchRecord(campaignId, patch, atMillis)
 
 enum class MarksmanshipBadgeTier(
     val label: String,
@@ -481,6 +508,7 @@ data class UniformTailorOverrides(
     val neckSlot: String = SLOT_AUTO,
     val tabSlot1: String = SLOT_AUTO,
     val tabSlot2: String = SLOT_AUTO,
+    val tabSlot3: String = SLOT_AUTO,
     val pinSlot1: String = SLOT_AUTO,
     val pinSlot2: String = SLOT_AUTO,
     val pinSlot3: String = SLOT_AUTO,
@@ -864,6 +892,8 @@ data class Operator(
     val schoolAttempts: Map<String, Int> = emptyMap(),
     val highestRiskSurvived: MissionRisk? = null,
     val timesWounded: Int = 0,
+    /** One record per campaign fought, holding the squad patch worn there. */
+    val combatPatchHistory: List<CombatPatchRecord> = emptyList(),
     val unlocked: Boolean,
     val recruitCreditCost: Double,
     val recruitIntelCost: Double,
@@ -1053,7 +1083,7 @@ data class TacticalSquad(
     val cohesionXp: Int = 0,
     val missionsTogether: Int = 0,
     val createdAtMillis: Long = 0L,
-    val standardPatch: UnitPatchStyle = UnitPatchStyle.AUTO_MOS,
+    val standardPatch: UnitPatchStyle = UnitPatchStyle.DIVISION_1,
     val standardCamo: CamoPattern? = null,
     val standardHeadgear: HeadgearStyle? = null,
     val standardDressStyle: DressUniformStyle? = null,
@@ -1084,8 +1114,7 @@ data class TacticalSquad(
         )
 
     val hasUniformStandard: Boolean
-        get() = standardPatch != UnitPatchStyle.AUTO_MOS ||
-            standardCamo != null ||
+        get() = standardCamo != null ||
             standardHeadgear != null ||
             standardDressStyle != null ||
             standardBravosHeadgear != null ||
@@ -1097,7 +1126,7 @@ data class TacticalSquad(
 
     val standardSummaryParts: List<String>
         get() = buildList {
-            if (standardPatch != UnitPatchStyle.AUTO_MOS) add("SSI: ${standardPatch.label}")
+            add("SSI: ${standardPatch.label}")
             standardCamo?.let { add("Field: ${it.label}") }
             val bravosParts = listOfNotNull(standardBravosDressStyle?.shortLabel, standardBravosHeadgear?.label)
             if (bravosParts.isNotEmpty()) add("Bravos: ${bravosParts.joinToString(" / ")}")

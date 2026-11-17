@@ -72,6 +72,49 @@ class TacticalCalculatorTest {
     }
 
     @Test
+    fun manualTabPicksStillDrawInPrecedenceOrder() {
+        val base = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
+        val tabs = GameCatalog.medals.filter {
+            it.id in setOf("insig_airborne_tab", "insig_ranger_tab", "insig_sapper_tab")
+        }
+        val picked = base.copy(
+            tailorOverrides = base.tailorOverrides.copy(
+                tabSlot1 = "insig_airborne_tab",
+                tabSlot2 = "insig_sapper_tab",
+                tabSlot3 = "insig_ranger_tab"
+            )
+        )
+        val worn = TacticalCalculator.resolveWornRegalia(picked, tabs)
+        assertEquals(
+            listOf("insig_ranger_tab", "insig_sapper_tab", "insig_airborne_tab"),
+            worn.shoulderTabs.map { it.id }
+        )
+    }
+
+    @Test
+    fun leftShoulderPatchFollowsSquadHqOrUnassigned() {
+        val soldier = GameCatalog.initialOperators.first { it.id == "op_cipher" }
+        val squadA = TacticalSquad(id = "sq_a", name = "Alpha", memberIds = listOf(soldier.id), leaderId = soldier.id, standardPatch = UnitPatchStyle.DIVISION_3)
+        val squadB = TacticalSquad(id = "sq_b", name = "Bravo", memberIds = emptyList(), leaderId = null, standardPatch = UnitPatchStyle.DIVISION_5)
+        assertEquals(UnitPatchStyle.DIVISION_3, UniformRegaliaRules.resolveUnitPatch(soldier, listOf(squadA, squadB)))
+        // Moving squads changes the patch automatically
+        val moved = listOf(squadA.copy(memberIds = emptyList()), squadB.copy(memberIds = listOf(soldier.id)))
+        assertEquals(UnitPatchStyle.DIVISION_5, UniformRegaliaRules.resolveUnitPatch(soldier, moved))
+        assertEquals(UnitPatchStyle.UNASSIGNED, UniformRegaliaRules.resolveUnitPatch(soldier, emptyList()))
+        val hq = soldier.copy(status = OperatorStatus.HQ_STAFF)
+        assertEquals(UnitPatchStyle.SUPREME_HQ, UniformRegaliaRules.resolveUnitPatch(hq, listOf(squadA)))
+        // A Tailor Studio pick still overrides Auto
+        val picked = soldier.copy(tailorOverrides = UniformTailorOverrides(unitPatch = UnitPatchStyle.DIVISION_6))
+        assertEquals(UnitPatchStyle.DIVISION_6, UniformRegaliaRules.resolveUnitPatch(picked, listOf(squadA)))
+        // New squads get the first division patch nobody is using
+        assertEquals(UnitPatchStyle.DIVISION_1, UnitPatchStyle.firstUnusedDivision(listOf(squadA, squadB)))
+        assertEquals(
+            UnitPatchStyle.DIVISION_2,
+            UnitPatchStyle.firstUnusedDivision(listOf(squadA.copy(standardPatch = UnitPatchStyle.DIVISION_1), squadB))
+        )
+    }
+
+    @Test
     fun schoolDeploymentsDoNotUseHqSlots() {
         val school = GameCatalog.missions.first { it.scope == MissionScope.TRAINING }
         val combat = GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT }
@@ -771,6 +814,11 @@ class TacticalCalculatorTest {
         assertEquals("cord_infantry_blue", wornFullMedals.leftCord?.id)
         assertEquals("cord_general_aiguillette", wornFullMedals.rightCord?.id)
         assertEquals(TacticalCalculator.MAX_WORN_SHOULDER_TABS, wornFullMedals.shoulderTabs.size)
+        // All four tabs held: the stack is SF, Ranger, Sapper and the Airborne Tab drops off
+        assertEquals(
+            listOf("insig_sf_tab", "insig_ranger_tab", "insig_sapper_tab"),
+            wornFullMedals.shoulderTabs.map { it.id }
+        )
         assertEquals(TacticalCalculator.MAX_WORN_CHEST_BADGES, wornFullMedals.chestBadges.size)
         assertEquals(TacticalCalculator.MAX_WORN_HANGING_MEDALS, wornFullMedals.hangingMedals.size)
         assertEquals(TacticalCalculator.MAX_WORN_RIBBONS, wornFullMedals.ribbonRack.size)
@@ -1257,7 +1305,7 @@ class TacticalCalculatorTest {
             equippedLeftCordId = "cord_infantry_blue",
             equippedRightCordId = "cord_valor_fourragere",
             tailorOverrides = UniformTailorOverrides(
-                unitPatch = UnitPatchStyle.SAPPER_CITADEL,
+                unitPatch = UnitPatchStyle.DIVISION_2,
                 neckSlot = UniformTailorOverrides.SLOT_NONE,
                 tabSlot1 = "insig_sapper_tab",
                 tabSlot2 = UniformTailorOverrides.SLOT_NONE,
@@ -1402,7 +1450,7 @@ class TacticalCalculatorTest {
         assertEquals("insig_cmb_medic", medicWorn.chestPinAboveRack?.id)
         assertEquals("insig_air_assault", medicWorn.chestPinLeftPocket?.id)
 
-        // Breacher (12B) puts EOD Badge above rack ahead of Master Jump, and Sapper Tab ahead of Ranger Tab!
+        // Breacher (12B) puts EOD Badge above rack ahead of Master Jump; tabs follow regulation order (Ranger above Sapper)
         val breacherAwards = GameCatalog.medals.filter {
             it.id in setOf("insig_master_para", "insig_eod_badge", "insig_ranger_tab", "insig_sapper_tab")
         }
@@ -1412,7 +1460,8 @@ class TacticalCalculatorTest {
         )
         assertEquals("insig_eod_badge", breacherWorn.chestPinAboveRack?.id)
         assertEquals("insig_master_para", breacherWorn.chestPinLeftPocket?.id)
-        assertEquals("insig_sapper_tab", breacherWorn.tabSlot1?.id)
+        assertEquals("insig_ranger_tab", breacherWorn.tabSlot1?.id)
+        assertEquals("insig_sapper_tab", breacherWorn.tabSlot2?.id)
 
         // Signals (25B) prioritizes Cyber Crest on pocket slots and Signals Cord first on left shoulder
         val signalsAwards = GameCatalog.medals.filter {
@@ -2112,16 +2161,29 @@ class TacticalCalculatorTest {
             highestRiskSurvived = null
         )
 
-        // Combat patch is NONE before Moderate+ combat, auto after Moderate+ combat, and respects manual override
+        // Combat patch comes only from campaign history: none without it, newest campaign on Auto,
+        // and a manual pick must be a patch the soldier earned
         assertEquals(UnitPatchStyle.NONE, UniformRegaliaRules.resolveCombatPatch(baseOp))
         assertEquals(
-            UnitPatchStyle.AEGIS_VANGUARD,
+            UnitPatchStyle.NONE,
             UniformRegaliaRules.resolveCombatPatch(baseOp.copy(missionsCompleted = 2, highestRiskSurvived = MissionRisk.MODERATE))
         )
+        val veteran = baseOp.copy(
+            combatPatchHistory = emptyList<CombatPatchRecord>()
+                .recordCampaignPatch("camp_a", UnitPatchStyle.DIVISION_1, 100L)
+                .recordCampaignPatch("camp_b", UnitPatchStyle.DIVISION_4, 200L)
+        )
+        assertEquals(UnitPatchStyle.DIVISION_4, UniformRegaliaRules.resolveCombatPatch(veteran))
         assertEquals(
-            UnitPatchStyle.SKYWARD_AIRBORNE,
+            UnitPatchStyle.DIVISION_1,
             UniformRegaliaRules.resolveCombatPatch(
-                baseOp.copy(tailorOverrides = UniformTailorOverrides(combatPatch = UnitPatchStyle.SKYWARD_AIRBORNE))
+                veteran.copy(tailorOverrides = UniformTailorOverrides(combatPatch = UnitPatchStyle.DIVISION_1))
+            )
+        )
+        assertEquals(
+            UnitPatchStyle.DIVISION_4,
+            UniformRegaliaRules.resolveCombatPatch(
+                veteran.copy(tailorOverrides = UniformTailorOverrides(combatPatch = UnitPatchStyle.DIVISION_6))
             )
         )
 

@@ -74,11 +74,12 @@ fun UniformTailorStudioCard(
         squads.any { it.leaderId == operator.id }
     }
 
-    val tabCatalog = remember(operator.specialty) {
-        UniformRegaliaRules.tabsForSpecialty(GameCatalog.medals, operator.specialty)
+    val tabCatalog = remember {
+        UniformRegaliaRules.tabsInPrecedenceOrder(GameCatalog.medals)
     }
-    val primaryTabIds = remember(operator.specialty) {
-        UniformRegaliaRules.primaryTabIdsForSpecialty(operator.specialty)
+    // Recommend the highest-precedence tab the soldier has earned
+    val primaryTabIds = remember(ownedMedalIds) {
+        tabCatalog.firstOrNull { it.id in ownedMedalIds }?.let { setOf(it.id) } ?: emptySet()
     }
     val allChestBadges = remember {
         GameCatalog.medals.filter {
@@ -322,11 +323,11 @@ fun UniformTailorStudioCard(
             }
 
             // 2. Unit Patches & Shoulder Tabs
-            val patchLabel = if (overrides.unitPatch == UnitPatchStyle.AUTO_MOS) {
-                "${operator.specialty.label} Patch"
-            } else {
-                overrides.unitPatch.label
-            }
+            val autoUnitPatch = UniformRegaliaRules.resolveUnitPatch(
+                operator.copy(tailorOverrides = overrides.copy(unitPatch = UnitPatchStyle.AUTO_MOS)),
+                squads
+            )
+            val patchLabel = if (overrides.unitPatch == UnitPatchStyle.AUTO_MOS) autoUnitPatch.label else overrides.unitPatch.label
             TailorAccordionSection(
                 icon = Icons.Filled.Shield,
                 title = "Unit Patches & Shoulder Tabs",
@@ -337,7 +338,8 @@ fun UniformTailorStudioCard(
             ) {
                 UnitPatchDropdown(
                     selectedPatch = overrides.unitPatch,
-                    specialty = operator.specialty,
+                    autoPatch = autoUnitPatch,
+                    isHqStaff = operator.status == OperatorStatus.HQ_STAFF,
                     onSelect = { patch ->
                         updateOverrides(forceDressMode = false) { it.copy(unitPatch = patch) }
                     },
@@ -345,37 +347,55 @@ fun UniformTailorStudioCard(
                 )
                 CombatPatchDropdown(
                     selectedPatch = overrides.combatPatch,
-                    specialty = operator.specialty,
+                    earnedPatches = UniformRegaliaRules.earnedCombatPatches(operator),
                     onSelect = { patch ->
                         updateOverrides(forceDressMode = false) { it.copy(combatPatch = patch) }
                     },
                     testTag = "dropdown_combat_patch"
                 )
                 RegaliaSlotDropdown(
-                    label = "Upper Shoulder Tab (Slot 1)",
+                    label = "Shoulder Tab (Slot 1)",
                     slotValue = overrides.tabSlot1,
                     candidateMedals = tabCatalog,
                     ownedMedalIds = ownedMedalIds,
-                    autoTitle = "Auto (MOS Priority)",
-                    autoHint = "Wears ${operator.specialty.roleTag} priority tab above unit patch",
-                    noneSubtitle = "Hide upper sleeve tab",
+                    autoTitle = "Auto (Highest Earned)",
+                    autoHint = "Wears the highest earned tab (SF, Ranger, Sapper, Airborne)",
+                    noneSubtitle = "Leave this tab slot empty",
                     recommendedIds = primaryTabIds,
-                    otherSelectedIds = setOf(overrides.tabSlot2),
+                    otherSelectedIds = setOf(overrides.tabSlot2, overrides.tabSlot3),
                     onSelect = { v -> updateOverrides { it.copy(tabSlot1 = v) } },
                     testTag = "dropdown_tab_slot_1"
                 )
                 RegaliaSlotDropdown(
-                    label = "Lower Shoulder Tab (Slot 2)",
+                    label = "Shoulder Tab (Slot 2)",
                     slotValue = overrides.tabSlot2,
                     candidateMedals = tabCatalog,
                     ownedMedalIds = ownedMedalIds,
-                    autoTitle = "Auto (MOS Priority)",
-                    autoHint = "Wears second earned qualification tab if held",
-                    noneSubtitle = "Hide lower sleeve tab",
+                    autoTitle = "Auto (Next Earned)",
+                    autoHint = "Wears the next earned tab, if any",
+                    noneSubtitle = "Leave this tab slot empty",
                     recommendedIds = primaryTabIds,
-                    otherSelectedIds = setOf(overrides.tabSlot1),
+                    otherSelectedIds = setOf(overrides.tabSlot1, overrides.tabSlot3),
                     onSelect = { v -> updateOverrides { it.copy(tabSlot2 = v) } },
                     testTag = "dropdown_tab_slot_2"
+                )
+                RegaliaSlotDropdown(
+                    label = "Shoulder Tab (Slot 3)",
+                    slotValue = overrides.tabSlot3,
+                    candidateMedals = tabCatalog,
+                    ownedMedalIds = ownedMedalIds,
+                    autoTitle = "Auto (Next Earned)",
+                    autoHint = "Wears a third earned tab, if any",
+                    noneSubtitle = "Leave this tab slot empty",
+                    recommendedIds = primaryTabIds,
+                    otherSelectedIds = setOf(overrides.tabSlot1, overrides.tabSlot2),
+                    onSelect = { v -> updateOverrides { it.copy(tabSlot3 = v) } },
+                    testTag = "dropdown_tab_slot_3"
+                )
+                Text(
+                    text = "Tabs always stack in regulation order: Special Forces, Ranger, Sapper, Airborne.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = extra.signalsCyan
                 )
                 BooleanChoiceDropdown(
                     label = "Left-Cuff Service Hash Stripes",
