@@ -328,6 +328,69 @@ fun UniformTailorStudioCard(
                     },
                     testTag = "dropdown_camo_pattern"
                 )
+                // Appearance: Auto keeps the soldier's stable look derived from their id
+                val autoSkin = operator.copy(skinToneOverride = null).skinTone
+                val skinOptions = remember(autoSkin) {
+                    listOf(
+                        DropdownOptionItem<SkinTone?>(
+                            value = null,
+                            title = "Auto (${autoSkin.label})",
+                            subtitle = "Stays the same for this soldier",
+                            primaryColor = Color(autoSkin.toneHex),
+                            trimColor = extra.signalsCyan,
+                            testTag = "dropdown_skin_tone_opt_auto"
+                        )
+                    ) + SkinTone.entries.map { tone ->
+                        DropdownOptionItem<SkinTone?>(
+                            value = tone,
+                            title = tone.label,
+                            primaryColor = Color(tone.toneHex),
+                            trimColor = Color(tone.shadowHex),
+                            testTag = "dropdown_skin_tone_opt_${tone.name.lowercase()}"
+                        )
+                    }
+                }
+                SingleChoiceDropdown(
+                    label = "Skin Tone",
+                    selectedText = operator.skinToneOverride?.label ?: "Auto (${autoSkin.label})",
+                    selectedPrimaryColor = Color(operator.skinTone.toneHex),
+                    selectedTrimColor = Color(operator.skinTone.shadowHex),
+                    options = skinOptions,
+                    selectedValue = operator.skinToneOverride,
+                    onSelect = { tone -> updateRequest { it.copy(skinToneOverride = tone) } },
+                    fieldTestTag = "dropdown_skin_tone"
+                )
+                val autoBuild = operator.copy(bodyBuildOverride = null).bodyBuild
+                val buildOptions = remember(autoBuild) {
+                    listOf(
+                        DropdownOptionItem<BodyBuild?>(
+                            value = null,
+                            title = "Auto (${autoBuild.label})",
+                            subtitle = "Stays the same for this soldier",
+                            primaryColor = Color.Transparent,
+                            trimColor = extra.signalsCyan,
+                            testTag = "dropdown_body_build_opt_auto"
+                        )
+                    ) + BodyBuild.entries.map { build ->
+                        DropdownOptionItem<BodyBuild?>(
+                            value = build,
+                            title = build.label,
+                            primaryColor = Color.Transparent,
+                            trimColor = extra.borderSubtle,
+                            testTag = "dropdown_body_build_opt_${build.name.lowercase()}"
+                        )
+                    }
+                }
+                SingleChoiceDropdown(
+                    label = "Build",
+                    selectedText = operator.bodyBuildOverride?.label ?: "Auto (${autoBuild.label})",
+                    selectedPrimaryColor = Color.Transparent,
+                    selectedTrimColor = extra.borderSubtle,
+                    options = buildOptions,
+                    selectedValue = operator.bodyBuildOverride,
+                    onSelect = { build -> updateRequest { it.copy(bodyBuildOverride = build) } },
+                    fieldTestTag = "dropdown_body_build"
+                )
             }
 
             // 2. Unit Patches & Shoulder Tabs

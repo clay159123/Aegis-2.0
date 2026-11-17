@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 5
+        const val SAVE_FORMAT_VERSION = 6
     }
 
     private val commanderMutex = Mutex()
@@ -412,6 +412,8 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     timesWounded = timesWounded,
     combatPatchHistory = decodeCombatPatchHistoryCsv(combatPatchHistoryCsv),
     equippedGearIds = decodeEquippedGearCsv(equippedGearCsv),
+    skinToneOverride = skinToneName?.let { n -> SkinTone.entries.find { it.name == n } },
+    bodyBuildOverride = bodyBuildName?.let { n -> BodyBuild.entries.find { it.name == n } },
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -472,6 +474,8 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     timesWounded = timesWounded,
     combatPatchHistoryCsv = encodeCombatPatchHistoryCsv(combatPatchHistory),
     equippedGearCsv = encodeEquippedGearCsv(equippedGearIds),
+    skinToneName = skinToneOverride?.name,
+    bodyBuildName = bodyBuildOverride?.name,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
