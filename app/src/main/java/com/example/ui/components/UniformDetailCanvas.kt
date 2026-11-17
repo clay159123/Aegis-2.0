@@ -231,7 +231,8 @@ private fun DrawScope.drawDressUniformFigure(
     val lapelCol = Color(style.lapelHex)
     val trimCol = Color(style.trimHex)
     val trouserStripeCol = Color(style.trouserStripeHex)
-    val resolvedHeadgear = if (operator.headgearStyle.kind == HeadgearKind.BERET) {
+    // Berets were already resolved by resolveKitAppearance; only swap one for a cap on a non-Bravos kit
+    val resolvedHeadgear = if (operator.headgearStyle.kind == HeadgearKind.BERET && kit != WardrobeKit.BRAVOS) {
         TacticalCalculator.defaultHeadgearForKit(kit, operator)
     } else {
         operator.headgearStyle
@@ -522,7 +523,8 @@ private fun DrawScope.drawDressUniformFigure(
             drawLine(trimCol.copy(alpha = 0.65f), Offset(cx + w * 0.110f, h * 0.294f), Offset(cx + w * 0.088f, h * 0.440f), strokeWidth = 1.1f)
         }
     }
-    drawBranchCollarInsignia(cx, h, w, operator.specialty, tier, trimCol)
+    // Mess dress carries no collar brass; the narrow mess lapels would push it onto the shirt
+    if (!style.isCutawayMess) drawBranchCollarInsignia(cx, h, w, operator.specialty, tier, trimCol)
 
     // 5. Sovereign Star Neck Medallion
     if (neckMedalDef != null) {

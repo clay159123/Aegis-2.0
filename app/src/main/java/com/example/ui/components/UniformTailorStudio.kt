@@ -310,7 +310,14 @@ fun UniformTailorStudioCard(
                     freeCustomOverride = freeOverride,
                     wardrobeKit = effectiveKit,
                     onSelect = { hg ->
-                        updateRequest { it.copy(headgearStyle = hg, uniformMode = UniformMode.DRESS_UNIFORM) }
+                        updateRequest {
+                            it.copy(
+                                headgearStyle = hg ?: it.headgearStyle,
+                                headgearTouched = true,
+                                headgearAuto = hg == null,
+                                uniformMode = UniformMode.DRESS_UNIFORM
+                            )
+                        }
                     },
                     testTag = "dropdown_headgear_style"
                 )
@@ -444,14 +451,16 @@ fun UniformTailorStudioCard(
                         color = extra.signalsCyan
                     )
                 }
+                val cordRequest = UniformTailorRequest.fromOperator(operator, WardrobeKit.ALPHAS)
                 ShoulderCordDropdown(
                     label = CordShoulderSlot.LEFT_BRANCH.label,
                     isRightShoulder = false,
                     specialty = operator.specialty,
-                    selectedCordId = alphasSummary.leftCord?.id ?: operator.equippedLeftCordId,
+                    selectedCordId = cordRequest.equippedLeftCordId,
                     ownedMedalIds = ownedMedalIds,
-                    otherShoulderCordId = operator.equippedRightCordId,
+                    otherShoulderCordId = alphasSummary.rightCord?.id,
                     freeCustomOverride = freeOverride,
+                    autoCord = UniformRegaliaRules.autoCordForShoulder(operator, awardedDecorations, isRightShoulder = false),
                     onSelect = { cordId ->
                         updateRequest {
                             it.copy(equippedLeftCordId = cordId, uniformMode = UniformMode.DRESS_UNIFORM)
@@ -463,10 +472,11 @@ fun UniformTailorStudioCard(
                     label = CordShoulderSlot.RIGHT_STAFF_VALOR.label,
                     isRightShoulder = true,
                     specialty = operator.specialty,
-                    selectedCordId = alphasSummary.rightCord?.id ?: operator.equippedRightCordId,
+                    selectedCordId = cordRequest.equippedRightCordId,
                     ownedMedalIds = ownedMedalIds,
-                    otherShoulderCordId = operator.equippedLeftCordId,
+                    otherShoulderCordId = alphasSummary.leftCord?.id,
                     freeCustomOverride = freeOverride,
+                    autoCord = UniformRegaliaRules.autoCordForShoulder(operator, awardedDecorations, isRightShoulder = true),
                     onSelect = { cordId ->
                         updateRequest {
                             it.copy(equippedRightCordId = cordId, uniformMode = UniformMode.DRESS_UNIFORM)

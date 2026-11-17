@@ -36,21 +36,18 @@ object GameCatalog {
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
                     dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
-                    headgearStyle = HeadgearStyle.TAN_BERET,
                     hasWhiteGloves = false,
                     hasDressSash = false
                 ),
                 alphas = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
-                    headgearStyle = HeadgearStyle.OFFICER_PEAKED_CAP,
                     hasWhiteGloves = true,
                     hasDressSash = true
                 ),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.OFFICER_MESS_BLUES,
-                    headgearStyle = HeadgearStyle.OFFICER_PEAKED_CAP,
                     hasWhiteGloves = true,
                     hasDressSash = false
                 )
@@ -96,20 +93,17 @@ object GameCatalog {
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
                     dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
-                    headgearStyle = HeadgearStyle.MAROON_BERET,
                     hasWhiteGloves = false,
                     hasDressSash = false
                 ),
                 alphas = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
-                    headgearStyle = HeadgearStyle.NCO_SERVICE_CAP,
                     hasWhiteGloves = true
                 ),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.ENLISTED_MESS_BLUES,
-                    headgearStyle = HeadgearStyle.NCO_SERVICE_CAP,
                     hasWhiteGloves = true
                 )
             ),
@@ -153,18 +147,15 @@ object GameCatalog {
                 ),
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN,
-                    headgearStyle = HeadgearStyle.OBSIDIAN_BERET
+                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN
                 ),
                 alphas = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN,
-                    headgearStyle = HeadgearStyle.ENLISTED_SERVICE_CAP
+                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN
                 ),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.ENLISTED_MESS_BLUES,
-                    headgearStyle = HeadgearStyle.ENLISTED_SERVICE_CAP,
                     hasWhiteGloves = true
                 )
             ),
@@ -208,19 +199,16 @@ object GameCatalog {
                 ),
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
-                    headgearStyle = HeadgearStyle.OBSIDIAN_BERET
+                    dressStyle = DressUniformStyle.NCO_PARADE_BLUES
                 ),
                 alphas = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
-                    headgearStyle = HeadgearStyle.NCO_SERVICE_CAP,
                     hasWhiteGloves = true
                 ),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.ENLISTED_MESS_BLUES,
-                    headgearStyle = HeadgearStyle.NCO_SERVICE_CAP,
                     hasWhiteGloves = true
                 )
             ),
@@ -264,19 +252,16 @@ object GameCatalog {
                 ),
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
-                    headgearStyle = HeadgearStyle.OBSIDIAN_BERET
+                    dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES
                 ),
                 alphas = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
-                    headgearStyle = HeadgearStyle.OFFICER_PEAKED_CAP,
                     hasWhiteGloves = true
                 ),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.OFFICER_MESS_BLUES,
-                    headgearStyle = HeadgearStyle.OFFICER_PEAKED_CAP,
                     hasWhiteGloves = true
                 )
             ),
@@ -320,19 +305,16 @@ object GameCatalog {
                 ),
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.FLAG_STAFF_FORMAL,
-                    headgearStyle = HeadgearStyle.EMERALD_BERET
+                    dressStyle = DressUniformStyle.FLAG_STAFF_FORMAL
                 ),
                 alphas = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.FLAG_STAFF_FORMAL,
-                    headgearStyle = HeadgearStyle.FLAG_GENERAL_CAP,
                     hasWhiteGloves = true
                 ),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.FLAG_MESS_FORMAL,
-                    headgearStyle = HeadgearStyle.FLAG_GENERAL_CAP,
                     hasWhiteGloves = true
                 )
             ),
@@ -413,18 +395,15 @@ object GameCatalog {
                 ),
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS,
-                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN,
-                    headgearStyle = HeadgearStyle.OBSIDIAN_BERET
+                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN
                 ),
                 alphas = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
-                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN,
-                    headgearStyle = HeadgearStyle.ENLISTED_SERVICE_CAP
+                    dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN
                 ),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     dressStyle = DressUniformStyle.ENLISTED_MESS_BLUES,
-                    headgearStyle = HeadgearStyle.ENLISTED_SERVICE_CAP,
                     hasWhiteGloves = true
                 )
             ),
