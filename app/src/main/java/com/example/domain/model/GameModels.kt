@@ -34,11 +34,15 @@ enum class RankTier(val label: String, val shortLabel: String, val order: Int) {
     NCO("Non-Commissioned Officer", "NCO", 2),
     SNCO("Senior Non-Commissioned Officer", "SNCO", 3),
     OFFICER("Commissioned Officer", "Officer", 4),
-    FLAG_OFFICER("General / Flag Officer", "Flag Officer", 5);
+    FLAG_OFFICER("General / Flag Officer", "Flag Officer", 5),
+    /** Warrant officers: a separate track entered through WOCS. Same order as commissioned officers. */
+    WARRANT("Warrant Officer", "Warrant", 4);
 
     val isEnlisted: Boolean get() = this == SOLDIER || this == NCO || this == SNCO
     val isNcoBand: Boolean get() = this == NCO || this == SNCO
-    val isOfficer: Boolean get() = this == OFFICER || this == FLAG_OFFICER
+    /** Wears officer uniforms: commissioned, flag and warrant officers. */
+    val isOfficer: Boolean get() = this == OFFICER || this == FLAG_OFFICER || this == WARRANT
+    val isCommissioned: Boolean get() = this == OFFICER || this == FLAG_OFFICER
 }
 
 enum class FacilityType(
@@ -248,9 +252,36 @@ enum class OperatorRank(
     BG("BG", "O-7", "Brigadier General", RankTier.FLAG_OFFICER, 7100, 1),
     MG("MG", "O-8", "Major General", RankTier.FLAG_OFFICER, 8600, 2),
     LTG("LTG", "O-9", "Lieutenant General", RankTier.FLAG_OFFICER, 10400, 3),
-    GEN("GEN", "O-10", "General", RankTier.FLAG_OFFICER, 12500, 4);
+    GEN("GEN", "O-10", "General", RankTier.FLAG_OFFICER, 12500, 4),
 
-    val isOfficer: Boolean get() = tier == RankTier.OFFICER || tier == RankTier.FLAG_OFFICER
+    // WARRANT OFFICER (W-1 to W-5): its own track, kept last so enlisted/commissioned ordering is unchanged.
+    // A warrant officer's grade is stored on the soldier (warrantGrade), not derived from XP; xpRequired is
+    // the XP each grade needs before its promotion board can sit.
+    WO1("WO1", "W-1", "Warrant Officer 1", RankTier.WARRANT, 2000, 1),
+    CW2("CW2", "W-2", "Chief Warrant Officer 2", RankTier.WARRANT, 2600, 2),
+    CW3("CW3", "W-3", "Chief Warrant Officer 3", RankTier.WARRANT, 3300, 3),
+    CW4("CW4", "W-4", "Chief Warrant Officer 4", RankTier.WARRANT, 4100, 4),
+    CW5("CW5", "W-5", "Chief Warrant Officer 5", RankTier.WARRANT, 5000, 5);
+
+    /** Officer uniforms and courtesies: commissioned, flag and warrant officers. */
+    val isOfficer: Boolean get() = tier.isOfficer
+    val isCommissioned: Boolean get() = tier == RankTier.OFFICER || tier == RankTier.FLAG_OFFICER
+    val isWarrant: Boolean get() = tier == RankTier.WARRANT
+    /** 1..5 for WO1..CW5, 0 otherwise. */
+    val warrantGrade: Int get() = if (isWarrant) insigniaCount else 0
+
+    /**
+     * Position on one seniority ladder for stat bonuses, sorting and minimum-rank checks. Warrant grades sit
+     * between senior NCOs and company-grade officers: WO1 with MSG, CW2 with 2LT, up to CW5 with MAJ.
+     */
+    val seniorityIndex: Int get() = when (this) {
+        WO1 -> MSG.ordinal
+        CW2 -> LT2.ordinal
+        CW3 -> LT1.ordinal
+        CW4 -> CPT.ordinal
+        CW5 -> MAJ.ordinal
+        else -> ordinal
+    }
     val isFieldGradeOfficer: Boolean get() = this == MAJ || this == LTC || this == COL
     val isCareerEligibleForStaffOrTransfer: Boolean get() = ordinal >= SGT.ordinal
 
@@ -260,6 +291,7 @@ enum class OperatorRank(
         RankTier.SNCO -> 200.0
         RankTier.OFFICER -> 260.0
         RankTier.FLAG_OFFICER -> 480.0
+        RankTier.WARRANT -> 200.0
     }
 
     fun promotionPrestigeCost(): Int = when (tier) {
@@ -268,12 +300,16 @@ enum class OperatorRank(
         RankTier.SNCO -> 11
         RankTier.OFFICER -> 14
         RankTier.FLAG_OFFICER -> 24
+        RankTier.WARRANT -> 12
     }
 
     companion object {
+        /** Enlisted and commissioned ranks by XP. Warrant grades never come from XP (see [forWarrantGrade]). */
         fun forXp(xp: Int, maxTier: RankTier = RankTier.FLAG_OFFICER): OperatorRank {
+            if (maxTier == RankTier.WARRANT) return forXp(xp, RankTier.SNCO)
             var current = PVT
             for (rank in entries) {
+                if (rank.isWarrant) continue
                 if (rank.tier.order <= maxTier.order && xp >= rank.xpRequired) {
                     current = rank
                 }
@@ -281,8 +317,13 @@ enum class OperatorRank(
             return current
         }
 
+        val warrantRanks: List<OperatorRank> get() = entries.filter { it.isWarrant }
+
+        fun forWarrantGrade(grade: Int): OperatorRank = warrantRanks[(grade.coerceIn(1, 5)) - 1]
+
         fun ceilingXpForTier(tier: RankTier): Int? =
-            entries.firstOrNull { it.tier.order > tier.order }?.xpRequired
+            if (tier == RankTier.WARRANT) null
+            else entries.firstOrNull { !it.isWarrant && it.tier.order > tier.order }?.xpRequired
 
         fun clampXpToAuthorizedTier(xp: Int, authorizedTier: RankTier): Int {
             val ceiling = ceilingXpForTier(authorizedTier)
@@ -290,9 +331,16 @@ enum class OperatorRank(
         }
 
         fun nextRank(current: OperatorRank): OperatorRank? {
+            if (current.isWarrant) {
+                return if (current == CW5) null else forWarrantGrade(current.warrantGrade + 1)
+            }
+            if (current == GEN) return null
             val idx = entries.indexOf(current)
             return if (idx in 0 until entries.lastIndex) entries[idx + 1] else null
         }
+
+        /** Warrant grades are each their own board, like a tier crossing. */
+        fun isBoardGate(from: OperatorRank, to: OperatorRank): Boolean = to.tier != from.tier || to.isWarrant
     }
 }
 
@@ -302,7 +350,27 @@ enum class OperatorSpecialty(val label: String, val roleTag: String, val recruit
     SIGNALS("Cyber & Signals", "25B SIG", "Encrypted comms, UAV telemetry & EW"),
     BREACHER("Engineer & EOD", "12B ENG", "Ordnance disposal, sapper & bridging"),
     MEDIC("Medical Corps", "68W MED", "Trauma stabilization & medevac boost"),
-    COMMAND("Staff & Command", "HQ CMD", "Operations coordination & leadership")
+    COMMAND("Staff & Command", "HQ CMD", "Operations coordination & leadership"),
+    /** Warrant officer aviators. Reached only through Flight School; never recruited as enlisted. */
+    AVIATION("Army Aviation", "153A AVN", "Helicopter pilot flying insertions and support")
+}
+
+/** Where a new recruit comes from (item 31). Each arrives at a set rank with that school's record. */
+enum class RecruitSource(
+    val label: String,
+    val arrivalRank: OperatorRank,
+    val creditCost: Double,
+    /** School marked complete on arrival; null for Reception Station */
+    val schoolId: String?
+) {
+    RECEPTION("Reception Station", OperatorRank.PV2, 45.0, null),
+    NCO_ACADEMY("NCO Academy", OperatorRank.SGT, 110.0, "msn_nco_school"),
+    SENIOR_LEADER_COURSE("Senior Leader Course", OperatorRank.SFC, 200.0, "msn_snco_school"),
+    OCS("Officer Candidate School", OperatorRank.LT2, 220.0, "msn_ocs_school"),
+    WOCS_TECHNICAL("WOCS: Technical", OperatorRank.WO1, 180.0, "msn_wocs"),
+    WOCS_AVIATOR("WOCS: Aviator", OperatorRank.WO1, 240.0, "msn_wocs");
+
+    val summary: String get() = "${arrivalRank.code} (${arrivalRank.payGrade}) • ${creditCost.toInt()} CR"
 }
 
 enum class OperatorStatus(val label: String) {
@@ -334,7 +402,15 @@ enum class HqStaffRole(
     val survivalBonusPct: Int = 0,
     val efficiencyBonusPct: Int = 0,
     val prestigeBonusPct: Int = 0,
-    val xpBonusPct: Int = 0
+    val xpBonusPct: Int = 0,
+    /** Billet needs a warrant officer aviator (153A). */
+    val requiresAviator: Boolean = false,
+    /** Billet needs a technical warrant officer (warrant, not an aviator). */
+    val requiresTechnicalWarrant: Boolean = false,
+    /** Cut to warrant officer promotion costs while filled. */
+    val warrantPromotionDiscountPct: Int = 0,
+    /** Cut to helicopter insertion supply cost and risk while filled (insertions arrive in Session 10). */
+    val heloInsertionBonusPct: Int = 0
 ) {
     CO_COMMANDING_OFFICER(
         slotOrder = 1,
@@ -453,6 +529,35 @@ enum class HqStaffRole(
         efficiencyBonusPct = 8,
         prestigeBonusPct = 15,
         xpBonusPct = 10
+    ),
+    AIR_OPS_OFFICER(
+        slotOrder = 8,
+        requiredHqLevel = 6,
+        shortCode = "AIR",
+        title = "Air Operations Officer",
+        description = "Senior warrant aviator planning lift, routing and air support. Helicopter insertions cost less supply and carry less risk.",
+        minRank = OperatorRank.CW2,
+        minMissionsRequired = 3,
+        supplyFlowPct = 6,
+        durationReductionPct = 4,
+        survivalBonusPct = 2,
+        efficiencyBonusPct = 3,
+        requiresAviator = true,
+        heloInsertionBonusPct = 20
+    ),
+    CCWO_COMMAND_CHIEF_WARRANT(
+        slotOrder = 9,
+        requiredHqLevel = 7,
+        shortCode = "CCWO",
+        title = "Command Chief Warrant Officer",
+        description = "The command's senior technical warrant officer. Mentors the warrant corps (cheaper warrant promotions) and sharpens HQ technical and intelligence work.",
+        minRank = OperatorRank.CW4,
+        minMissionsRequired = 6,
+        intelFlowPct = 10,
+        efficiencyBonusPct = 4,
+        xpBonusPct = 5,
+        requiresTechnicalWarrant = true,
+        warrantPromotionDiscountPct = 25
     );
 
     val requiredTier: RankTier get() = minRank.tier
@@ -460,6 +565,8 @@ enum class HqStaffRole(
     val requirementSummary: String
         get() = buildString {
             append("${minRank.code} (${minRank.payGrade})+ • ${minMissionsRequired}+ Ops")
+            if (requiresAviator) append(" • Warrant Aviator")
+            if (requiresTechnicalWarrant) append(" • Technical Warrant")
             if (requiredSchoolLabel != null) append(" • School: $requiredSchoolLabel")
         }
 
@@ -808,7 +915,10 @@ enum class InsigniaShape {
     INTEL_CREST,
     EOD_BADGE,
     LOGISTICS_CREST,
-    STAFF_CREST
+    STAFF_CREST,
+    AVIATOR_WINGS,
+    SENIOR_AVIATOR_WINGS,
+    MASTER_AVIATOR_WINGS
 }
 
 enum class ChestBadgeSlot(val label: String, val ruleHint: String) {
@@ -1048,8 +1158,19 @@ data class Operator(
     /** A better qualification waiting for the player to award it */
     val pendingMarksmanshipQual: MarksmanshipBadgeTier? = null,
     /** Score from the most recent qualification */
-    val lastQualScore: Int = 0
+    val lastQualScore: Int = 0,
+    /** 1..5 for WO1..CW5 while [authorizedTier] is WARRANT; 0 otherwise */
+    val warrantGrade: Int = 0,
+    /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
+    val flightSkill: Int = 0,
+    /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */
+    val combatSortiesFlown: Int = 0
 ) {
+    val isWarrantOfficer: Boolean get() = authorizedTier == RankTier.WARRANT
+    val isAviator: Boolean get() = specialty == OperatorSpecialty.AVIATION
+    /** Technical warrant officers keep their MOS; aviators are the 153A pilots. */
+    val isTechnicalWarrant: Boolean get() = isWarrantOfficer && !isAviator
+
     /** Skin tone shown on every uniform: the override, or a stable pick from the soldier id */
     val skinTone: SkinTone
         get() = skinToneOverride ?: SkinTone.entries[Math.floorMod(id.hashCode(), SkinTone.entries.size)]
@@ -1058,19 +1179,28 @@ data class Operator(
     val bodyBuild: BodyBuild
         get() = bodyBuildOverride ?: BodyBuild.entries[Math.floorMod("$id#build".hashCode(), BodyBuild.entries.size)]
 
-    val rank: OperatorRank get() = OperatorRank.forXp(xp, authorizedTier)
+    val rank: OperatorRank
+        get() = if (authorizedTier == RankTier.WARRANT) OperatorRank.forWarrantGrade(warrantGrade)
+        else OperatorRank.forXp(xp, authorizedTier)
 
     val isAtCategoryPromotionGate: Boolean
         get() {
             val next = OperatorRank.nextRank(rank) ?: return false
-            return next.tier != rank.tier
+            return OperatorRank.isBoardGate(rank, next)
         }
 
     val isReadyForNextCategoryPromotion: Boolean
         get() {
             val next = OperatorRank.nextRank(rank) ?: return false
-            return next.tier != rank.tier && xp >= next.xpRequired
+            return OperatorRank.isBoardGate(rank, next) && xp >= next.xpRequired
         }
+
+    /** This soldier at [next] rank: XP raised to its floor, tier authorized, warrant grade set. */
+    fun promotedTo(next: OperatorRank): Operator = copy(
+        xp = maxOf(xp, next.xpRequired),
+        authorizedTier = if (next.isWarrant || next.tier.order > authorizedTier.order || authorizedTier == RankTier.WARRANT) next.tier else authorizedTier,
+        warrantGrade = next.warrantGrade
+    )
 }
 
 data class UniformTailorRequest(

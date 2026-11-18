@@ -38,7 +38,7 @@ fun SquadArmoryScreen(
     onUnequipGear: (operatorId: String, gearId: String) -> Unit,
     onAutoDistributeGear: () -> Unit = {},
     onPurchaseOrUpgradeGear: (String) -> Unit,
-    onEnlistPostBasicSoldier: (OperatorSpecialty) -> Unit = {},
+    onEnlistRecruit: (OperatorSpecialty, RecruitSource) -> Unit = { _, _ -> },
     onAssignToHqStaff: (String, HqStaffRole) -> Unit = { _, _ -> },
     onReassignHqStaffRole: (String, HqStaffRole) -> Unit = { _, _ -> },
     onApproveTransferOut: (String) -> Unit = {},
@@ -65,6 +65,7 @@ fun SquadArmoryScreen(
     var selectedOperatorId by rememberSaveable { mutableStateOf<String?>(null) }
     var showArmoryDrawer by remember { mutableStateOf(false) }
     var selectedRecruitMos by remember { mutableStateOf(OperatorSpecialty.SIGNALS) }
+    var selectedRecruitSource by remember { mutableStateOf(RecruitSource.RECEPTION) }
     var pendingTransferConfirmOp by remember { mutableStateOf<Operator?>(null) }
     var pendingRetirementConfirmOp by remember { mutableStateOf<Operator?>(null) }
     var hqRoleTargetOpId by remember { mutableStateOf<String?>(null) }
@@ -114,6 +115,11 @@ fun SquadArmoryScreen(
     val fieldOps = uiState.operators.filter {
         it.unlocked && !it.status.isOutOfActiveService && it.status != OperatorStatus.HQ_STAFF
     }
+    // Ground soldiers first, then the aviation pool (153A pilots never join squads)
+    val groundOps = fieldOps.filter { !it.isAviator }
+    val aviationPool = fieldOps.filter { it.isAviator }
+    val rosterOrder = groundOps + aviationPool
+    val firstAviatorId = aviationPool.firstOrNull()?.id
     val hqStaffOps = uiState.operators.filter {
         it.unlocked && it.status == OperatorStatus.HQ_STAFF
     }
@@ -355,7 +361,14 @@ fun SquadArmoryScreen(
             }
         }
 
-        items(fieldOps, key = { it.id }) { op ->
+        items(rosterOrder, key = { it.id }) { op ->
+            if (op.id == firstAviatorId) {
+                SectionHeader(
+                    title = "Aviation Pool (${aviationPool.size})",
+                    subtitle = "Warrant officer pilots. They fly insertions and Flight Hours; they don't join squads."
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
             val equipped = uiState.gearItems.equippedBy(op)
             val opMedals = uiState.citations.filter { it.operatorId == op.id }
                 .mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
@@ -600,24 +613,44 @@ fun SquadArmoryScreen(
             }
         }
 
-        // Enlist Post-Basic Soldier (PV2 E-2, Non-Infantry & Infantry MOS options, No Special Schools)
+        // Recruiting (item 31): Reception Station PV2s, or leadership-school graduates at higher ranks
         item {
             Spacer(modifier = Modifier.height(6.dp))
             SectionHeader(
-                title = "Reception Station • Enlist Post-Basic Soldier",
-                subtitle = "Arrives at PV2 (E-2) in bare AGSU with Army Service Ribbon & 0 special schools"
+                title = "Recruiting • ${selectedRecruitSource.label}",
+                subtitle = if (selectedRecruitSource == RecruitSource.RECEPTION) {
+                    "Arrives at PV2 (E-2) in bare AGSU with Army Service Ribbon & 0 special schools"
+                } else {
+                    "Arrives ${selectedRecruitSource.summary} with that school's record, one MOS school and no combat history"
+                }
             )
             Spacer(modifier = Modifier.height(6.dp))
-            val canEnlist = !fieldSlotsFull && uiState.resources.credits >= 45.0
+            val recruitCost = selectedRecruitSource.creditCost
+            val canEnlist = !fieldSlotsFull && uiState.resources.credits >= recruitCost
+            val arrival = selectedRecruitSource.arrivalRank
             TacticalPanelCard(borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)) {
-                RecruitMosDropdown(
-                    selectedMos = selectedRecruitMos,
-                    onSelect = { selectedRecruitMos = it },
-                    testTag = "dropdown_recruit_mos"
+                RecruitSourceDropdown(
+                    selectedSource = selectedRecruitSource,
+                    onSelect = { selectedRecruitSource = it },
+                    testTag = "dropdown_recruit_source"
                 )
                 Spacer(modifier = Modifier.height(10.dp))
+                if (selectedRecruitSource == RecruitSource.WOCS_AVIATOR) {
+                    Text(
+                        "153A Army Aviator: Flight School complete, Aviator Badge and starting flight skill ${TacticalCalculator.FLIGHT_SCHOOL_STARTING_SKILL}. Joins the Aviation Pool.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = extra.brassBright
+                    )
+                } else {
+                    RecruitMosDropdown(
+                        selectedMos = selectedRecruitMos,
+                        onSelect = { selectedRecruitMos = it },
+                        testTag = "dropdown_recruit_mos"
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
                 Button(
-                    onClick = { onEnlistPostBasicSoldier(selectedRecruitMos) },
+                    onClick = { onEnlistRecruit(selectedRecruitMos, selectedRecruitSource) },
                     enabled = canEnlist,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -629,8 +662,8 @@ fun SquadArmoryScreen(
                     Text(
                         when {
                             fieldSlotsFull -> "Field Roster Full (${fieldOps.size}/${uiState.maxFieldRosterSlots})"
-                            uiState.resources.credits < 45.0 -> "Need 45 CR to Enlist PV2"
-                            else -> "Enlist Post-Basic PV2 (45 CR)"
+                            uiState.resources.credits < recruitCost -> "Need ${recruitCost.toInt()} CR for a ${arrival.code}"
+                            else -> "Recruit ${arrival.code} (${recruitCost.toInt()} CR)"
                         }
                     )
                 }
@@ -792,7 +825,7 @@ fun SquadArmoryScreen(
         SquadEditorDialog(
             editingSquad = editingSquad,
             allSquads = uiState.squads,
-            fieldOperators = fieldOps,
+            fieldOperators = groundOps,
             onSave = onSaveSquad,
             onDisband = onDisbandSquad,
             gearItems = uiState.gearItems,

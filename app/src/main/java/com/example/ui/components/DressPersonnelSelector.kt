@@ -98,7 +98,7 @@ internal fun buildOrganizedRosterSections(
         .filter { it.status == OperatorStatus.HQ_STAFF }
         .sortedWith(
             compareBy<Operator> { it.hqRole?.slotOrder ?: 99 }
-                .thenByDescending { it.rank.ordinal }
+                .thenByDescending { it.rank.seniorityIndex }
                 .thenByDescending { it.xp }
         )
     if (hqOps.isNotEmpty()) {
@@ -120,7 +120,7 @@ internal fun buildOrganizedRosterSections(
             .distinctBy { it.id }
             .sortedWith(
                 compareByDescending<Operator> { it.id == squad.leaderId }
-                    .thenByDescending { it.rank.ordinal }
+                    .thenByDescending { it.rank.seniorityIndex }
                     .thenByDescending { it.xp }
             )
         if (squadMembers.isNotEmpty()) {
@@ -147,7 +147,7 @@ internal fun buildOrganizedRosterSections(
                 it.id !in assignedSquadMemberIds
         }
         .sortedWith(
-            compareByDescending<Operator> { it.rank.ordinal }
+            compareByDescending<Operator> { it.rank.seniorityIndex }
                 .thenByDescending { it.xp }
         )
     if (unassignedField.isNotEmpty()) {
@@ -167,7 +167,7 @@ internal fun buildOrganizedRosterSections(
     val memorialOps = unlockedOps
         .filter { it.status == OperatorStatus.FALLEN }
         .sortedWith(
-            compareByDescending<Operator> { it.rank.ordinal }
+            compareByDescending<Operator> { it.rank.seniorityIndex }
                 .thenByDescending { it.missionsCompleted }
         )
     if (memorialOps.isNotEmpty()) {
@@ -763,12 +763,12 @@ fun DressPersonnelDirectorySheet(
                         .let { list ->
                             when (sortMode) {
                                 RosterSortMode.BY_RANK -> list.sortedWith(
-                                    compareByDescending<Operator> { it.rank.ordinal }
+                                    compareByDescending<Operator> { it.rank.seniorityIndex }
                                         .thenByDescending { it.xp }
                                 )
                                 RosterSortMode.BY_HONORS -> list.sortedWith(
                                     compareByDescending<Operator> { honorCountsByOp[it.id] ?: 0 }
-                                        .thenByDescending { it.rank.ordinal }
+                                        .thenByDescending { it.rank.seniorityIndex }
                                 )
                                 RosterSortMode.BY_BILLET -> list
                             }

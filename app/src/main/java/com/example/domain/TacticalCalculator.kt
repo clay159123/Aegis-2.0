@@ -485,6 +485,51 @@ object TacticalCalculator {
 
     // ---------- Rifle qualification ----------
     const val RIFLE_QUAL_MISSION_ID = "msn_rifle_qual"
+
+    // ---- Warrant officers and aviation (Session 9) ----
+    const val OCS_MISSION_ID = "msn_ocs_school"
+    const val WOCS_MISSION_ID = "msn_wocs"
+    const val FLIGHT_SCHOOL_MISSION_ID = "msn_flight_school"
+    const val FLIGHT_HOURS_MISSION_ID = "msn_flight_hours"
+    const val AVIATOR_WINGS_ID = "insig_aviator_wings"
+    const val SENIOR_AVIATOR_WINGS_ID = "insig_senior_aviator_wings"
+    const val MASTER_AVIATOR_WINGS_ID = "insig_master_aviator_wings"
+    const val AIR_MEDAL_ID = "medal_air_medal"
+    /** Flight skill a new Flight School graduate starts with. */
+    const val FLIGHT_SCHOOL_STARTING_SKILL = 10
+    /** Flight skill each Flight Hours session adds, up to [MAX_FLIGHT_SKILL]. */
+    const val FLIGHT_HOURS_SKILL_GAIN = 5
+    const val MAX_FLIGHT_SKILL = 100
+    const val SENIOR_WINGS_FLIGHT_SKILL = 40
+    const val MASTER_WINGS_FLIGHT_SKILL = 65
+    /** Combat missions flown as pilot per Air Medal (first award and each oak leaf cluster). */
+    const val SORTIES_PER_AIR_MEDAL = 3
+    /** Squad power added by a technical warrant officer in the squad. */
+    const val TECH_WARRANT_SQUAD_TECH_BONUS = 2
+    /** Pass-chance bonus (percentage points) when a technical warrant officer's MOS fits the mission. */
+    const val TECH_WARRANT_MOS_PASS_BONUS = 3
+
+    /** Ops a warrant officer needs before the board for [next] grade (CW2..CW5). */
+    fun warrantOpsRequired(next: OperatorRank): Int = when (next) {
+        OperatorRank.CW2 -> 3
+        OperatorRank.CW3 -> 6
+        OperatorRank.CW4 -> 10
+        OperatorRank.CW5 -> 15
+        else -> 0
+    }
+
+    /** Flight skill an aviator needs before the board for [next] grade (CW2..CW5). */
+    fun warrantFlightSkillRequired(next: OperatorRank): Int = when (next) {
+        OperatorRank.CW2 -> 20
+        OperatorRank.CW3 -> 35
+        OperatorRank.CW4 -> 50
+        OperatorRank.CW5 -> 65
+        else -> 0
+    }
+
+    /** True once a soldier has started (attempted) or finished this school. */
+    private fun hasEnteredSchool(operator: Operator, missionId: String): Boolean =
+        missionId in operator.completedMissionIds || (operator.schoolAttempts[missionId] ?: 0) > 0
     const val MAX_REQUAL_ATTEMPTS = 3
     const val QUAL_ROLL_MAX = RIFLE_QUAL_ROLL_MAX
     const val RANGE_QUAL_BONUS_PER_LEVEL = 1
@@ -615,8 +660,19 @@ object TacticalCalculator {
 
     fun evaluateHqRoleEligibility(role: HqStaffRole, operator: Operator): EligibilityResult {
         val missing = mutableListOf<String>()
-        if (operator.rank.ordinal < role.minRank.ordinal) {
+        val rankShort = if (role.minRank.isWarrant) {
+            !operator.rank.isWarrant || operator.rank.warrantGrade < role.minRank.warrantGrade
+        } else {
+            operator.rank.seniorityIndex < role.minRank.seniorityIndex
+        }
+        if (rankShort) {
             missing += "Requires ${role.minRank.code} (${role.minRank.payGrade})+ (currently ${operator.rank.code})"
+        }
+        if (role.requiresAviator && !(operator.isWarrantOfficer && operator.isAviator)) {
+            missing += "Requires a warrant officer aviator (153A)"
+        }
+        if (role.requiresTechnicalWarrant && !operator.isTechnicalWarrant) {
+            missing += "Requires a technical warrant officer"
         }
         val totalExpOps = operator.missionsCompleted + operator.staffOpsSupported
         if (totalExpOps < role.minMissionsRequired) {
@@ -665,8 +721,13 @@ object TacticalCalculator {
             OperatorStatus.READY -> Unit
         }
 
+        if (operator.isAviator && mission.scope == MissionScope.FIELD_COMBAT) {
+            return EligibilityResult(false, listOf("Aviators fly insertions; they don't join ground teams"))
+        }
+
         if (mission.scope == MissionScope.TRAINING) {
-            if (mission.id in operator.completedMissionIds && mission.id != RIFLE_QUAL_MISSION_ID) {
+            val repeatable = mission.id == RIFLE_QUAL_MISSION_ID || mission.id == FLIGHT_HOURS_MISSION_ID
+            if (mission.id in operator.completedMissionIds && !repeatable) {
                 return EligibilityResult(false, listOf("Already Graduated"))
             }
             val req = mission.schoolRequirements
@@ -678,6 +739,26 @@ object TacticalCalculator {
                 }
                 if (mission.id == "msn_eib_testing" && !isInfantryOrSfQualified(operator)) {
                     missing += "Infantry or SF-qualified only"
+                }
+                // Item 29: Officer Candidate School and Warrant Officer Candidate School are either-or
+                if (mission.id == OCS_MISSION_ID && (operator.isWarrantOfficer || hasEnteredSchool(operator, WOCS_MISSION_ID))) {
+                    missing += "On the Warrant Officer path (WOCS): OCS is closed"
+                }
+                if (mission.id == WOCS_MISSION_ID) {
+                    if (hasEnteredSchool(operator, OCS_MISSION_ID) || operator.rank.isCommissioned) {
+                        missing += "On the commissioned path (OCS): WOCS is closed"
+                    } else if (!operator.rank.tier.isEnlisted) {
+                        missing += "Enlisted soldiers only"
+                    }
+                }
+                if (mission.id == FLIGHT_SCHOOL_MISSION_ID) {
+                    if (!operator.isWarrantOfficer) missing += "Warrant officers only (graduate WOCS first)"
+                    if (facilityLevel(facilities, FacilityType.AIRFIELD) < 1) missing += "Build an Airfield first"
+                }
+                if (mission.id == FLIGHT_HOURS_MISSION_ID) {
+                    if (!operator.isAviator) missing += "Aviators only (graduate Flight School first)"
+                    if (facilityLevel(facilities, FacilityType.AIRFIELD) < 1) missing += "Needs an Airfield"
+                    if (operator.flightSkill >= MAX_FLIGHT_SKILL) missing += "Flight skill maxed ($MAX_FLIGHT_SKILL)"
                 }
                 val attemptsUsed = operator.schoolAttempts[mission.id] ?: 0
                 if (req.maxAttempts != null && attemptsUsed >= req.maxAttempts) {
@@ -856,12 +937,12 @@ object TacticalCalculator {
         return when (kit) {
             WardrobeKit.MESS -> when (tier) {
                 RankTier.FLAG_OFFICER -> DressUniformStyle.FLAG_MESS_FORMAL
-                RankTier.OFFICER -> DressUniformStyle.OFFICER_MESS_BLUES
+                RankTier.OFFICER, RankTier.WARRANT -> DressUniformStyle.OFFICER_MESS_BLUES
                 RankTier.SNCO, RankTier.NCO, RankTier.SOLDIER -> DressUniformStyle.ENLISTED_MESS_BLUES
             }
             WardrobeKit.ALPHAS, WardrobeKit.BRAVOS, WardrobeKit.FIELD -> when (tier) {
                 RankTier.FLAG_OFFICER -> DressUniformStyle.FLAG_STAFF_FORMAL
-                RankTier.OFFICER -> DressUniformStyle.OFFICER_SERVICE_BLUES
+                RankTier.OFFICER, RankTier.WARRANT -> DressUniformStyle.OFFICER_SERVICE_BLUES
                 RankTier.SNCO, RankTier.NCO -> DressUniformStyle.NCO_PARADE_BLUES
                 RankTier.SOLDIER -> DressUniformStyle.ARMY_SERVICE_GREEN
             }
@@ -894,7 +975,7 @@ object TacticalCalculator {
                 if (preferred != null && preferred.kind != HeadgearKind.BERET) return preferred
                 when (tier) {
                     RankTier.FLAG_OFFICER -> HeadgearStyle.FLAG_GENERAL_CAP
-                    RankTier.OFFICER -> HeadgearStyle.OFFICER_PEAKED_CAP
+                    RankTier.OFFICER, RankTier.WARRANT -> HeadgearStyle.OFFICER_PEAKED_CAP
                     RankTier.SNCO, RankTier.NCO -> HeadgearStyle.NCO_SERVICE_CAP
                     RankTier.SOLDIER -> HeadgearStyle.ENLISTED_SERVICE_CAP
                 }
@@ -1119,7 +1200,7 @@ object TacticalCalculator {
     ): Int {
         val req = mission.schoolRequirements ?: return 90
         val stats = soldierStats(operator, citations)
-        val rankBonus = operator.rank.ordinal.coerceAtMost(10)
+        val rankBonus = operator.rank.seniorityIndex.coerceAtMost(10)
         val mosFitBonus = if (operator.specialty in req.naturalFitSpecialties) 5 else 0
         val statMargin = ((stats.totalPower - mission.recommendedPower) / 5).coerceIn(-16, 10)
         val staffBonus = (hqStaffSummary?.efficiencyBonusPct ?: 0) / 6
@@ -1188,9 +1269,31 @@ object TacticalCalculator {
             MissionRisk.HIGH -> 16 to 70
             MissionRisk.EXTREME -> 12 to 62
         }
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus)
+        val warrantBonus = if (mission.scope == MissionScope.TRAINING) 0 else technicalWarrantOddsBonus(mission, selectedOperators)
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus)
             .coerceIn(minOdds, maxOdds)
     }
+
+    /** Keywords in a mission's focus that match each MOS, for the technical warrant officer bonus. */
+    private val mosFocusKeywords: Map<OperatorSpecialty, List<String>> = mapOf(
+        OperatorSpecialty.ASSAULT to listOf("Assault", "Strike", "Armor", "Firepower"),
+        OperatorSpecialty.RECON to listOf("Recon", "Intel", "Stealth", "Infiltration"),
+        OperatorSpecialty.SIGNALS to listOf("Signals", "Tech", "EW", "Cyber"),
+        OperatorSpecialty.BREACHER to listOf("EOD", "Breach", "Engineer", "Sapper"),
+        OperatorSpecialty.MEDIC to listOf("Trauma", "Medical", "Rescue"),
+        OperatorSpecialty.COMMAND to listOf("Diplomatic", "Staff", "Logistics", "Coalition"),
+        OperatorSpecialty.AVIATION to emptyList()
+    )
+
+    /**
+     * Technical warrant officers lift their team: +1 point for the technical edge (about +2 Tech of squad
+     * power) and [TECH_WARRANT_MOS_PASS_BONUS] more when the mission's focus matches their MOS. Best WO counts once.
+     */
+    fun technicalWarrantOddsBonus(mission: MissionTemplate, team: List<Operator>): Int =
+        team.filter { it.isTechnicalWarrant }.maxOfOrNull { wo ->
+            val fits = mosFocusKeywords[wo.specialty].orEmpty().any { mission.primaryFocus.contains(it, ignoreCase = true) }
+            1 + if (fits) TECH_WARRANT_MOS_PASS_BONUS else 0
+        } ?: 0
 
     fun productionRates(
         facilities: List<FacilityState>,
@@ -1263,7 +1366,7 @@ object TacticalCalculator {
         val tierBonusBps = when (operator.rank.tier) {
             RankTier.SOLDIER, RankTier.NCO -> 0
             RankTier.SNCO -> 8
-            RankTier.OFFICER -> 15
+            RankTier.OFFICER, RankTier.WARRANT -> 15
             RankTier.FLAG_OFFICER -> 30
         }
         val tenureBonusBps = (((totalOps - MIN_RETIREMENT_OPS).coerceAtLeast(0)) / 4).coerceAtMost(4) * 5
@@ -1379,7 +1482,7 @@ object TacticalCalculator {
         citations: List<AwardedMedal>,
         facilities: List<FacilityState>
     ): StatProfile {
-        val rankIndex = OperatorRank.entries.indexOf(operator.rank)
+        val rankIndex = operator.rank.seniorityIndex
         val rankBonus = rankIndex + operator.rank.tier.order * 2
         val gearMult = gearBonusMultiplier(facilities)
 
@@ -1874,6 +1977,41 @@ object TacticalCalculator {
                     missing += "Complete 3+ Ops (${operator.missionsCompleted}/3)"
                 }
             }
+            AVIATOR_WINGS_ID -> {
+                if (FLIGHT_SCHOOL_MISSION_ID !in operator.completedMissionIds) {
+                    missing += "Graduate Flight School"
+                }
+                if (SENIOR_AVIATOR_WINGS_ID in ownedMedalIds || MASTER_AVIATOR_WINGS_ID in ownedMedalIds) {
+                    missing += "Already wears higher aviator wings"
+                }
+            }
+            SENIOR_AVIATOR_WINGS_ID -> {
+                if (AVIATOR_WINGS_ID !in ownedMedalIds) missing += "Hold the Aviator Badge first"
+                if (MASTER_AVIATOR_WINGS_ID in ownedMedalIds) missing += "Already wears Master wings"
+                if (operator.rank.warrantGrade < 3) missing += "Reach CW3 (currently ${operator.rank.code})"
+                if (operator.flightSkill < SENIOR_WINGS_FLIGHT_SKILL) {
+                    missing += "Flight skill ${operator.flightSkill}/$SENIOR_WINGS_FLIGHT_SKILL"
+                }
+            }
+            MASTER_AVIATOR_WINGS_ID -> {
+                if (SENIOR_AVIATOR_WINGS_ID !in ownedMedalIds) missing += "Hold the Senior Aviator Badge first"
+                if (operator.rank.warrantGrade < 4) missing += "Reach CW4 (currently ${operator.rank.code})"
+                if (operator.flightSkill < MASTER_WINGS_FLIGHT_SKILL) {
+                    missing += "Flight skill ${operator.flightSkill}/$MASTER_WINGS_FLIGHT_SKILL"
+                }
+            }
+            "cord_aviation" -> {
+                if (FLIGHT_SCHOOL_MISSION_ID !in operator.completedMissionIds) {
+                    missing += "Graduate Flight School"
+                }
+            }
+            AIR_MEDAL_ID -> {
+                val held = allCitations.count { it.operatorId == operator.id && it.medalId == AIR_MEDAL_ID }
+                val needed = SORTIES_PER_AIR_MEDAL * (held + 1)
+                if (operator.combatSortiesFlown < needed) {
+                    missing += "Fly ${needed} combat missions as pilot (${operator.combatSortiesFlown}/$needed)"
+                }
+            }
             "insig_ranger_tab" -> {
                 if ("msn_ranger_school" !in operator.completedMissionIds) {
                     missing += "Graduate Army Ranger Leadership Course"
@@ -2145,6 +2283,10 @@ object TacticalCalculator {
                                 val medalId = firstEligibleUnowned(listOf("insig_ranger_tab"), includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} in small-unit tactics, mountaineering & patrol leadership — Tan Beret authorized."
                             }
+                            FLIGHT_SCHOOL_MISSION_ID -> {
+                                val medalId = firstEligibleUnowned(listOf(AVIATOR_WINGS_ID, "cord_aviation"), includeGeneralFallback = false)
+                                medalId to "Graduated ${mission.title}: primary, instrument and combat skills flights complete."
+                            }
                             "msn_sf_school" -> {
                                 val candidates = listOf(
                                     "insig_sf_tab",
@@ -2334,6 +2476,11 @@ object TacticalCalculator {
                     add("medal_meritorious")
                     add("medal_army_commendation")
                     if (effectiveStaffOp.rank.tier.isOfficer) add("insig_staff_crest")
+                }
+                HqStaffRole.AIR_OPS_OFFICER, HqStaffRole.CCWO_COMMAND_CHIEF_WARRANT -> {
+                    add("medal_meritorious")
+                    add("medal_army_commendation")
+                    add("insig_staff_crest")
                 }
                 null -> {
                     if (effectiveStaffOp.rank.tier.isOfficer) {

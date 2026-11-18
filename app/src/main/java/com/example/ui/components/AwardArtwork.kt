@@ -336,6 +336,7 @@ fun AwardVisualThumbnail(
                 "cord_logistics_buff" -> Color(0xFF9C2D2D)
                 "cord_sf_emerald" -> Color(0xFFF2D272)
                 "cord_valor_fourragere" -> Color(0xFF9C2D2D)
+                "cord_aviation" -> Color(0xFFE89A2B)
                 "cord_general_aiguillette" -> Color(0xFFFFE796)
                 else -> cordColor.copy(alpha = 0.65f)
             }
@@ -422,6 +423,28 @@ fun AwardVisualThumbnail(
                         if (medal.insigniaShape == InsigniaShape.STAR_WINGS) {
                             drawLaurelWreathArcs(Offset(cx, h * 0.22f), h * 0.18f, Color(0xFFF2D272), (h * 0.055f).coerceAtLeast(1.6f))
                             drawStar(Offset(cx, h * 0.22f), h * 0.15f, h * 0.065f, Color(0xFFF2D272))
+                        }
+                    }
+                    InsigniaShape.AVIATOR_WINGS, InsigniaShape.SENIOR_AVIATOR_WINGS, InsigniaShape.MASTER_AVIATOR_WINGS -> {
+                        val shape = medal.insigniaShape
+                        drawLine(col, Offset(w * 0.04f, cy - h * 0.02f), Offset(w * 0.96f, cy - h * 0.02f), strokeWidth = (h * 0.10f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
+                        drawLine(col, Offset(w * 0.12f, cy + h * 0.13f), Offset(w * 0.88f, cy + h * 0.13f), strokeWidth = (h * 0.075f).coerceAtLeast(2.2f), cap = StrokeCap.Round)
+                        drawLine(col, Offset(w * 0.22f, cy + h * 0.26f), Offset(w * 0.78f, cy + h * 0.26f), strokeWidth = (h * 0.055f).coerceAtLeast(1.6f), cap = StrokeCap.Round)
+                        val shield = Path().apply {
+                            moveTo(cx - w * 0.09f, cy - h * 0.18f)
+                            lineTo(cx + w * 0.09f, cy - h * 0.18f)
+                            lineTo(cx + w * 0.09f, cy + h * 0.10f)
+                            quadraticTo(cx + w * 0.07f, cy + h * 0.28f, cx, cy + h * 0.36f)
+                            quadraticTo(cx - w * 0.07f, cy + h * 0.28f, cx - w * 0.09f, cy + h * 0.10f)
+                            close()
+                        }
+                        drawPath(shield, col)
+                        drawPath(shield, Color(0xFF121722).copy(alpha = 0.55f), style = Stroke(width = 1.1f))
+                        if (shape == InsigniaShape.MASTER_AVIATOR_WINGS) {
+                            drawLaurelWreathArcs(Offset(cx, h * 0.14f), h * 0.15f, col, (h * 0.05f).coerceAtLeast(1.4f))
+                        }
+                        if (shape != InsigniaShape.AVIATOR_WINGS) {
+                            drawStar(Offset(cx, h * 0.14f), h * 0.12f, h * 0.05f, col)
                         }
                     }
                     // EIB: rifle bar only. CIB: rifle bar inside an oak wreath.

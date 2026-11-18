@@ -510,12 +510,11 @@ class CommandViewModel(
         } else {
             op.authorizedTier
         }
-        val targetXp = maxOf(op.xp, nextRank.xpRequired)
         val bonus = if (tierChanged) endorsementFocus?.statBonus else null
+        val promoted = op.promotedTo(nextRank)
         val progressedOp = applyTierProgressionOnRankUp(
-            op = op.copy(
-                xp = targetXp,
-                authorizedTier = nextAuthorizedTier,
+            op = promoted.copy(
+                authorizedTier = if (nextRank.isWarrant) RankTier.WARRANT else nextAuthorizedTier,
                 baseFirepower = op.baseFirepower + (bonus?.firepower ?: 0),
                 baseStealth = op.baseStealth + (bonus?.stealth ?: 0),
                 baseTech = op.baseTech + (bonus?.tech ?: 0),
@@ -556,6 +555,22 @@ class CommandViewModel(
         }
     }
 
+    /** WOCS appoints WO1 (keeping MOS); Flight School makes a 153A aviator; Flight Hours builds flight skill. */
+    private fun applyCareerSchoolEffects(op: Operator, missionId: String, passed: Boolean): Operator = when {
+        passed && missionId == TacticalCalculator.WOCS_MISSION_ID -> {
+            val prevRank = op.rank
+            applyTierProgressionOnRankUp(op.promotedTo(OperatorRank.WO1), prevRank, OperatorRank.WO1)
+        }
+        passed && missionId == TacticalCalculator.FLIGHT_SCHOOL_MISSION_ID -> op.copy(
+            specialty = OperatorSpecialty.AVIATION,
+            flightSkill = maxOf(op.flightSkill, TacticalCalculator.FLIGHT_SCHOOL_STARTING_SKILL)
+        )
+        passed && missionId == TacticalCalculator.FLIGHT_HOURS_MISSION_ID -> op.copy(
+            flightSkill = (op.flightSkill + TacticalCalculator.FLIGHT_HOURS_SKILL_GAIN).coerceAtMost(TacticalCalculator.MAX_FLIGHT_SKILL)
+        )
+        else -> op
+    }
+
     private fun applyTierProgressionOnRankUp(
         op: Operator,
         prevRank: OperatorRank,
@@ -565,19 +580,19 @@ class CommandViewModel(
         val updatedAlphasDress = when (newRank.tier) {
             RankTier.SOLDIER -> DressUniformStyle.ARMY_SERVICE_GREEN
             RankTier.NCO, RankTier.SNCO -> DressUniformStyle.NCO_PARADE_BLUES
-            RankTier.OFFICER -> DressUniformStyle.OFFICER_SERVICE_BLUES
+            RankTier.OFFICER, RankTier.WARRANT -> DressUniformStyle.OFFICER_SERVICE_BLUES
             RankTier.FLAG_OFFICER -> DressUniformStyle.FLAG_STAFF_FORMAL
         }
         val updatedMessDress = when (newRank.tier) {
             RankTier.SOLDIER, RankTier.NCO, RankTier.SNCO -> DressUniformStyle.ENLISTED_MESS_BLUES
-            RankTier.OFFICER -> DressUniformStyle.OFFICER_MESS_BLUES
+            RankTier.OFFICER, RankTier.WARRANT -> DressUniformStyle.OFFICER_MESS_BLUES
             RankTier.FLAG_OFFICER -> DressUniformStyle.FLAG_MESS_FORMAL
         }
         val updatedDress = if (op.dressStyle.isCutawayMess) updatedMessDress else updatedAlphasDress
         val updatedServiceCap = when (newRank.tier) {
             RankTier.SOLDIER -> HeadgearStyle.ENLISTED_SERVICE_CAP
             RankTier.NCO, RankTier.SNCO -> HeadgearStyle.NCO_SERVICE_CAP
-            RankTier.OFFICER -> HeadgearStyle.OFFICER_PEAKED_CAP
+            RankTier.OFFICER, RankTier.WARRANT -> HeadgearStyle.OFFICER_PEAKED_CAP
             RankTier.FLAG_OFFICER -> HeadgearStyle.FLAG_GENERAL_CAP
         }
         val updatedHeadgear = if (op.headgearStyle.kind == HeadgearKind.BERET) {
@@ -811,7 +826,7 @@ class CommandViewModel(
                 val opXp = if (passed) xpEach else (xpEach * 0.35).roundToInt().coerceAtLeast(10)
                 val prevRank = op.rank
                 val newXp = OperatorRank.clampXpToAuthorizedTier(op.xp + opXp, op.authorizedTier)
-                val newRank = OperatorRank.forXp(newXp, op.authorizedTier)
+                var newRank = op.copy(xp = newXp).rank
                 // Training never counts toward combat or career operation totals for valor/awards
                 val updatedCompletedIds = if (passed) op.completedMissionIds + mission.id else op.completedMissionIds
                 val nextStatus = if (op.status == OperatorStatus.HQ_STAFF) OperatorStatus.HQ_STAFF else OperatorStatus.READY
@@ -838,7 +853,8 @@ class CommandViewModel(
                     completedMissionIds = updatedCompletedIds,
                     schoolAttempts = updatedAttempts,
                     status = nextStatus
-                )
+                ).let { grad -> applyCareerSchoolEffects(grad, mission.id, passed) }
+                newRank = graduatedOp.rank
                 // Rifle Qualification, and graduating Marksmanship & Tactical Basics, both shoot for a badge
                 val shootsForQual = isRifleQual || (passed && mission.id == "msn_basic_qual")
                 val (updatedOp, qualNote) = if (shootsForQual) {
@@ -879,7 +895,25 @@ class CommandViewModel(
                 } else {
                     ""
                 }
-                val deedText = baseDeedText + statGainNote + attemptNote + qualNote
+                val flightNote = when {
+                    passed && mission.id == TacticalCalculator.WOCS_MISSION_ID -> " Appointed Warrant Officer 1."
+                    passed && mission.id == TacticalCalculator.FLIGHT_SCHOOL_MISSION_ID -> " Now a 153A Army Aviator (flight skill ${updatedOp.flightSkill})."
+                    mission.id == TacticalCalculator.FLIGHT_HOURS_MISSION_ID -> " Flight skill ${op.flightSkill} → ${updatedOp.flightSkill}."
+                    else -> ""
+                }
+                val deedText = baseDeedText + statGainNote + attemptNote + qualNote + flightNote
+                if (passed && mission.id in setOf(
+                        TacticalCalculator.FLIGHT_HOURS_MISSION_ID,
+                        TacticalCalculator.FLIGHT_SCHOOL_MISSION_ID,
+                        TacticalCalculator.WOCS_MISSION_ID
+                    )
+                ) {
+                    // Wings, the Aviation cord and wing upgrades follow from these schools: offer every one now earned
+                    newDeeds.addAll(
+                        newlyEligibleAwardDeeds(op, updatedOp, state, reasonTitle = "Flight Hours", now = now)
+                            .filter { d -> newDeeds.none { it.operatorId == d.operatorId && it.recommendedMedalId == d.recommendedMedalId } }
+                    )
+                }
 
                 if (recMedalId != null) {
                     newDeeds.add(
@@ -977,7 +1011,7 @@ class CommandViewModel(
                 val opXp = if (missionSucceeded) xpEach else (xpEach * 0.45).roundToInt().coerceAtLeast(15)
                 val prevRank = op.rank
                 val newXp = OperatorRank.clampXpToAuthorizedTier(op.xp + opXp, op.authorizedTier)
-                val newRank = OperatorRank.forXp(newXp, op.authorizedTier)
+                val newRank = op.copy(xp = newXp).rank
                 val isCombatOp = mission.scope == MissionScope.FIELD_COMBAT
                 // Failed deployments still count toward career deployment totals, while combatMissionsCompleted tracks FIELD_COMBAT only
                 val newOpsCount = if (outcome != OperatorOutcomeType.FALLEN) op.missionsCompleted + 1 else op.missionsCompleted
@@ -1167,7 +1201,7 @@ class CommandViewModel(
             val nextSupportCount = staff.staffOpsSupported + 1
             val prevStaffRank = staff.rank
             val nextStaffXp = OperatorRank.clampXpToAuthorizedTier(staff.xp + staffXp, staff.authorizedTier)
-            val nextStaffRank = OperatorRank.forXp(nextStaffXp, staff.authorizedTier)
+            val nextStaffRank = staff.copy(xp = nextStaffXp).rank
             val candidateStaff = staff.copy(
                 xp = nextStaffXp,
                 staffOpsSupported = nextSupportCount
@@ -1497,7 +1531,10 @@ class CommandViewModel(
         }
     }
 
-    fun enlistPostBasicSoldier(specialty: OperatorSpecialty) {
+    fun enlistPostBasicSoldier(specialty: OperatorSpecialty) = enlistRecruit(specialty, RecruitSource.RECEPTION)
+
+    /** Item 31: recruit from Reception Station or a leadership school at that school's rank and record. */
+    fun enlistRecruit(specialty: OperatorSpecialty, source: RecruitSource) {
         val state = uiState.value
         val activeFieldCount = state.operators.count {
             it.unlocked && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService
@@ -1506,17 +1543,22 @@ class CommandViewModel(
             showBanner("Field roster full (${state.maxFieldRosterSlots}/${state.maxFieldRosterSlots}). Transfer out, assign SGT+ to HQ Staff, or upgrade HQ.")
             return
         }
-        val enlistCost = 45.0
+        val enlistCost = source.creditCost
         if (state.resources.credits < enlistCost) {
-            showBanner("Need 45 CR to bring a post-Basic soldier onto HQ orders.")
+            showBanner("Need ${enlistCost.toInt()} CR to recruit a ${source.arrivalRank.code} from ${source.label}.")
             return
         }
-        val recruit = GameCatalog.createPostBasicRecruit(
+        val raw = GameCatalog.createRecruit(
             id = "op_rec_${UUID.randomUUID().toString().take(6)}",
-            specialty = specialty,
+            requestedSpecialty = specialty,
+            source = source,
             existingCallsigns = state.operators.map { it.callsign }.toSet(),
             seedIndex = state.operators.size + Random.nextInt(100)
         )
+        // Officers and warrant officers arrive in their tier's uniforms
+        val recruit = applyTierProgressionOnRankUp(raw, OperatorRank.PV2, raw.rank)
+        val awardIds = GameCatalog.recruitAwardPackage(source, recruit.specialty)
+            .filter { id -> GameCatalog.medals.any { it.id == id } }
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             repository.updateCommanderState { cur ->
@@ -1526,17 +1568,27 @@ class CommandViewModel(
                 )
             }
             repository.saveOperator(recruit)
-            repository.addCitation(
-                AwardedMedal(
-                    id = "cit_${UUID.randomUUID().toString().take(8)}",
-                    operatorId = recruit.id,
-                    medalId = "medal_basic_training",
-                    citationNote = "Completed Basic Combat Training — arrived at HQ post-Basic with no specialty schools.",
-                    missionTitle = "Basic Combat Training Graduation",
-                    awardedAtMillis = now
+            // One of each award at most (the per-soldier caps from item 5 hold for every source)
+            awardIds.forEachIndexed { i, medalId ->
+                repository.addCitation(
+                    AwardedMedal(
+                        id = "cit_${UUID.randomUUID().toString().take(8)}",
+                        operatorId = recruit.id,
+                        medalId = medalId,
+                        citationNote = if (source == RecruitSource.RECEPTION) {
+                            "Completed Basic Combat Training — arrived at HQ post-Basic with no specialty schools."
+                        } else {
+                            "Prior service record on arrival from ${source.label}."
+                        },
+                        missionTitle = if (medalId == "medal_basic_training") "Basic Combat Training Graduation" else "Prior Service Record",
+                        awardedAtMillis = now + i
+                    )
                 )
+            }
+            showBanner(
+                if (source == RecruitSource.RECEPTION) "${recruit.rank.code} ${recruit.callsign} (${recruit.specialty.roleTag}) arrived post-Basic!"
+                else "${recruit.rank.code} ${recruit.callsign} (${recruit.specialty.roleTag}) reported from ${source.label}!"
             )
-            showBanner("${recruit.rank.code} ${recruit.callsign} (${specialty.roleTag}) arrived post-Basic!")
         }
     }
 
@@ -2292,6 +2344,15 @@ class CommandViewModel(
                     awardedAtMillis = now
                 )
             )
+            // Higher aviator wings replace the lower ones
+            when (medalId) {
+                TacticalCalculator.SENIOR_AVIATOR_WINGS_ID ->
+                    repository.removeCitation(operatorId, TacticalCalculator.AVIATOR_WINGS_ID)
+                TacticalCalculator.MASTER_AVIATOR_WINGS_ID -> {
+                    repository.removeCitation(operatorId, TacticalCalculator.SENIOR_AVIATOR_WINGS_ID)
+                    repository.removeCitation(operatorId, TacticalCalculator.AVIATOR_WINGS_ID)
+                }
+            }
             // Newly awarded cords show through Auto at render time; just bring the soldier into dress uniform
             if (medal.category == AwardCategory.SHOULDER_CORD) {
                 repository.saveOperator(

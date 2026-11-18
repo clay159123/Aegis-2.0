@@ -193,7 +193,7 @@ fun HonorsScreen(
         item {
             SectionHeader(
                 title = "Army Rank Structure & Uniform Tiers",
-                subtitle = "Five distinct promotion tiers from Junior Enlisted Soldier to 4-Star General"
+                subtitle = "Six promotion tiers, from Junior Enlisted Soldier to 4-Star General plus the Warrant Officer track"
             )
             Spacer(modifier = Modifier.height(4.dp))
             TacticalPanelCard {
@@ -204,7 +204,7 @@ fun HonorsScreen(
                             RankTier.SOLDIER -> "AGSU Service Green & Dress Blues, Berets, Collar Discs, Sleeve Chevrons"
                             RankTier.NCO -> "NCO Parade Dress Blues, Service Visor Cap, Sleeve Rockers & Gold Cuff Trim"
                             RankTier.SNCO -> "Senior Enlisted Parade Blues, Dual-Braid Cuffs, Senior Visor Cap & SLC Promotion Board"
-                            RankTier.OFFICER -> "Officer Mess Blues, Ivory Ceremonial, Peaked Cap, Gold Epaulets & Sam Browne"
+                            RankTier.OFFICER, RankTier.WARRANT -> "Officer Mess Blues, Ivory Ceremonial, Peaked Cap, Gold Epaulets & Sam Browne"
                             RankTier.FLAG_OFFICER -> "General Staff Formal, 1–4 Star Bullion Epaulets, Dual Oak-Leaf Cuffs, Crimson Sash"
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {

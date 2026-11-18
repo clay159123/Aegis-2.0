@@ -266,7 +266,7 @@ fun HqCommandScreen(
                 val isDeployed = occupant.id in deployedOpIds
 
                 val canRetire = TacticalCalculator.evaluateRetirementEligibility(occupant).eligible
-                val crossesTier = OperatorRank.nextRank(occupant.rank)?.let { it.tier != occupant.rank.tier } == true
+                val crossesTier = OperatorRank.nextRank(occupant.rank)?.let { OperatorRank.isBoardGate(occupant.rank, it) } == true
                 HqOccupiedBilletCard(
                     role = role,
                     operator = occupant,
@@ -714,7 +714,7 @@ private fun HqOccupiedBilletCard(
     val nextRank = OperatorRank.nextRank(operator.rank)
     val crCost = operator.rank.promotionCreditCost()
     val prsCost = operator.rank.promotionPrestigeCost()
-    val crossesTierCard = nextRank != null && nextRank.tier != operator.rank.tier
+    val crossesTierCard = nextRank != null && OperatorRank.isBoardGate(operator.rank, nextRank)
     val canPromote = nextRank != null && (
         crossesTierCard || (resources.credits >= crCost && resources.prestige >= prsCost)
     )
@@ -814,7 +814,7 @@ private fun HqOccupiedBilletCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = extra.brassBright
                 )
-                val crossesTier = nextRank != null && nextRank.tier != operator.rank.tier
+                val crossesTier = nextRank != null && OperatorRank.isBoardGate(operator.rank, nextRank)
                 val readyAtGate = crossesTier && operator.xp >= nextRank!!.xpRequired
                 Text(
                     text = when {

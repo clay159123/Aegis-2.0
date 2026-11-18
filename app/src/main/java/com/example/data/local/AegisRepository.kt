@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 9
+        const val SAVE_FORMAT_VERSION = 10
     }
 
     private val commanderMutex = Mutex()
@@ -318,6 +318,11 @@ class AegisRepository(private val dao: AegisDao) {
         dao.deletePendingDeedsForAward(awardedMedal.operatorId, awardedMedal.medalId)
     }
 
+    /** Removes a held award, used when higher wings replace lower ones. */
+    suspend fun removeCitation(operatorId: String, medalId: String) {
+        dao.deleteCitationForAward(operatorId, medalId)
+    }
+
     suspend fun addPendingDeeds(deeds: List<PendingDeed>) {
         dao.insertPendingDeeds(deeds.map { it.toEntity() })
     }
@@ -428,6 +433,9 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     marksmanshipQual = marksmanshipQualName?.let { n -> MarksmanshipBadgeTier.entries.find { it.name == n } },
     pendingMarksmanshipQual = pendingMarksmanshipQualName?.let { n -> MarksmanshipBadgeTier.entries.find { it.name == n } },
     lastQualScore = lastQualScore,
+    warrantGrade = warrantGrade,
+    flightSkill = flightSkill,
+    combatSortiesFlown = combatSortiesFlown,
     bodyBuildOverride = bodyBuildName?.let { n -> BodyBuild.entries.find { it.name == n } },
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
@@ -493,6 +501,9 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     marksmanshipQualName = marksmanshipQual?.name,
     pendingMarksmanshipQualName = pendingMarksmanshipQual?.name,
     lastQualScore = lastQualScore,
+    warrantGrade = warrantGrade,
+    flightSkill = flightSkill,
+    combatSortiesFlown = combatSortiesFlown,
     bodyBuildName = bodyBuildOverride?.name,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,

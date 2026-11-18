@@ -21,7 +21,8 @@ object UniformRegaliaRules {
         OperatorSpecialty.SIGNALS to listOf("cord_sf_emerald", "cord_signals_orange", "cord_intel_teal", "cord_airborne_crimson", "cord_logistics_buff", "cord_engineer_scarlet", "cord_medical_maroon", "cord_infantry_blue"),
         OperatorSpecialty.BREACHER to listOf("cord_sf_emerald", "cord_engineer_scarlet", "cord_airborne_crimson", "cord_intel_teal", "cord_logistics_buff", "cord_signals_orange", "cord_medical_maroon", "cord_infantry_blue"),
         OperatorSpecialty.MEDIC to listOf("cord_sf_emerald", "cord_medical_maroon", "cord_airborne_crimson", "cord_logistics_buff", "cord_intel_teal", "cord_engineer_scarlet", "cord_signals_orange", "cord_infantry_blue"),
-        OperatorSpecialty.COMMAND to listOf("cord_sf_emerald", "cord_intel_teal", "cord_logistics_buff", "cord_infantry_blue", "cord_airborne_crimson", "cord_engineer_scarlet", "cord_signals_orange", "cord_medical_maroon")
+        OperatorSpecialty.COMMAND to listOf("cord_sf_emerald", "cord_intel_teal", "cord_logistics_buff", "cord_infantry_blue", "cord_airborne_crimson", "cord_engineer_scarlet", "cord_signals_orange", "cord_medical_maroon"),
+        OperatorSpecialty.AVIATION to listOf("cord_sf_emerald", "cord_aviation", "cord_airborne_crimson", "cord_intel_teal", "cord_signals_orange", "cord_engineer_scarlet", "cord_logistics_buff", "cord_medical_maroon", "cord_infantry_blue")
     )
 
     /** The cord each HQ staff billet puts first for a Command-MOS soldier (after SF Emerald). */
@@ -214,6 +215,30 @@ object UniformRegaliaRules {
                 "insig_logistics_crest",
                 "insig_intel_crest",
                 "insig_cyber_crest"
+            )
+        ),
+        OperatorSpecialty.AVIATION to mapOf(
+            ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_master_aviator_wings",
+                "insig_senior_aviator_wings",
+                "insig_aviator_wings",
+                "insig_master_para",
+                "insig_air_assault",
+                "insig_parachutist"
+            ),
+            ChestBadgeSlot.LEFT_POCKET to listOf(
+                "insig_master_aviator_wings",
+                "insig_senior_aviator_wings",
+                "insig_aviator_wings",
+                "insig_air_assault",
+                "insig_parachutist",
+                "insig_pathfinder"
+            ),
+            ChestBadgeSlot.RIGHT_POCKET to listOf(
+                "insig_staff_crest",
+                "insig_intel_crest",
+                "insig_cyber_crest",
+                "insig_logistics_crest"
             )
         )
     )

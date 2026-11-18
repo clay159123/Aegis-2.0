@@ -43,7 +43,7 @@ object SquadCohesionRules {
         return memberIds
             .distinct()
             .sortedWith(
-                compareByDescending<String> { opsById[it]?.rank?.ordinal ?: -1 }
+                compareByDescending<String> { opsById[it]?.rank?.seniorityIndex ?: -1 }
                     .thenByDescending { opsById[it]?.xp ?: -1 }
             )
             .firstOrNull()
@@ -57,7 +57,7 @@ object SquadCohesionRules {
         squad.memberIds.size < TEAM_LEADER_MIN_SQUAD_SIZE -> "Squad needs $TEAM_LEADER_MIN_SQUAD_SIZE+ members"
         candidate == null || candidate.id !in squad.memberIds -> "Not a squad member"
         candidate.id == squad.leaderId -> "Already the Squad Leader"
-        candidate.rank.ordinal < OperatorRank.SGT.ordinal -> "Requires SGT or above"
+        candidate.rank.seniorityIndex < OperatorRank.SGT.seniorityIndex -> "Requires SGT or above"
         else -> null
     }
 
@@ -123,7 +123,8 @@ object SquadCohesionRules {
     fun isOperatorEligibleForFieldSquad(operator: Operator): Boolean =
         operator.unlocked &&
             !operator.status.isOutOfActiveService &&
-            operator.status != OperatorStatus.HQ_STAFF
+            operator.status != OperatorStatus.HQ_STAFF &&
+            !operator.isAviator
 
     fun orderedMembersForDeployment(
         squad: TacticalSquad,

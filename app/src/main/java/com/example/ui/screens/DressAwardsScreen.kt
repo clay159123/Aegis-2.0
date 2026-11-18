@@ -973,7 +973,7 @@ fun DressAwardsScreen(
         )
     }
 
-    if (showPromotionBoard && nextRank != null && nextRank.tier != selectedOp.rank.tier) {
+    if (showPromotionBoard && nextRank != null && OperatorRank.isBoardGate(selectedOp.rank, nextRank)) {
         val dialogEval = TacticalCalculator.evaluatePromotionBoard(
             operator = selectedOp,
             allOperators = uiState.operators,

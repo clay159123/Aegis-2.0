@@ -57,7 +57,8 @@ class TacticalCalculatorTest {
         val fieldSchools = setOf(
             "msn_basic_qual", "msn_medical_school", "msn_engineer_school", "msn_night_qual",
             "msn_ranger_school", "msn_sf_school", "msn_ocs_school",
-            "msn_sapper_school", "msn_pathfinder_school", "msn_eib_testing", "msn_rifle_qual"
+            "msn_sapper_school", "msn_pathfinder_school", "msn_eib_testing", "msn_rifle_qual",
+            "msn_flight_school", "msn_flight_hours"
         )
         GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.forEach { school ->
             val expected = if (school.id in fieldSchools) WardrobeKit.FIELD else WardrobeKit.BRAVOS
@@ -1543,7 +1544,10 @@ class TacticalCalculatorTest {
                 "msn_sapper_school",
                 "msn_pathfinder_school",
                 "msn_eib_testing",
-                "msn_rifle_qual"
+                "msn_rifle_qual",
+                "msn_wocs",
+                "msn_flight_school",
+                "msn_flight_hours"
             ),
             schoolIds
         )
@@ -1844,10 +1848,10 @@ class TacticalCalculatorTest {
                 true,
                 TacticalCalculator.canOperatorDeployOnMission(maxedOp(mos).copy(completedMissionIds = setOf("msn_basic_qual", "msn_night_qual")), rangerSchool, emptySet()).eligible
             )
-            // SFQC: combat MOS (Infantry, Recon, Engineer) plus Command and Medic; not Signals
+            // SFQC: combat MOS (Infantry, Recon, Engineer) plus Command and Medic; not Signals or Aviation
             assertEquals(
                 "SFQC MOS check for ${mos.name}",
-                mos != OperatorSpecialty.SIGNALS,
+                mos != OperatorSpecialty.SIGNALS && mos != OperatorSpecialty.AVIATION,
                 TacticalCalculator.canOperatorDeployOnMission(maxedOp(mos), sfSchool, emptySet()).eligible
             )
         }
@@ -2727,7 +2731,7 @@ class TacticalCalculatorTest {
     @Test
     fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
         val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-        assertEquals(16, schools.size)
+        assertEquals(19, schools.size)
         schools.forEach { school ->
             assertFalse(school.id, school.hasClassCap)
             assertTrue(school.id, 15 in school.minOperators..school.maxOperators)

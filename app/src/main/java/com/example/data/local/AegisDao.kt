@@ -93,6 +93,9 @@ interface AegisDao {
     @Query("DELETE FROM citations WHERE operatorId = :operatorId")
     suspend fun deleteCitationsForOperator(operatorId: String)
 
+    @Query("DELETE FROM citations WHERE operatorId = :operatorId AND medalId = :medalId")
+    suspend fun deleteCitationForAward(operatorId: String, medalId: String)
+
     @Query("DELETE FROM pending_deeds WHERE operatorId = :operatorId")
     suspend fun deletePendingDeedsForOperator(operatorId: String)
 
