@@ -13,6 +13,7 @@ import com.example.domain.MissionNameGenerator
 import com.example.domain.MissionNames
 import com.example.domain.displayTitle
 import com.example.domain.TacticalCalculator
+import com.example.domain.AwardRules
 import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
 import kotlinx.coroutines.delay
@@ -227,8 +228,8 @@ class CommandViewModel(
         }.forEach { squad ->
             autoDisbanding += squad.id
             val keepers = state.operators.mapNotNull { op ->
-                val earned = squad.unitCitations.count { op.id in it.memberIds }
-                if (earned > 0) op.copy(retainedUnitCitations = op.retainedUnitCitations + earned) else null
+                val earned = squad.unitCitations.filter { op.id in it.memberIds }.map { it.type }
+                if (earned.isNotEmpty()) op.copy(retainedUnitAwards = op.retainedUnitAwards + earned) else null
             }
             viewModelScope.launch {
                 if (keepers.isNotEmpty()) repository.saveOperators(keepers)
@@ -866,6 +867,39 @@ class CommandViewModel(
         val updatedOperators = mutableListOf<Operator>()
         val updatedGear = mutableListOf<GearItem>()
         val newDeeds = mutableListOf<PendingDeed>()
+
+        /**
+         * Session 15 (items 52 and 55): advance the soldier's service record and queue the routine awards
+         * it earned. [updated] must already be the last entry for this soldier in updatedOperators.
+         */
+        fun addServiceAwards(updated: Operator, outcome: OperatorOutcomeType, succeeded: Boolean, isLeader: Boolean = false) {
+            val pendingIds = state.pendingDeeds.filter { it.operatorId == updated.id }.map { it.recommendedMedalId }.toSet() +
+                newDeeds.filter { it.operatorId == updated.id }.map { it.recommendedMedalId }
+            val result = AwardRules.serviceAwardsFor(
+                op = updated,
+                mission = mission,
+                outcome = outcome,
+                missionSucceeded = succeeded,
+                held = AwardRules.heldCounts(updated.id, state.citations),
+                pending = pendingIds,
+                rng = Random,
+                isSquadOrPlatoonLeader = isLeader
+            )
+            val idx = updatedOperators.indexOfLast { it.id == updated.id }
+            if (idx >= 0) updatedOperators[idx] = result.operator
+            result.medalIds.forEach { medalId ->
+                newDeeds.add(
+                    PendingDeed(
+                        id = "deed_${UUID.randomUUID().toString().take(8)}",
+                        operatorId = updated.id,
+                        missionTitle = mission.title,
+                        deedSummary = AwardRules.serviceDeedText(medalId, mission),
+                        recommendedMedalId = medalId,
+                        createdAtMillis = now
+                    )
+                )
+            }
+        }
         val outcomes = mutableListOf<OperatorDebriefOutcome>()
 
         val missionSucceeded: Boolean
@@ -946,6 +980,7 @@ class CommandViewModel(
                     graduatedOp to ""
                 }
                 updatedOperators.add(updatedOp)
+                addServiceAwards(updatedOp, outcome, passed)
 
                 val existingAndQueuedMedals = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet() +
                     state.pendingDeeds.filter { it.operatorId == op.id }.map { it.recommendedMedalId }.toSet()
@@ -1194,6 +1229,9 @@ class CommandViewModel(
                     points = TacticalCalculator.missionExperiencePoints(mission, outcome, missionSucceeded)
                 )
                 updatedOperators.add(updatedOp)
+                val leadsTeam = op.id == TacticalCalculator.platoonLeaderFor(mission, groundOps, deployment.platoonLeaderId)?.id ||
+                    state.squads.any { it.leaderId == op.id && groundOps.count { g -> g.id in it.memberIds } >= 2 }
+                if (op.id != pilotId) addServiceAwards(updatedOp, outcome, missionSucceeded, leadsTeam)
                 if (op.id == pilotId && isCombatOp && outcome != OperatorOutcomeType.FALLEN) {
                     val airMedal = GameCatalog.medals.first { it.id == TacticalCalculator.AIR_MEDAL_ID }
                     val owned = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet()
@@ -1350,6 +1388,9 @@ class CommandViewModel(
                 TacticalCalculator.EXP_POINTS_HQ_STAFF_TECH
             ).first
             updatedOperators.add(updatedStaff)
+            if (missionSucceeded && !mission.risk.isTraining) {
+                addServiceAwards(updatedStaff, OperatorOutcomeType.STAFF_SUPPORT, missionSucceeded)
+            }
             val earnsStaffAward = missionSucceeded &&
                 !mission.risk.isTraining &&
                 (mission.risk.baseDangerPenalty >= 14 || nextSupportCount % 2 == 0)
@@ -1463,9 +1504,9 @@ class CommandViewModel(
             .mapValues { (id, squad) ->
                 citedSquads[id]?.let { squad.copy(unitCitations = squad.unitCitations + it) } ?: squad
             }
-        val unitCitationNote = citedSquads.keys.mapNotNull { id -> state.squads.find { it.id == id }?.name }
+        val unitCitationNote = citedSquads.mapNotNull { (id, cit) -> state.squads.find { it.id == id }?.let { "${it.name} earned the ${cit.type.label}" } }
             .takeIf { it.isNotEmpty() }
-            ?.let { names -> "${names.joinToString(", ")} earned the Unit Citation" }
+            ?.joinToString("; ")
         val sanitizedSquadsToSave = SquadCohesionRules.pruneUnavailableMembers(
             squads = state.squads.map { updatedSquadMap[it.id] ?: it },
             operators = effectiveRoster
@@ -1546,6 +1587,33 @@ class CommandViewModel(
                 )
             )
             outcomes[i] = o.copy(deedText = text, recommendedMedalId = TacticalCalculator.SOVEREIGN_STAR_ID)
+        }
+        // Item 89: valor awards by chance on High and Extreme field ops; DFC for the pilot; Soldier's Medal
+        // for heroism away from combat. A soldier who just earned the Sovereign Star doesn't roll again.
+        for (i in outcomes.indices) {
+            val o = outcomes[i]
+            if (o.recommendedMedalId == TacticalCalculator.SOVEREIGN_STAR_ID) continue
+            val isPilot = o.operatorId == deployment.pilotId
+            val medalId = when {
+                isPilot -> AwardRules.DFC_ID.takeIf {
+                    o.outcome != OperatorOutcomeType.FALLEN && Random.nextDouble() < AwardRules.dfcOdds(mission, anyCasualty)
+                }
+                else -> AwardRules.valorAwardFor(mission, o.outcome, missionSucceeded, Random.nextDouble())
+                    ?: AwardRules.SOLDIERS_MEDAL_ID.takeIf { Random.nextDouble() < AwardRules.soldiersMedalOdds(mission, o.outcome) }
+            } ?: continue
+            if (state.pendingDeeds.any { it.operatorId == o.operatorId && it.recommendedMedalId == medalId }) continue
+            val text = AwardRules.heroismText(medalId, mission, o.outcome)
+            newDeeds.add(
+                PendingDeed(
+                    id = "deed_${UUID.randomUUID().toString().take(8)}",
+                    operatorId = o.operatorId,
+                    missionTitle = mission.title,
+                    deedSummary = text,
+                    recommendedMedalId = medalId,
+                    createdAtMillis = now
+                )
+            )
+            if (o.recommendedMedalId == null) outcomes[i] = o.copy(deedText = text, recommendedMedalId = medalId)
         }
         // Item 76: one pending award per soldier per award; skip anything already waiting
         val alreadyPending = state.pendingDeeds.map { it.operatorId to it.recommendedMedalId }.toSet()
@@ -1798,12 +1866,27 @@ class CommandViewModel(
             operators = state.operators.map { if (it.id == op.id) updatedStaffOp else it }
         ).filter { updated -> state.squads.find { it.id == updated.id } != updated }
 
+        // Item 90: the gold command aiguillette comes with an HQ billet
+        val hasAiguillette = state.citations.any { it.operatorId == op.id && it.medalId == AwardRules.AIGUILLETTE_ID }
         viewModelScope.launch {
             repository.saveOperator(updatedStaffOp)
             if (updatedSquads.isNotEmpty()) {
                 repository.saveSquads(updatedSquads)
             }
-            showBanner("${op.rank.code} ${op.callsign} assigned as ${targetRole.shortCode} (${targetRole.title})!")
+            if (!hasAiguillette) {
+                repository.addCitation(
+                    AwardedMedal(
+                        id = "cit_${UUID.randomUUID().toString().take(8)}",
+                        operatorId = op.id,
+                        medalId = AwardRules.AIGUILLETTE_ID,
+                        citationNote = "Authorized on joining the HQ staff as ${targetRole.title}.",
+                        missionTitle = "HQ Staff: ${targetRole.shortCode}",
+                        awardedAtMillis = System.currentTimeMillis()
+                    )
+                )
+            }
+            showBanner("${op.rank.code} ${op.callsign} assigned as ${targetRole.shortCode} (${targetRole.title})!" +
+                if (!hasAiguillette) " Gold aiguillette authorized." else "")
         }
     }
 
@@ -2531,27 +2614,122 @@ class CommandViewModel(
                     awardedAtMillis = now
                 )
             )
-            // Higher aviator wings replace the lower ones
-            when (medalId) {
-                TacticalCalculator.SENIOR_AVIATOR_WINGS_ID ->
-                    repository.removeCitation(operatorId, TacticalCalculator.AVIATOR_WINGS_ID)
-                TacticalCalculator.MASTER_AVIATOR_WINGS_ID -> {
-                    repository.removeCitation(operatorId, TacticalCalculator.SENIOR_AVIATOR_WINGS_ID)
-                    repository.removeCitation(operatorId, TacticalCalculator.AVIATOR_WINGS_ID)
-                }
-            }
-            // Newly awarded cords show through Auto at render time; just bring the soldier into dress uniform
-            if (medal.category == AwardCategory.SHOULDER_CORD) {
-                repository.saveOperator(
-                    operator.copy(
-                        uniformMode = UniformMode.DRESS_UNIFORM,
-                        activeWardrobeKit = if (operator.activeWardrobeKit == WardrobeKit.FIELD) WardrobeKit.ALPHAS else operator.activeWardrobeKit
-                    )
-                )
-            }
-            showBanner("Awarded ${medal.name} to ${operator.rank.code} ${operator.callsign}!")
+            val cord = afterAward(operator, medal, ownedMedalIds + medalId, now)
+            showBanner(
+                "Awarded ${medal.name} to ${operator.rank.code} ${operator.callsign}!" +
+                    (cord?.let { " The ${it.shortName} cord comes with it." } ?: "")
+            )
         }
         return true
+    }
+
+    /**
+     * What follows any award: higher aviator wings replace lower ones, a cord brings the soldier into
+     * dress uniform, and (item 53) the award's related cord is granted with it at no cost. Returns that cord.
+     */
+    private suspend fun afterAward(operator: Operator, medal: MedalDefinition, ownedAfter: Set<String>, now: Long): MedalDefinition? {
+        when (medal.id) {
+            TacticalCalculator.SENIOR_AVIATOR_WINGS_ID ->
+                repository.removeCitation(operator.id, TacticalCalculator.AVIATOR_WINGS_ID)
+            TacticalCalculator.MASTER_AVIATOR_WINGS_ID -> {
+                repository.removeCitation(operator.id, TacticalCalculator.SENIOR_AVIATOR_WINGS_ID)
+                repository.removeCitation(operator.id, TacticalCalculator.AVIATOR_WINGS_ID)
+            }
+        }
+        val cord = AwardRules.companionCordFor(medal.id)
+            ?.takeIf { it !in ownedAfter }
+            ?.let { id -> GameCatalog.medals.find { it.id == id } }
+            ?.takeIf { TacticalCalculator.evaluateAwardEligibility(it, operator, ownedAfter).eligible }
+        if (cord != null) {
+            repository.addCitation(
+                AwardedMedal(
+                    id = "cit_${UUID.randomUUID().toString().take(8)}",
+                    operatorId = operator.id,
+                    medalId = cord.id,
+                    citationNote = "Comes with the ${medal.name}.",
+                    missionTitle = "With the ${medal.shortName}",
+                    awardedAtMillis = now
+                )
+            )
+        }
+        // Newly awarded cords show through Auto at render time; just bring the soldier into dress uniform
+        if (medal.category == AwardCategory.SHOULDER_CORD || cord != null) {
+            repository.saveOperator(
+                operator.copy(
+                    uniformMode = UniformMode.DRESS_UNIFORM,
+                    activeWardrobeKit = if (operator.activeWardrobeKit == WardrobeKit.FIELD) WardrobeKit.ALPHAS else operator.activeWardrobeKit
+                )
+            )
+        }
+        return cord
+    }
+
+    /**
+     * Item 51: grants every listed award that isn't a repeat, in order, while prestige lasts. Stops and
+     * says so when prestige runs out. Returns the ids of the deeds it awarded.
+     */
+    fun awardAll(deeds: List<PendingDeed>): Set<String> {
+        val state = uiState.value
+        var prestige = state.resources.prestige
+        val owned = state.citations.groupBy { it.operatorId }.mapValues { (_, c) -> c.map { it.medalId }.toMutableSet() }.toMutableMap()
+        val picks = mutableListOf<Triple<PendingDeed, Operator, MedalDefinition>>()
+        var ranOut = false
+        for (deed in deeds) {
+            val op = state.operators.find { it.id == deed.operatorId && it.unlocked } ?: continue
+            val medal = GameCatalog.medals.find { it.id == deed.recommendedMedalId } ?: continue
+            val held = owned.getOrPut(op.id) { mutableSetOf() }
+            if (medal.id in held) continue // repeats are awarded one at a time
+            if (!TacticalCalculator.evaluateAwardEligibility(medal, op, held, state.citations, heroismCited = true).eligible) continue
+            if (prestige < medal.prestigeCost) { ranOut = true; break }
+            prestige -= medal.prestigeCost
+            held += medal.id
+            picks += Triple(deed, op, medal)
+        }
+        if (picks.isEmpty()) {
+            showBanner(if (ranOut) "Not enough prestige for the next award." else "No first-time awards to grant.")
+            return emptySet()
+        }
+        val spent = picks.sumOf { it.third.prestigeCost }
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            repository.updateCommanderState { cur ->
+                cur.copy(prestige = (cur.prestige - spent).coerceAtLeast(0.0), lastSimulatedAtMillis = now)
+            }
+            var cords = 0
+            for ((deed, op, medal) in picks) {
+                repository.addCitation(
+                    AwardedMedal(
+                        id = "cit_${UUID.randomUUID().toString().take(8)}",
+                        operatorId = op.id,
+                        medalId = medal.id,
+                        citationNote = deed.deedSummary,
+                        missionTitle = deed.missionTitle,
+                        awardedAtMillis = now
+                    )
+                )
+                if (afterAward(op, medal, owned[op.id].orEmpty(), now) != null) cords++
+            }
+            showBanner(
+                "Awarded ${picks.size} award${if (picks.size == 1) "" else "s"} ($spent PRS)" +
+                    (if (cords > 0) " plus $cords cord${if (cords == 1) "" else "s"}" else "") + "." +
+                    if (ranOut) " Out of prestige; the rest stay in Pending Awards." else ""
+            )
+        }
+        return picks.map { it.first.id }.toSet()
+    }
+
+    /** Award all on the Honors screen: every soldier's pending first-time awards. */
+    fun awardAllPending() {
+        awardAll(uiState.value.pendingDeeds)
+    }
+
+    /** Award all on the award pop-up: the rest of the queue; repeat awards stay for one-by-one review. */
+    fun awardAllFromQueue() {
+        val awarded = awardAll(_awardQueue.value)
+        if (awarded.isEmpty()) return
+        val rest = _awardQueue.value.filter { it.id !in awarded }
+        _awardQueue.value = rest
+        if (rest.isEmpty()) _awardQueueTotal.value = 0
     }
 
     /** Award button on the award pop-up: confers the head of the queue and moves to the next card. */
@@ -2845,8 +3023,8 @@ class CommandViewModel(
         val squad = state.squads.find { it.id == squadId } ?: return
         // Soldiers keep the unit citations they earned with this squad after it's gone
         val keepers = state.operators.mapNotNull { op ->
-            val earned = squad.unitCitations.count { op.id in it.memberIds }
-            if (earned > 0) op.copy(retainedUnitCitations = op.retainedUnitCitations + earned) else null
+            val earned = squad.unitCitations.filter { op.id in it.memberIds }.map { it.type }
+            if (earned.isNotEmpty()) op.copy(retainedUnitAwards = op.retainedUnitAwards + earned) else null
         }
         viewModelScope.launch {
             if (keepers.isNotEmpty()) repository.saveOperators(keepers)

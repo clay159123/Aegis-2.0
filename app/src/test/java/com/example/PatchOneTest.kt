@@ -28,7 +28,7 @@ class PatchOneTest {
     @Test
     fun disbandedSquadsLeaveTheirCitationWithTheSoldiers() {
         assertFalse(UniformRegaliaRules.hasUnitCitation(op, emptyList()))
-        assertTrue(UniformRegaliaRules.hasUnitCitation(op.copy(retainedUnitCitations = 1), emptyList()))
+        assertTrue(UniformRegaliaRules.hasUnitCitation(op.copy(retainedUnitAwards = listOf(UnitAwardType.MERITORIOUS_UNIT_COMMENDATION)), emptyList()))
     }
 
     @Test

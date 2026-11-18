@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.example.data.catalog.GameCatalog
 import com.example.domain.PromotionEndorsementFocus
 import com.example.domain.TacticalCalculator
+import com.example.domain.AwardRules
+import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
 import com.example.ui.components.*
 import com.example.ui.theme.LocalAegisColors
@@ -51,6 +53,7 @@ fun DressAwardsScreen(
     onSelectWardrobeKit: (String, WardrobeKit) -> Unit = { _, _ -> },
     onToggleSmartWardrobe: () -> Unit = {},
     onConductKitInspection: ((String, WardrobeKit) -> Unit)? = null,
+    onAwardAllPending: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val extra = LocalAegisColors.current
@@ -74,7 +77,8 @@ fun DressAwardsScreen(
     var showTailorPanel by remember { mutableStateOf(false) }
     var showUniformInspection by remember { mutableStateOf(false) }
     var inspectedAward by remember { mutableStateOf<MedalDefinition?>(null) }
-    var selectedCategory by remember { mutableStateOf<AwardCategory?>(null) }
+    // Item 54: award catalog groups start collapsed
+    var expandedGroups by remember { mutableStateOf(setOf<AwardRules.AwardGroup>()) }
     var citationModalMedal by remember { mutableStateOf<Pair<MedalDefinition, PendingDeed?>?>(null) }
     var showPromotionBoard by remember { mutableStateOf(false) }
 
@@ -184,9 +188,15 @@ fun DressAwardsScreen(
         }
     }
 
-    val filteredCatalog = remember(selectedCategory) {
-        if (selectedCategory == null) GameCatalog.medals
-        else GameCatalog.medals.filter { it.category == selectedCategory }
+    val groupedCatalog = remember {
+        GameCatalog.medals.sortedBy { it.precedenceOrder }.groupBy { AwardRules.groupFor(it) }
+    }
+    val opUnitAwards = remember(selectedOp, uiState.squads) {
+        UniformRegaliaRules.unitAwardsFor(selectedOp, uiState.squads).toMap()
+    }
+    val firstTimePendingCount = remember(uiState.pendingDeeds, uiState.citations) {
+        val held = uiState.citations.map { it.operatorId to it.medalId }.toSet()
+        uiState.pendingDeeds.count { (it.operatorId to it.recommendedMedalId) !in held }
     }
     val listState = rememberLazyListState()
     LaunchedEffect(showTailorPanel) {
@@ -751,6 +761,18 @@ fun DressAwardsScreen(
                     title = "Recent Mission Deeds",
                     subtitle = "Recommended awards based on ${selectedOp.callsign}'s field actions"
                 )
+                if (firstTimePendingCount > 1) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = onAwardAllPending,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("award_all_pending")
+                    ) {
+                        Text("Award All Pending, Every Soldier ($firstTimePendingCount first awards)")
+                    }
+                }
             }
             items(opDeeds, key = { it.id }) { deed ->
                 val medal = GameCatalog.medals.find { it.id == deed.recommendedMedalId }
@@ -841,61 +863,62 @@ fun DressAwardsScreen(
                 title = "Army Awards & Regalia (${uiState.resources.prestige.toInt()} PRS)",
                 subtitle = "Medals, Ribbons, Shoulder Cords & Specialty School Insignia"
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = selectedCategory == null,
-                    onClick = { selectedCategory = null },
-                    label = { Text("All (${GameCatalog.medals.size})") },
-                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+        }
+
+        AwardRules.AwardGroup.entries.forEach { group ->
+            val expanded = group in expandedGroups
+            val groupAwards = groupedCatalog[group].orEmpty()
+            val (heldCount, totalCount) = if (group == AwardRules.AwardGroup.UNIT_AWARDS) {
+                opUnitAwards.size to UnitAwardType.entries.size
+            } else {
+                groupAwards.count { it.id in ownedMedalIds } to groupAwards.size
+            }
+            item(key = "award_group_${group.name}") {
+                AwardGroupHeader(
+                    label = group.label,
+                    held = heldCount,
+                    total = totalCount,
+                    expanded = expanded,
+                    onToggle = { expandedGroups = if (expanded) expandedGroups - group else expandedGroups + group },
+                    modifier = Modifier.testTag("award_group_${group.name.lowercase()}")
                 )
-                AwardCategory.entries.forEach { cat ->
-                    val count = GameCatalog.medals.count { it.category == cat }
-                    FilterChip(
-                        selected = selectedCategory == cat,
-                        onClick = { selectedCategory = cat },
-                        label = { Text("${cat.pluralLabel} ($count)") },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("award_filter_${cat.name.lowercase()}")
+            }
+            if (expanded && group == AwardRules.AwardGroup.UNIT_AWARDS) {
+                items(UnitAwardType.entries, key = { "${selectedOp.id}_unit_${it.name}" }) { type ->
+                    UnitAwardCard(type = type, count = opUnitAwards[type] ?: 0)
+                }
+            }
+            if (expanded && group != AwardRules.AwardGroup.UNIT_AWARDS) {
+                items(groupAwards, key = { "${selectedOp.id}_${it.id}" }) { medal ->
+                    val alreadyHeld = medal.id in ownedMedalIds
+                    val isRepeatable = TacticalCalculator.isRepeatableAward(medal)
+                    val heldCount = citationCountsByMedalId[medal.id] ?: 0
+                    val hasDeed = opDeeds.any { it.recommendedMedalId == medal.id }
+                    val eligibility = TacticalCalculator.evaluateAwardEligibility(
+                        medal = medal,
+                        operator = selectedOp,
+                        ownedMedalIds = ownedMedalIds,
+                        allCitations = uiState.citations,
+                        heroismCited = hasDeed
+                    )
+                    val canAfford = uiState.resources.prestige >= medal.prestigeCost
+                    val perSoldierCap = TacticalCalculator.perSoldierCapForAward(medal.id)
+
+                    AwardCatalogCard(
+                        medal = medal,
+                        selectedOp = selectedOp,
+                        alreadyHeld = alreadyHeld,
+                        isRepeatable = isRepeatable,
+                        heldCount = heldCount,
+                        hasDeed = hasDeed,
+                        eligibility = eligibility,
+                        canAfford = canAfford,
+                        perSoldierCap = perSoldierCap,
+                        onInspect = { inspectedAward = medal },
+                        onConfer = { citationModalMedal = medal to opDeeds.firstOrNull { it.recommendedMedalId == medal.id } }
                     )
                 }
             }
-        }
-
-        items(filteredCatalog, key = { "${selectedOp.id}_${it.id}" }) { medal ->
-            val alreadyHeld = medal.id in ownedMedalIds
-            val isRepeatable = TacticalCalculator.isRepeatableAward(medal)
-            val heldCount = citationCountsByMedalId[medal.id] ?: 0
-            val hasDeed = opDeeds.any { it.recommendedMedalId == medal.id }
-            val eligibility = TacticalCalculator.evaluateAwardEligibility(
-                medal = medal,
-                operator = selectedOp,
-                ownedMedalIds = ownedMedalIds,
-                allCitations = uiState.citations,
-                heroismCited = hasDeed
-            )
-            val canAfford = uiState.resources.prestige >= medal.prestigeCost
-            val perSoldierCap = TacticalCalculator.perSoldierCapForAward(medal.id)
-
-            AwardCatalogCard(
-                medal = medal,
-                selectedOp = selectedOp,
-                alreadyHeld = alreadyHeld,
-                isRepeatable = isRepeatable,
-                heldCount = heldCount,
-                hasDeed = hasDeed,
-                eligibility = eligibility,
-                canAfford = canAfford,
-                perSoldierCap = perSoldierCap,
-                onInspect = { inspectedAward = medal },
-                onConfer = { citationModalMedal = medal to opDeeds.firstOrNull { it.recommendedMedalId == medal.id } }
-            )
         }
     }
 
@@ -1162,6 +1185,86 @@ internal fun AwardCatalogCard(
                     else -> "Award ${medal.category.label} to ${selectedOp.callsign}"
                 },
                 maxLines = 1
+            )
+        }
+    }
+}
+
+/** Item 54: a collapsible award group header with how many of its awards the soldier holds. */
+@Composable
+private fun AwardGroupHeader(
+    label: String,
+    held: Int,
+    total: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val extra = LocalAegisColors.current
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, if (expanded) extra.brass.copy(alpha = 0.6f) else extra.borderSubtle),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onToggle)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 14.dp)
+                .defaultMinSize(minHeight = 48.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(
+                "$held/$total held",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (held > 0) extra.brassBright else extra.textMuted
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse $label" else "Expand $label",
+                tint = extra.textMuted
+            )
+        }
+    }
+}
+
+/** How each unit award is earned, for the Unit Awards group. */
+private fun unitAwardRule(type: UnitAwardType): String = when (type) {
+    UnitAwardType.PRESIDENTIAL_UNIT_CITATION -> "Squad wins an Extreme campaign finale, or an Extreme mission with nobody wounded."
+    UnitAwardType.VALOROUS_UNIT_AWARD -> "Squad wins any other Extreme mission."
+    UnitAwardType.MERITORIOUS_UNIT_COMMENDATION -> "Squad wins a High mission."
+    UnitAwardType.SUPERIOR_UNIT_AWARD -> "Every ${com.example.domain.SquadCohesionRules.SUPERIOR_UNIT_AWARD_INTERVAL}th squad mission won with nobody wounded."
+}
+
+/** Item 55: a unit award, its emblem, and how many times this soldier's squads earned it. */
+@Composable
+private fun UnitAwardCard(type: UnitAwardType, count: Int) {
+    val extra = LocalAegisColors.current
+    TacticalPanelCard(modifier = Modifier.testTag("unit_award_${type.name.lowercase()}")) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .size(width = 54.dp, height = 20.dp)
+                    .alpha(if (count > 0) 1f else 0.45f)
+            ) {
+                val stripeW = size.width / type.stripes.size
+                type.stripes.forEachIndexed { i, hex ->
+                    drawRect(Color(hex), androidx.compose.ui.geometry.Offset(i * stripeW, 0f), androidx.compose.ui.geometry.Size(stripeW + 0.5f, size.height))
+                }
+                drawRect(Color(type.frameHex), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(type.label, style = MaterialTheme.typography.titleSmall)
+                Text(unitAwardRule(type), style = MaterialTheme.typography.bodySmall, color = extra.textMuted)
+            }
+            Text(
+                if (count > 0) "Held ×$count" else "Not earned",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (count > 0) extra.brassBright else extra.textMuted
             )
         }
     }

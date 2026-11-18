@@ -1118,7 +1118,7 @@ object GameCatalog {
         initialGear.associateBy { it.id }
     }
 
-    val medals: List<MedalDefinition> = listOf(
+    private val baseMedals: List<MedalDefinition> = listOf(
         // ============================================================
         // CATEGORY 1: MEDALS (Precedence 1..8)
         // ============================================================
@@ -1276,7 +1276,7 @@ object GameCatalog {
         MedalDefinition(
             id = "medal_expeditionary",
             name = "Overseas Expeditionary Ribbon",
-            shortName = "OVERSEAS",
+            shortName = "EXPED",
             category = AwardCategory.RIBBON,
             tier = MedalTier.SERVICE,
             precedenceOrder = 9,
@@ -2117,6 +2117,9 @@ object GameCatalog {
             yieldBonusPct = 5
         )
     )
+
+    /** Every award: the base set plus Session 15 additions, in real-Army precedence (item 55). */
+    val medals: List<MedalDefinition> = (baseMedals + AwardExpansion.medals).map { AwardExpansion.withPrecedence(it) }
 
     /** Missions with Session 10 MOS and insertion tags applied (see [tagMission]). */
     val missions: List<MissionTemplate> by lazy {

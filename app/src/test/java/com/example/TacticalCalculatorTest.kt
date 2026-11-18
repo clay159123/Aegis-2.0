@@ -414,7 +414,8 @@ class TacticalCalculatorTest {
             equippedGear = emptyList(),
             existingCitationMedalIds = emptySet()
         )
-        assertEquals("medal_distinguished_cross", fallenMedal)
+        // Session 15: valor for the fallen comes from the valor roll
+        assertEquals("medal_purple_shield", fallenMedal)
     }
 
     @Test
@@ -909,9 +910,9 @@ class TacticalCalculatorTest {
         assertEquals(
             listOf(
                 "medal_distinguished_cross",
-                "medal_defense_superior",
+                "medal_distinguished_service",
                 "medal_silver_vanguard",
-                "medal_purple_shield"
+                "medal_defense_superior"
             ),
             wornFullMedals.hangingMedals.map { it.id }
         )
@@ -922,7 +923,9 @@ class TacticalCalculatorTest {
         )
         assertEquals(9, wornRibbons.ribbonRack.size)
         assertTrue("medal_sovereign_star" in wornRibbons.wornIds)
-        assertTrue("medal_expeditionary" in wornRibbons.wornIds)
+        // Real-Army precedence (Session 15): the ninth ribbon is the Bronze Valor Star
+        assertTrue("medal_bronze_valor" in wornRibbons.wornIds)
+        assertFalse("medal_expeditionary" in wornRibbons.wornIds)
         assertFalse("medal_basic_training" in wornRibbons.wornIds)
     }
 
@@ -1206,7 +1209,8 @@ class TacticalCalculatorTest {
             existingCitationMedalIds = emptySet(),
             allCampaignCitations = listOf(firstSovereignCit)
         )
-        assertEquals("medal_distinguished_cross", fallenAward)
+        // Session 15: valor comes from the valor roll; the routine deed for the fallen is the Purple Shield
+        assertEquals("medal_purple_shield", fallenAward)
 
         // 4. Sovereign Star uses a per-soldier cap (1 max/soldier) instead of a global campaign cap
         assertNull(TacticalCalculator.campaignCapForAward(sovereignStar.id))
@@ -1224,7 +1228,8 @@ class TacticalCalculatorTest {
                 medal = serviceCross,
                 operator = secondCandidate,
                 ownedMedalIds = setOf("medal_bronze_valor"),
-                allCitations = crossCitations
+                allCitations = crossCitations,
+                heroismCited = true
             ).eligible
         )
         val fullDefSupCitations = listOf(
@@ -1256,7 +1261,7 @@ class TacticalCalculatorTest {
             highestRiskSurvived = MissionRisk.MODERATE,
             completedMissionIds = GameCatalog.missions.map { it.id }.toSet()
         )
-        assertTrue(TacticalCalculator.evaluateAwardEligibility(bronzeValor, qualifiedFallen, emptySet()).eligible)
+        assertTrue(TacticalCalculator.evaluateAwardEligibility(bronzeValor, qualifiedFallen, emptySet(), heroismCited = true).eligible)
         assertFalse(TacticalCalculator.evaluateAwardEligibility(basicTraining, qualifiedFallen, emptySet()).eligible)
         assertFalse(TacticalCalculator.evaluateAwardEligibility(ncoDev, qualifiedFallen, emptySet()).eligible)
         assertFalse(TacticalCalculator.evaluateAwardEligibility(infCord, qualifiedFallen, emptySet()).eligible)
@@ -2516,53 +2521,24 @@ class TacticalCalculatorTest {
         assertFalse(TacticalCalculator.evaluateAwardEligibility(cross, schoolOnlyOp, emptySet()).eligible)
         assertFalse(TacticalCalculator.evaluateAwardEligibility(arcom, schoolOnlyOp, emptySet()).eligible)
 
-        // 2. Surviving 1 Extreme combat op with inflated non-combat ops (missionsCompleted = 6, combatMissionsCompleted = 1) still blocks 2+/4+/6+ combat valor awards
-        val oneCombatOpInflatedCareer = kestrel.copy(
-            missionsCompleted = 6,
-            combatMissionsCompleted = 1,
-            completedMissionIds = setOf("msn_deep_expedition"),
+        // 2. Session 15 (item 89): valor awards come only from a valor roll. No service record unlocks them,
+        //    and any citation does, whatever the record.
+        val decorated = kestrel.copy(
+            missionsCompleted = 12,
+            combatMissionsCompleted = 12,
+            completedMissionIds = setOf("msn_deep_expedition", "msn_citadel_recovery", "msn_convoy_escort"),
             highestRiskSurvived = MissionRisk.EXTREME
         )
-        assertTrue(TacticalCalculator.evaluateAwardEligibility(expRibbon, oneCombatOpInflatedCareer, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(bronze, oneCombatOpInflatedCareer, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(silver, oneCombatOpInflatedCareer, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(cross, oneCombatOpInflatedCareer, setOf("medal_bronze_valor")).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(sovereign, oneCombatOpInflatedCareer, setOf("medal_distinguished_cross")).eligible)
+        for (valor in listOf(bronze, silver, cross)) {
+            assertFalse(valor.id, TacticalCalculator.evaluateAwardEligibility(valor, decorated, emptySet()).eligible)
+            assertTrue(valor.id, TacticalCalculator.evaluateAwardEligibility(valor, schoolOnlyOp, emptySet(), heroismCited = true).eligible)
+        }
+        assertTrue(TacticalCalculator.evaluateAwardEligibility(expRibbon, decorated, emptySet()).eligible)
 
-        // 3. Qualifying for Bronze Valor (2 Combat Ops, Moderate) does NOT qualify for Silver Star (requires High+ & 4 Combat Ops), Fourragere, Service Cross, or Defense Superior
-        val bronzeOnlyOp = kestrel.copy(
-            missionsCompleted = 2,
-            combatMissionsCompleted = 2,
-            completedMissionIds = setOf("msn_harbor_overwatch", "msn_convoy_escort"),
-            highestRiskSurvived = MissionRisk.MODERATE
-        )
-        assertTrue(TacticalCalculator.evaluateAwardEligibility(bronze, bronzeOnlyOp, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(silver, bronzeOnlyOp, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(fourragere, bronzeOnlyOp, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(cross, bronzeOnlyOp, setOf("medal_bronze_valor")).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(defSup, bronzeOnlyOp, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(meritorious, bronzeOnlyOp, emptySet()).eligible)
-
-        // 4. Qualifying for Silver Star (4 Combat Ops, High, repeating 1 mission) still does NOT unlock Fourragere (needs 3 distinct combat ops & 5+ ops) or Service Cross (needs 6+ combat ops & prior valor)
-        val silverQualified = kestrel.copy(
-            missionsCompleted = 4,
-            combatMissionsCompleted = 4,
-            completedMissionIds = setOf("msn_citadel_recovery"),
-            highestRiskSurvived = MissionRisk.HIGH
-        )
-        assertTrue(TacticalCalculator.evaluateAwardEligibility(silver, silverQualified, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(fourragere, silverQualified, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(cross, silverQualified, setOf("medal_silver_vanguard")).eligible)
-
-        // 5. Fourragere unlocks cleanly at 5+ Combat Ops across 3+ distinct combat missions at Moderate+
-        val multiSectorOp = kestrel.copy(
-            missionsCompleted = 5,
-            combatMissionsCompleted = 5,
-            completedMissionIds = setOf("msn_ridge_patrol", "msn_harbor_overwatch", "msn_convoy_escort"),
-            highestRiskSurvived = MissionRisk.MODERATE
-        )
-        assertTrue(TacticalCalculator.evaluateAwardEligibility(fourragere, multiSectorOp, emptySet()).eligible)
-        assertFalse(TacticalCalculator.evaluateAwardEligibility(silver, multiSectorOp, emptySet()).eligible)
+        // 3. The valor cord follows a valor award, not a mission count
+        assertFalse(TacticalCalculator.evaluateAwardEligibility(fourragere, decorated, emptySet()).eligible)
+        assertTrue(TacticalCalculator.evaluateAwardEligibility(fourragere, schoolOnlyOp, setOf("medal_bronze_valor")).eligible)
+        assertTrue(TacticalCalculator.evaluateAwardEligibility(fourragere, schoolOnlyOp, setOf("medal_sovereign_star")).eligible)
 
         // 6. Defense Superior rewards Coalition Diplomacy / Long HQ Tenure rather than raw combat ops
         val diploOfficer = kestrel.copy(

@@ -397,6 +397,7 @@ fun AegisCommandApp() {
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
                                     onSelectWardrobeKit = viewModel::selectWardrobeKit,
                                     onToggleSmartWardrobe = viewModel::toggleSmartWardrobe,
+                                    onAwardAllPending = viewModel::awardAllPending,
                                     onConductKitInspection = { opId, kit ->
                                         viewModel.conductUniformInspection(operatorId = opId, inspectedKit = kit)
                                     }
@@ -444,7 +445,8 @@ fun AegisCommandApp() {
                     canAfford = uiState.resources.prestige >= medal.prestigeCost,
                     repeatLabel = com.example.domain.TacticalCalculator.repeatAwardLabel(op, medal, uiState.citations),
                     onAward = viewModel::awardFromQueue,
-                    onSkip = viewModel::skipAwardPrompt
+                    onSkip = viewModel::skipAwardPrompt,
+                    onAwardAll = if (awardQueue.size > 1) viewModel::awardAllFromQueue else null
                 )
             }
         }
