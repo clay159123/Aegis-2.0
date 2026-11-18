@@ -75,6 +75,7 @@ object UniformRegaliaRules {
     private val preferredBadgesBySpecialtyAndSlot: Map<OperatorSpecialty, Map<ChestBadgeSlot, List<String>>> = mapOf(
         OperatorSpecialty.ASSAULT to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_air_assault",
@@ -83,6 +84,7 @@ object UniformRegaliaRules {
                 "insig_pathfinder"
             ),
             ChestBadgeSlot.LEFT_POCKET to listOf(
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_air_assault",
@@ -102,6 +104,7 @@ object UniformRegaliaRules {
         OperatorSpecialty.MEDIC to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
                 "insig_air_assault",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_parachutist",
@@ -110,6 +113,7 @@ object UniformRegaliaRules {
             ),
             ChestBadgeSlot.LEFT_POCKET to listOf(
                 "insig_air_assault",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_parachutist",
@@ -128,6 +132,7 @@ object UniformRegaliaRules {
         OperatorSpecialty.BREACHER to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
                 "insig_eod_badge",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_air_assault",
@@ -138,6 +143,7 @@ object UniformRegaliaRules {
                 "insig_eod_badge",
                 "insig_pathfinder",
                 "insig_air_assault",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_parachutist",
@@ -153,6 +159,7 @@ object UniformRegaliaRules {
         ),
         OperatorSpecialty.RECON to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_pathfinder",
@@ -163,6 +170,7 @@ object UniformRegaliaRules {
             ChestBadgeSlot.LEFT_POCKET to listOf(
                 "insig_pathfinder",
                 "insig_intel_crest",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_parachutist",
@@ -181,6 +189,7 @@ object UniformRegaliaRules {
             ChestBadgeSlot.ABOVE_RACK to listOf(
                 "insig_pathfinder",
                 "insig_eod_badge",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_air_assault",
@@ -192,6 +201,7 @@ object UniformRegaliaRules {
                 "insig_pathfinder",
                 "insig_eod_badge",
                 "insig_air_assault",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_parachutist"
@@ -205,6 +215,7 @@ object UniformRegaliaRules {
         ),
         OperatorSpecialty.COMMAND to mapOf(
             ChestBadgeSlot.ABOVE_RACK to listOf(
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_air_assault",
@@ -216,6 +227,7 @@ object UniformRegaliaRules {
                 "insig_intel_crest",
                 "insig_pathfinder",
                 "insig_cyber_crest",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_air_assault",
@@ -234,6 +246,7 @@ object UniformRegaliaRules {
                 "insig_master_aviator_wings",
                 "insig_senior_aviator_wings",
                 "insig_aviator_wings",
+                "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
                 "insig_air_assault",

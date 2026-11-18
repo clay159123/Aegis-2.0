@@ -122,7 +122,8 @@ data class DeploymentEntity(
     val avgSurvivalPct: Int,
     val squadId: String? = null,
     val insertionName: String = "GROUND",
-    val pilotId: String? = null
+    val pilotId: String? = null,
+    val platoonLeaderId: String? = null
 )
 
 @Entity(tableName = "squads")

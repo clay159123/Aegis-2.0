@@ -425,6 +425,14 @@ fun AwardVisualThumbnail(
                             drawStar(Offset(cx, h * 0.22f), h * 0.15f, h * 0.065f, Color(0xFFF2D272))
                         }
                     }
+                    InsigniaShape.MFF_WINGS -> {
+                        drawLine(col, Offset(w * 0.06f, cy + h * 0.02f), Offset(w * 0.94f, cy + h * 0.02f), strokeWidth = (h * 0.10f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
+                        drawLine(col, Offset(w * 0.16f, cy + h * 0.17f), Offset(w * 0.84f, cy + h * 0.17f), strokeWidth = (h * 0.075f).coerceAtLeast(2.2f), cap = StrokeCap.Round)
+                        drawArc(col, 180f, 180f, true, Offset(cx - w * 0.14f, h * 0.20f), Size(w * 0.28f, h * 0.40f))
+                        drawLine(Color(0xFF121722), Offset(cx, h * 0.06f), Offset(cx, h * 0.86f), strokeWidth = (h * 0.09f).coerceAtLeast(2.6f))
+                        drawLine(Color(0xFFF2D272), Offset(cx, h * 0.06f), Offset(cx, h * 0.86f), strokeWidth = (h * 0.05f).coerceAtLeast(1.5f), cap = StrokeCap.Round)
+                        drawLine(Color(0xFFF2D272), Offset(cx - w * 0.06f, h * 0.68f), Offset(cx + w * 0.06f, h * 0.68f), strokeWidth = (h * 0.05f).coerceAtLeast(1.5f))
+                    }
                     InsigniaShape.DIVER_BADGE -> {
                         drawLine(col, Offset(w * 0.18f, h * 0.90f), Offset(w * 0.82f, h * 0.10f), strokeWidth = (h * 0.06f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
                         drawLine(col, Offset(w * 0.82f, h * 0.90f), Offset(w * 0.18f, h * 0.10f), strokeWidth = (h * 0.06f).coerceAtLeast(1.8f), cap = StrokeCap.Round)

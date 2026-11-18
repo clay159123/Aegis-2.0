@@ -58,7 +58,7 @@ class TacticalCalculatorTest {
             "msn_basic_qual", "msn_medical_school", "msn_engineer_school", "msn_night_qual",
             "msn_ranger_school", "msn_sf_school", "msn_ocs_school",
             "msn_sapper_school", "msn_pathfinder_school", "msn_eib_testing", "msn_rifle_qual",
-            "msn_flight_school", "msn_flight_hours", "msn_combat_diver_school"
+            "msn_flight_school", "msn_flight_hours", "msn_combat_diver_school", "msn_mff_school"
         )
         GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.forEach { school ->
             val expected = if (school.id in fieldSchools) WardrobeKit.FIELD else WardrobeKit.BRAVOS
@@ -1548,7 +1548,8 @@ class TacticalCalculatorTest {
                 "msn_wocs",
                 "msn_flight_school",
                 "msn_flight_hours",
-                "msn_combat_diver_school"
+                "msn_combat_diver_school",
+                "msn_mff_school"
             ),
             schoolIds
         )
@@ -2732,7 +2733,7 @@ class TacticalCalculatorTest {
     @Test
     fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
         val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-        assertEquals(20, schools.size)
+        assertEquals(21, schools.size)
         schools.forEach { school ->
             assertFalse(school.id, school.hasClassCap)
             assertTrue(school.id, 15 in school.minOperators..school.maxOperators)
@@ -2740,7 +2741,8 @@ class TacticalCalculatorTest {
         }
         GameCatalog.missions.filter { it.scope != MissionScope.TRAINING }.forEach { mission ->
             assertTrue(mission.id, mission.hasClassCap)
-            assertTrue(mission.id, mission.maxOperators <= 6)
+            // One-squad missions stay at 6 or fewer; platoon missions take 8-12
+            assertTrue(mission.id, mission.maxOperators <= if (mission.requiredSquads > 1) 12 else 6)
         }
         // A class of 15 fills from the roster without being trimmed
         val fifteen = (1..15).map { "op_$it" }

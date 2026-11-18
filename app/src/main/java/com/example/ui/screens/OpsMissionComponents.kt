@@ -97,12 +97,28 @@ internal fun ActiveHqDeploymentCard(
 
         Spacer(modifier = Modifier.height(6.dp))
         val metricLabel = if (mission.risk.isTraining) "Est. Pass" else "Survival"
-        if (activeSquad != null) {
+        // Item 35: platoon missions list both squads and the platoon leader
+        val deployedSquads = squads.filter { sq -> deployment.groundOperatorIds.count { it in sq.memberIds } >= 2 }
+        if (mission.requiredSquads > 1 && deployedSquads.size > 1) {
+            Text(
+                text = "★ " + deployedSquads.joinToString(" + ") { it.name },
+                style = MaterialTheme.typography.labelSmall,
+                color = extra.brassBright
+            )
+        } else if (activeSquad != null) {
             Text(
                 text = "★ ${activeSquad.name} (${activeSquad.cohesionScore}% Cohesion)",
                 style = MaterialTheme.typography.labelSmall,
                 color = extra.brassBright
             )
+        }
+        val leaderLine = listOfNotNull(
+            deployment.platoonLeaderId?.let { id -> operators.find { it.id == id } }?.let { "Platoon Leader ${it.rank.code} ${it.callsign}" },
+            deployment.pilotId?.let { id -> operators.find { it.id == id } }?.let { "Pilot ${it.rank.code} ${it.callsign}" },
+            deployment.insertion.takeIf { it != InsertionMethod.GROUND }?.shortLabel
+        )
+        if (leaderLine.isNotEmpty()) {
+            Text(leaderLine.joinToString(" • "), style = MaterialTheme.typography.labelSmall, color = extra.signalsCyan)
         }
         Text(
             text = "Team: $squadCallsigns • Eff ${deployment.efficiencyPct}% • $metricLabel ~${deployment.avgSurvivalPct}%",
@@ -478,7 +494,7 @@ internal fun HqStagingSheet(
         squads = uiState.squads,
         smartWardrobeEnabled = uiState.smartWardrobeEnabled
     )
-    val activeSquadBonus = SquadCohesionRules.evaluateActiveBonus(selectedOps, uiState.squads)
+    val activeSquadBonus = SquadCohesionRules.evaluateActiveBonus(selectedOps, uiState.squads, mission.requiredSquads > 1)
     // Schools charge per enrolled soldier; missions charge one fee per team
     val supplyCost = TacticalCalculator.dispatchSupplyCost(
         mission = mission,

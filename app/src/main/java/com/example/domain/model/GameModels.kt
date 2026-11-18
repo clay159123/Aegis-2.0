@@ -919,7 +919,8 @@ enum class InsigniaShape {
     AVIATOR_WINGS,
     SENIOR_AVIATOR_WINGS,
     MASTER_AVIATOR_WINGS,
-    DIVER_BADGE
+    DIVER_BADGE,
+    MFF_WINGS
 }
 
 enum class ChestBadgeSlot(val label: String, val ruleHint: String) {
@@ -1334,7 +1335,9 @@ data class TheaterCampaign(
     val completionBonusIntel: Double,
     val completionBonusPrestige: Double,
     val theaterBuffLabel: String,
-    val stageMissionIds: List<String>
+    val stageMissionIds: List<String>,
+    /** Item 36: Special Forces campaign (Unconventional Warfare); not part of the four theater campaigns. */
+    val isSpecialForces: Boolean = false
 )
 
 data class MissionTemplate(
@@ -1369,6 +1372,12 @@ data class MissionTemplate(
     val recommendedSpecialties: List<OperatorSpecialty> = emptyList(),
     /** Item 33: how the team can get there. Ground is always allowed. */
     val allowedInsertions: List<InsertionMethod> = listOf(InsertionMethod.GROUND),
+    /** Item 35: 1 for normal missions, 2 for platoon missions (two squads plus a platoon leader). */
+    val requiredSquads: Int = 1,
+    /** Item 36: Special Forces team mission (exactly 4 soldiers, 3+ SF-qualified). */
+    val requiresSfTeam: Boolean = false,
+    /** Item 36: Direct Action, Special Reconnaissance, Foreign Internal Defense or Unconventional Warfare. */
+    val sfMissionType: String? = null,
     /** Item 40: stats this mission trains through experience. Empty for schools. */
     val trainsStats: Set<StatType> = emptySet(),
     /** On the water: Maritime insertion is possible (SF missions only). */
@@ -1562,7 +1571,9 @@ data class ActiveDeployment(
     val squadId: String? = null,
     val insertion: InsertionMethod = InsertionMethod.GROUND,
     /** Helicopter pilot riding this mission; also listed in [operatorIds] so they're marked deployed. */
-    val pilotId: String? = null
+    val pilotId: String? = null,
+    /** Item 35: the officer leading a two-squad mission (one of the team). */
+    val platoonLeaderId: String? = null
 ) {
     /** The soldiers on the ground (everyone but the pilot). */
     val groundOperatorIds: List<String> get() = operatorIds.filter { it != pilotId }

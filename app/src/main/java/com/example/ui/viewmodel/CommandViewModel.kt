@@ -635,7 +635,8 @@ class CommandViewModel(
         selectedOperatorIds: List<String>,
         squadId: String? = null,
         insertion: InsertionMethod = InsertionMethod.GROUND,
-        pilotId: String? = null
+        pilotId: String? = null,
+        platoonLeaderId: String? = null
     ) {
         val state = uiState.value
         if (mission.scope != MissionScope.TRAINING && state.occupiedDeploymentSlots >= state.maxDeploymentSlots) {
@@ -700,6 +701,12 @@ class CommandViewModel(
             showBanner(msg)
             return
         }
+        // Items 35/36: SF team makeup, or two squads with a platoon leader
+        TacticalCalculator.teamBlocker(mission, chosenOps, state.squads, platoonLeaderId)?.let {
+            showBanner(it)
+            return
+        }
+        val platoonLeader = TacticalCalculator.platoonLeaderFor(mission, chosenOps, platoonLeaderId)
         // Item 33: the insertion must be allowed and the team (and pilot) qualified
         val pilot = if (insertion == InsertionMethod.HELICOPTER) {
             state.operators.find { it.id == pilotId && it.id !in deployedIds && it.status == OperatorStatus.READY }
@@ -724,7 +731,7 @@ class CommandViewModel(
             return
         }
 
-        val activeBonus = SquadCohesionRules.evaluateActiveBonus(chosenOps, state.squads)
+        val activeBonus = SquadCohesionRules.evaluateActiveBonus(chosenOps, state.squads, mission.requiredSquads > 1)
         val resolvedSquadId = squadId?.takeIf { id -> state.squads.any { it.id == id } }
             ?: activeBonus?.squad?.id
 
@@ -779,7 +786,8 @@ class CommandViewModel(
                 TacticalCalculator.insertionSurvivalDelta(insertion, pilot, airOps, scattered = false)).coerceIn(0, 98),
             squadId = resolvedSquadId,
             insertion = insertion,
-            pilotId = pilot?.id
+            pilotId = pilot?.id,
+            platoonLeaderId = platoonLeader?.id
         )
 
         viewModelScope.launch {
@@ -975,6 +983,9 @@ class CommandViewModel(
             // Airborne and HALO drops can scatter: harder mission, more casualties
             scatteredDrop = Random.nextInt(100) < TacticalCalculator.scatterChancePct(deployment.insertion)
             val insertionSurvival = TacticalCalculator.insertionSurvivalDelta(deployment.insertion, pilotOp, airOps, scatteredDrop)
+            val platoonSurvBonus = if (TacticalCalculator.platoonLeaderFor(mission, groundOps, deployment.platoonLeaderId) != null) {
+                TacticalCalculator.PLATOON_LEADER_SURVIVAL_BONUS
+            } else 0
             val successOdds = TacticalCalculator.missionSuccessOddsPct(
                 insertion = deployment.insertion,
                 scatteredDrop = scatteredDrop,
@@ -989,7 +1000,7 @@ class CommandViewModel(
                 smartWardrobeEnabled = state.smartWardrobeEnabled
             )
             missionSucceeded = Random.nextInt(100) < successOdds
-            val activeCohesionBonus = SquadCohesionRules.evaluateActiveBonus(groundOps, state.squads)
+            val activeCohesionBonus = SquadCohesionRules.evaluateActiveBonus(groundOps, state.squads, mission.requiredSquads > 1)
             val cohesionSurvBonus = activeCohesionBonus?.survivalBonusPct ?: 0
 
             var petitionAlreadyActive = state.operators.any {
@@ -1006,7 +1017,7 @@ class CommandViewModel(
                     facilities = state.facilities,
                     hqStaffCount = state.hqStaffCount,
                     hqStaffSummary = state.hqStaffSummary
-                ) + (if (op.id == pilotId) 0 else cohesionSurvBonus) + insertionSurvival).coerceIn(38, 98)
+                ) + (if (op.id == pilotId) 0 else cohesionSurvBonus + platoonSurvBonus) + insertionSurvival).coerceIn(38, 98)
                 val survivalPct = if (missionSucceeded) baseSurvivalPct else (baseSurvivalPct - 8).coerceAtLeast(38)
                 val roll = Random.nextInt(100)
                 val outcome = when {

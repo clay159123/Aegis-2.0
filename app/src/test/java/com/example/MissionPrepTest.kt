@@ -45,8 +45,9 @@ class MissionPrepTest {
             assertTrue(m.id, m.recommendedSpecialties.isEmpty())
             assertEquals(m.id, listOf(InsertionMethod.GROUND), m.allowedInsertions)
         }
-        // HALO and Maritime wait for SF missions
-        assertTrue(GameCatalog.missions.none { InsertionMethod.HALO in it.allowedInsertions || InsertionMethod.MARITIME in it.allowedInsertions })
+        // HALO and Maritime are for SF missions only
+        GameCatalog.missions.filter { InsertionMethod.HALO in it.allowedInsertions || InsertionMethod.MARITIME in it.allowedInsertions }
+            .forEach { assertTrue(it.id, it.requiresSfTeam) }
     }
 
     @Test
@@ -89,7 +90,8 @@ class MissionPrepTest {
         assertNotNull(TacticalCalculator.insertionBlocker(deep, InsertionMethod.AIRBORNE, legs + jumpers, null, facilities))
         assertNull(TacticalCalculator.insertionBlocker(deep, InsertionMethod.AIRBORNE, jumpers, null, facilities))
         // Maritime: coastal and Combat Divers (checked even before SF missions allow it)
-        val sfMission = deep.copy(allowedInsertions = InsertionMethod.entries)
+        val sfMission = deep.copy(allowedInsertions = InsertionMethod.entries, requiresSfTeam = true)
+        assertNotNull(TacticalCalculator.insertionBlocker(deep.copy(allowedInsertions = InsertionMethod.entries), InsertionMethod.HALO, legs, null, facilities))
         val divers = listOf(soldier("d", OperatorSpecialty.RECON, "msn_sf_school", TacticalCalculator.COMBAT_DIVER_SCHOOL_ID))
         assertTrue(sfMission.coastal)
         assertNull(TacticalCalculator.insertionBlocker(sfMission, InsertionMethod.MARITIME, divers, null, facilities))
