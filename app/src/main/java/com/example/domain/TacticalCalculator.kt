@@ -510,6 +510,10 @@ object TacticalCalculator {
     /** Flight skill each Flight Hours session adds, up to [MAX_FLIGHT_SKILL]. */
     const val FLIGHT_HOURS_SKILL_GAIN = 5
     const val MAX_FLIGHT_SKILL = 100
+    /** Hours logged per Flight Hours session (sessions become 1 to 10 hours in Session 17). */
+    const val FLIGHT_HOURS_PER_SESSION = 2
+    /** Hours logged per combat sortie flown as pilot. */
+    const val FLIGHT_HOURS_PER_SORTIE = 1
     const val SENIOR_WINGS_FLIGHT_SKILL = 40
     const val MASTER_WINGS_FLIGHT_SKILL = 65
     /** Combat missions flown as pilot per Air Medal (first award and each oak leaf cluster). */
@@ -1100,6 +1104,10 @@ object TacticalCalculator {
                 }
                 if (mission.id == "msn_eib_testing" && !isInfantryOrSfQualified(operator)) {
                     missing += "Infantry or SF-qualified only"
+                }
+                // Item 77: NCO Academy and the Senior Leader Course are for enlisted soldiers
+                if ((mission.id == "msn_nco_school" || mission.id == "msn_snco_school") && !operator.rank.tier.isEnlisted) {
+                    missing += "Enlisted leadership school: officers and warrant officers don't attend"
                 }
                 // Item 29: Officer Candidate School and Warrant Officer Candidate School are either-or
                 if (mission.id == OCS_MISSION_ID && (operator.isWarrantOfficer || hasEnteredSchool(operator, WOCS_MISSION_ID))) {

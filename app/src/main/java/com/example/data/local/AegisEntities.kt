@@ -86,6 +86,7 @@ data class OperatorEntity(
     val expPointsTech: Int = 0,
     val expPointsResilience: Int = 0,
     val retainedUnitCitations: Int = 0,
+    val flightHoursLogged: Int = 0,
     val bodyBuildName: String? = null,
     val unlocked: Boolean,
     val recruitCreditCost: Double,

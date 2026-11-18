@@ -889,7 +889,7 @@ enum class HeadgearStyle(
     OBSIDIAN_BERET("Standard Army Black Beret", "Post-Basic standard", RankTier.SOLDIER, HeadgearKind.BERET, 0xFF20252E),
     MAROON_BERET("Airborne Maroon Beret", "Airborne School, Airborne Tab, Jump Wings, or Airborne Cord", RankTier.SOLDIER, HeadgearKind.BERET, 0xFF6E2228),
     TAN_BERET("Ranger Tan Beret", "Army Ranger Course or Ranger Tab", RankTier.SOLDIER, HeadgearKind.BERET, 0xFF9C845E),
-    EMERALD_BERET("Special Forces Green Beret", "Special Forces School (SFQC), SF Tab, or Emerald Cord (NCO+)", RankTier.NCO, HeadgearKind.BERET, 0xFF254B34),
+    EMERALD_BERET("Special Forces Green Beret", "Special Forces School (SFQC), SF Tab, or Emerald Cord", RankTier.SOLDIER, HeadgearKind.BERET, 0xFF254B34),
     ENLISTED_SERVICE_CAP("Enlisted Service Visor Cap", "All Ranks (E-1+) • Service Alphas", RankTier.SOLDIER, HeadgearKind.SERVICE_CAP, 0xFF1F2B3C),
     NCO_SERVICE_CAP("NCO Service Visor Cap", "NCO Rank (E-5+)", RankTier.NCO, HeadgearKind.SERVICE_CAP, 0xFF1A2536),
     OFFICER_PEAKED_CAP("Officer Gold-Braided Cap", "Officer Rank (O-1+)", RankTier.OFFICER, HeadgearKind.OFFICER_CAP, 0xFF182233),
@@ -1178,7 +1178,9 @@ data class Operator(
     val expPointsTech: Int = 0,
     val expPointsResilience: Int = 0,
     /** Unit citations earned with a squad that was later disbanded; the soldier keeps wearing them. */
-    val retainedUnitCitations: Int = 0
+    val retainedUnitCitations: Int = 0,
+    /** Item 83: flight hours logged in training and on combat sorties. */
+    val flightHoursLogged: Int = 0
 ) {
     fun expPoints(stat: StatType): Int = when (stat) {
         StatType.FIREPOWER -> expPointsFirepower

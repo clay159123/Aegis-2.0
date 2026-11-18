@@ -56,6 +56,7 @@ fun OperatorDetailView(
     onPurchaseOrUpgradeGear: (String) -> Unit,
     onAssignToHqStaff: (HqStaffRole) -> Unit = {},
     onReassignHqStaffRole: (HqStaffRole) -> Unit = {},
+    onReturnToField: () -> Unit = {},
     onApproveTransferOut: () -> Unit = {},
     onDeclineTransferRequest: () -> Unit = {},
     onApproveRetirement: () -> Unit = {},
@@ -741,6 +742,15 @@ fun OperatorDetailView(
                                             Icon(Icons.Filled.AccountBalance, contentDescription = null, modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text("Change HQ Billet Role")
+                                        }
+                                        OutlinedButton(
+                                            onClick = onReturnToField,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .defaultMinSize(minHeight = 48.dp)
+                                                .testTag("return_to_field_${operator.id}")
+                                        ) {
+                                            Text("Return to Field Duty (Frees Billet)")
                                         }
                                     }
 

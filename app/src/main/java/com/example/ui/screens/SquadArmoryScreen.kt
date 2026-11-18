@@ -41,6 +41,7 @@ fun SquadArmoryScreen(
     onEnlistRecruit: (OperatorSpecialty, RecruitSource) -> Unit = { _, _ -> },
     onAssignToHqStaff: (String, HqStaffRole) -> Unit = { _, _ -> },
     onReassignHqStaffRole: (String, HqStaffRole) -> Unit = { _, _ -> },
+    onReturnHqStaffToField: (String) -> Unit = {},
     onApproveTransferOut: (String) -> Unit = {},
     onDeclineTransferRequest: (String) -> Unit = {},
     onApproveRetirement: (String) -> Unit = {},
@@ -102,6 +103,7 @@ fun SquadArmoryScreen(
             onPurchaseOrUpgradeGear = onPurchaseOrUpgradeGear,
             onAssignToHqStaff = { role -> onAssignToHqStaff(selectedOperator.id, role) },
             onReassignHqStaffRole = { role -> onReassignHqStaffRole(selectedOperator.id, role) },
+            onReturnToField = { onReturnHqStaffToField(selectedOperator.id) },
             onApproveTransferOut = { onApproveTransferOut(selectedOperator.id) },
             onDeclineTransferRequest = { onDeclineTransferRequest(selectedOperator.id) },
             onApproveRetirement = { onApproveRetirement(selectedOperator.id) },
@@ -483,6 +485,15 @@ fun SquadArmoryScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = extra.amberTelemetry
                         )
+                        // Item 83: pilots show their flight hours and skill
+                        if (op.isAviator) {
+                            Text(
+                                text = "${op.flightHoursLogged} flight hours • Flight skill ${op.flightSkill} • ${op.combatSortiesFlown} combat sorties",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = extra.signalsCyan,
+                                modifier = Modifier.testTag("pilot_hours_${op.id}")
+                            )
+                        }
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

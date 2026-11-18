@@ -42,7 +42,11 @@ fun AwardPromptDialog(
                         modifier = Modifier.testTag("award_prompt_counter")
                     )
                 }
-                Text("Award earned: $soldierLabel", style = MaterialTheme.typography.titleLarge, color = extra.brassBright)
+                Text(
+                    if (repeatLabel != null) "Award earned again: $soldierLabel" else "Award earned: $soldierLabel",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = if (repeatLabel != null) extra.signalsCyan else extra.brassBright
+                )
             }
         },
         text = {
@@ -70,8 +74,13 @@ fun AwardPromptDialog(
             Button(
                 onClick = onAward,
                 enabled = canAfford,
-                modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("award_prompt_award")
-            ) { Text("Award") }
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("award_prompt_award"),
+                // Item 84: first award in brass, repeat award (cluster) in cyan
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (repeatLabel != null) extra.signalsCyan else extra.brass,
+                    contentColor = MaterialTheme.colorScheme.onSecondary
+                )
+            ) { Text(if (repeatLabel != null) "Award Again" else "Award") }
         },
         dismissButton = {
             TextButton(

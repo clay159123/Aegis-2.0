@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -104,6 +105,10 @@ private val TopLevelDestinations = listOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Item 85: the speed setting must be in place before any timer or mission length is read
+        val savedMode = getSharedPreferences("aegis_ops_prefs", Context.MODE_PRIVATE).getString("time_mode", null)
+        com.example.domain.GameTiming.MODE = com.example.domain.TimeMode.entries.find { it.name == savedMode }
+            ?: com.example.domain.TimeMode.TESTING
         enableEdgeToEdge()
         setContent {
             AegisOpsTheme {
@@ -128,6 +133,15 @@ fun AegisCommandApp() {
         context.getSharedPreferences("aegis_ops_prefs", Context.MODE_PRIVATE)
     }
     var showGuideDialog by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var keepScreenOn by remember { mutableStateOf(prefs.getBoolean("keep_screen_on", true)) }
+    var showBanners by remember { mutableStateOf(prefs.getBoolean("show_banners", true)) }
+    // Item 80: keep the screen awake while the game is open
+    val rootView = androidx.compose.ui.platform.LocalView.current
+    DisposableEffect(keepScreenOn) {
+        rootView.keepScreenOn = keepScreenOn
+        onDispose { rootView.keepScreenOn = false }
+    }
     var isFirstTimeBrief by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.isLoading) {
@@ -142,11 +156,18 @@ fun AegisCommandApp() {
     val currentRoute = backStackEntry?.destination?.route ?: ROUTE_OPS
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Item 79: banners show for about 5 seconds, above any open dialog (see the popup host below)
     LaunchedEffect(uiState.statusBanner) {
         val msg = uiState.statusBanner
         if (msg != null) {
-            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
             viewModel.clearBanner()
+            if (showBanners) {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                val job = launch { snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Indefinite) }
+                kotlinx.coroutines.delay(5_000)
+                snackbarHostState.currentSnackbarData?.dismiss()
+                job.cancel()
+            }
         }
     }
 
@@ -177,7 +198,7 @@ fun AegisCommandApp() {
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets.safeDrawing,
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = {},
             bottomBar = {
                 if (!isWideLayout) {
                     NavigationBar(
@@ -306,6 +327,7 @@ fun AegisCommandApp() {
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
                                     onSwitchOperatorsToKit = viewModel::switchOperatorsToKit,
                                     onRefreshRotatingMissions = viewModel::refreshRotatingMissions,
+                                    onOpenSettings = { showSettings = true },
                                     onOpenCommandGuide = {
                                         isFirstTimeBrief = false
                                         showGuideDialog = true
@@ -344,6 +366,7 @@ fun AegisCommandApp() {
                                     onEnlistRecruit = viewModel::enlistRecruit,
                                     onAssignToHqStaff = viewModel::assignToHqStaff,
                                     onReassignHqStaffRole = viewModel::reassignHqStaffRole,
+                                    onReturnHqStaffToField = viewModel::returnHqStaffToField,
                                     onApproveTransferOut = viewModel::approveTransferOut,
                                     onDeclineTransferRequest = viewModel::declineTransferRequest,
                                     onApproveRetirement = viewModel::approveRetirement,
@@ -450,6 +473,34 @@ fun AegisCommandApp() {
             report = inspectionReport,
             onDismiss = viewModel::dismissInspectionReport
         )
+    }
+
+    if (showSettings) {
+        com.example.ui.components.SettingsDialog(
+            keepScreenOn = keepScreenOn,
+            onKeepScreenOn = { keepScreenOn = it; prefs.edit().putBoolean("keep_screen_on", it).apply() },
+            smartDutyDress = uiState.smartWardrobeEnabled,
+            onSmartDutyDress = { if (it != uiState.smartWardrobeEnabled) viewModel.toggleSmartWardrobe() },
+            showBanners = showBanners,
+            onShowBanners = { showBanners = it; prefs.edit().putBoolean("show_banners", it).apply() },
+            timeMode = com.example.domain.TimeMode.entries.find { it.name == prefs.getString("time_mode", null) } ?: com.example.domain.GameTiming.MODE,
+            onTimeMode = { prefs.edit().putString("time_mode", it.name).apply() },
+            onNewGame = {
+                showSettings = false
+                viewModel.resetCampaign()
+            },
+            onDismiss = { showSettings = false }
+        )
+    }
+
+    // Banners live in their own popup window, created only while one is showing, so it sits above dialogs
+    snackbarHostState.currentSnackbarData?.let {
+        androidx.compose.ui.window.Popup(
+            alignment = Alignment.BottomCenter,
+            properties = androidx.compose.ui.window.PopupProperties(focusable = false)
+        ) {
+            SnackbarHost(hostState = snackbarHostState, modifier = Modifier.padding(bottom = 96.dp))
+        }
     }
 
     if (showGuideDialog) {
