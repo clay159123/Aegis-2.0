@@ -297,10 +297,18 @@ fun UniformTailorStudioCard(
                     freeCustomOverride = freeOverride,
                     wardrobeKit = effectiveKit,
                     onSelect = { style ->
-                        updateRequest { it.copy(dressStyle = style, dressTouched = true, uniformMode = UniformMode.DRESS_UNIFORM) }
+                        updateRequest { it.copy(dressStyle = style, dressTouched = true, dressAuto = false, uniformMode = UniformMode.DRESS_UNIFORM) }
                     },
                     testTag = "dropdown_dress_style"
                 )
+                // Return a hand-picked coat to Auto (the squad standard or rank default) when saved
+                if (effectiveKit != WardrobeKit.FIELD && operator.wardrobe.forKit(effectiveKit).dressStyle != null) {
+                    TailorAutoReset(
+                        label = "Coat: back to Auto",
+                        onClick = { updateRequest { it.copy(dressAuto = true, dressTouched = false) } },
+                        testTag = "tailor_auto_dress"
+                    )
+                }
                 HeadgearStyleDropdown(
                     operator = kitPreviewOp,
                     ownedMedalIds = ownedMedalIds,
@@ -321,10 +329,17 @@ fun UniformTailorStudioCard(
                 CamoPatternDropdown(
                     selectedPattern = kitPreviewOp.camoPattern,
                     onSelect = { camo ->
-                        updateRequest { it.copy(camoPattern = camo, camoTouched = true, wardrobeKit = WardrobeKit.FIELD, uniformMode = UniformMode.FIELD_TACTICAL) }
+                        updateRequest { it.copy(camoPattern = camo, camoTouched = true, camoAuto = false, wardrobeKit = WardrobeKit.FIELD, uniformMode = UniformMode.FIELD_TACTICAL) }
                     },
                     testTag = "dropdown_camo_pattern"
                 )
+                if (operator.wardrobe.field.camoPattern != null) {
+                    TailorAutoReset(
+                        label = "Camo: back to Auto",
+                        onClick = { updateRequest { it.copy(camoAuto = true, camoTouched = false, wardrobeKit = WardrobeKit.FIELD) } },
+                        testTag = "tailor_auto_camo"
+                    )
+                }
                 // Appearance: Auto keeps the soldier's stable look derived from their id
                 val autoSkin = operator.copy(skinToneOverride = null).skinTone
                 val skinOptions = remember(autoSkin) {
@@ -785,10 +800,17 @@ fun UniformTailorStudioCard(
                         glovesElig.reasonText
                     },
                     onSelect = { gloves ->
-                        updateRequest { it.copy(hasWhiteGloves = gloves, glovesTouched = true, uniformMode = UniformMode.DRESS_UNIFORM) }
+                        updateRequest { it.copy(hasWhiteGloves = gloves, glovesTouched = true, glovesAuto = false, uniformMode = UniformMode.DRESS_UNIFORM) }
                     },
                     testTag = "dropdown_gloves"
                 )
+                if (operator.wardrobe.forKit(effectiveKit).hasWhiteGloves != null) {
+                    TailorAutoReset(
+                        label = "Gloves: back to Auto",
+                        onClick = { updateRequest { it.copy(glovesAuto = true, glovesTouched = false) } },
+                        testTag = "tailor_auto_gloves"
+                    )
+                }
                 BooleanChoiceDropdown(
                     label = "Waist Sash / Sam Browne Belt",
                     selectedValue = kitPreviewOp.hasDressSash,
@@ -899,5 +921,17 @@ private fun TailorAccordionSection(
                 )
             }
         }
+    }
+}
+
+
+/** A small "back to Auto" control under a tailor picker; shown only while that item has a hand pick saved. */
+@Composable
+private fun TailorAutoReset(label: String, onClick: () -> Unit, testTag: String) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag(testTag)
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
     }
 }

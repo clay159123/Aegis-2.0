@@ -854,6 +854,27 @@ object TacticalCalculator {
         return updated to if (gains.isEmpty()) "" else " ${gains.joinToString(", ")}."
     }
 
+    /**
+     * For an award the soldier already holds, what this one adds, e.g. "2nd award: 1 Bronze OLC".
+     * Null for a first award.
+     */
+    fun repeatAwardLabel(op: Operator, medal: MedalDefinition, citations: List<AwardedMedal>): String? {
+        val held = citations.count { it.operatorId == op.id && it.medalId == medal.id }
+        if (held == 0) return null
+        val next = held + 1
+        val withNext = citations + AwardedMedal("preview", op.id, medal.id, "", awardedAtMillis = 0L)
+        val device = UniformRegaliaRules.resolveAwardDevices(op, medal.id, withNext).summaryLabel
+            ?.replace("OLC", "Oak Leaf Cluster")
+        val ordinal = when {
+            next % 100 in 11..13 -> "${next}th"
+            next % 10 == 1 -> "${next}st"
+            next % 10 == 2 -> "${next}nd"
+            next % 10 == 3 -> "${next}rd"
+            else -> "${next}th"
+        }
+        return "$ordinal award" + (device?.let { ": $it" } ?: "")
+    }
+
     /** Combat jump stars to draw on this soldier's jump wings (0..5). */
     fun combatJumpStars(op: Operator): Int = op.combatJumps.coerceIn(0, MAX_COMBAT_JUMP_STARS)
 

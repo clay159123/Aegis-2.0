@@ -419,6 +419,7 @@ fun AegisCommandApp() {
                     position = (awardQueueTotal - awardQueue.size + 1).coerceAtLeast(1),
                     total = maxOf(awardQueueTotal, awardQueue.size),
                     canAfford = uiState.resources.prestige >= medal.prestigeCost,
+                    repeatLabel = com.example.domain.TacticalCalculator.repeatAwardLabel(op, medal, uiState.citations),
                     onAward = viewModel::awardFromQueue,
                     onSkip = viewModel::skipAwardPrompt
                 )

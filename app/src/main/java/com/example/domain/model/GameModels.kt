@@ -1173,7 +1173,9 @@ data class Operator(
     val expPointsFirepower: Int = 0,
     val expPointsStealth: Int = 0,
     val expPointsTech: Int = 0,
-    val expPointsResilience: Int = 0
+    val expPointsResilience: Int = 0,
+    /** Unit citations earned with a squad that was later disbanded; the soldier keeps wearing them. */
+    val retainedUnitCitations: Int = 0
 ) {
     fun expPoints(stat: StatType): Int = when (stat) {
         StatType.FIREPOWER -> expPointsFirepower
@@ -1247,6 +1249,10 @@ data class UniformTailorRequest(
     val dressTouched: Boolean = false,
     val camoTouched: Boolean = false,
     val glovesTouched: Boolean = false,
+    /** True when the player picked "Auto" for these, clearing a saved manual pick */
+    val dressAuto: Boolean = false,
+    val camoAuto: Boolean = false,
+    val glovesAuto: Boolean = false,
     /** Clears this kit's manual coat, headgear, camo and gloves so the squad standard applies again */
     val followSquadStandard: Boolean = false,
     /** Appearance overrides; null = Auto (derived from the soldier id) */
