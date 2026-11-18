@@ -33,21 +33,21 @@ fun RankInsigniaBadge(
     val extra = LocalAegisColors.current
     val badgeBg = when (rank.tier) {
         RankTier.FLAG_OFFICER -> Color(0xFF282012)
-        RankTier.OFFICER -> extra.brassContainer
+        RankTier.OFFICER, RankTier.WARRANT -> extra.brassContainer
         RankTier.SNCO -> Color(0xFF1A2A34)
         RankTier.NCO -> Color(0xFF1F2B38)
         RankTier.SOLDIER -> MaterialTheme.colorScheme.primaryContainer
     }
     val badgeBorder = when (rank.tier) {
         RankTier.FLAG_OFFICER -> extra.brassBright
-        RankTier.OFFICER -> extra.brass
+        RankTier.OFFICER, RankTier.WARRANT -> extra.brass
         RankTier.SNCO -> extra.brassBright
         RankTier.NCO -> extra.signalsCyan
         RankTier.SOLDIER -> MaterialTheme.colorScheme.primary
     }
     val badgeText = when (rank.tier) {
         RankTier.FLAG_OFFICER -> extra.brassBright
-        RankTier.OFFICER -> extra.brassBright
+        RankTier.OFFICER, RankTier.WARRANT -> extra.brassBright
         RankTier.SNCO -> extra.brassBright
         RankTier.NCO -> extra.signalsCyan
         RankTier.SOLDIER -> MaterialTheme.colorScheme.onPrimaryContainer
@@ -74,7 +74,7 @@ fun RankInsigniaBadge(
                         drawStar(Offset(gap * (i + 1), h * 0.5f), r, r * 0.45f, badgeText)
                     }
                 }
-                RankTier.OFFICER -> {
+                RankTier.OFFICER, RankTier.WARRANT -> {
                     drawOfficerRankDevice(
                         rank = rank,
                         center = Offset(w * 0.5f, h * 0.5f),
@@ -163,6 +163,34 @@ internal fun DrawScope.drawOfficerRankDevice(
     val strokeW = (minOf(boxW, boxH) * 0.065f).coerceIn(0.75f, 1.5f)
 
     when (rank) {
+        OperatorRank.WO1, OperatorRank.CW2, OperatorRank.CW3, OperatorRank.CW4, OperatorRank.CW5 -> {
+            // Warrant bar: silver with black squares (WO1-CW4), or a black center line (CW5)
+            val barW = (boxW * 0.30f).coerceAtLeast(3.2f)
+            val barH = boxH * 0.80f
+            val left = cx - barW * 0.5f
+            val top = cy - barH * 0.5f
+            drawRoundRect(silverCol, Offset(left, top), Size(barW, barH), CornerRadius(1.2f, 1.2f))
+            val black = Color(0xFF111111)
+            if (rank == OperatorRank.CW5) {
+                val lineW = (barW * 0.22f).coerceAtLeast(0.8f)
+                drawRect(black, Offset(cx - lineW * 0.5f, top + barH * 0.08f), Size(lineW, barH * 0.84f))
+            } else {
+                val squares = rank.warrantGrade
+                val sq = minOf(barW * 0.55f, barH / (squares * 2f + 1f))
+                val step = barH / (squares + 1)
+                repeat(squares) { i ->
+                    val sy = top + step * (i + 1) - sq * 0.5f
+                    drawRect(black, Offset(cx - sq * 0.5f, sy), Size(sq, sq))
+                }
+            }
+            drawRoundRect(
+                color = outlineColor.copy(alpha = 0.72f),
+                topLeft = Offset(left, top),
+                size = Size(barW, barH),
+                cornerRadius = CornerRadius(1.2f, 1.2f),
+                style = Stroke(width = strokeW)
+            )
+        }
         OperatorRank.LT2, OperatorRank.LT1 -> {
             val metal = if (rank == OperatorRank.LT2) goldCol else silverCol
             val barW = (boxW * 0.28f).coerceAtLeast(3.0f)

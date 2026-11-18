@@ -336,7 +336,7 @@ fun OperatorDetailView(
                         val span = (nextRank.xpRequired - operator.rank.xpRequired).coerceAtLeast(1)
                         ((operator.xp - operator.rank.xpRequired).toFloat() / span.toFloat()).coerceIn(0f, 1f)
                     } else 1f
-                    val crossesTier = nextRank != null && nextRank.tier != operator.rank.tier
+                    val crossesTier = nextRank != null && OperatorRank.isBoardGate(operator.rank, nextRank)
                     val readyAtGate = crossesTier && operator.xp >= nextRank!!.xpRequired
                     Row(
                         modifier = Modifier.fillMaxWidth(),

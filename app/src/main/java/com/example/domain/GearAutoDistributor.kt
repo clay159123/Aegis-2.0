@@ -109,7 +109,7 @@ object GearAutoDistributor {
         operator: Operator,
         citations: List<AwardedMedal>
     ): StatProfile {
-        val rankIndex = com.example.domain.model.OperatorRank.entries.indexOf(operator.rank)
+        val rankIndex = operator.rank.seniorityIndex
         val rankBonus = rankIndex + operator.rank.tier.order * 2
         val opMedals = citations.filter { it.operatorId == operator.id }
             .mapNotNull { cit -> com.example.data.catalog.GameCatalog.medals.find { it.id == cit.medalId } }
@@ -144,6 +144,8 @@ object GearAutoDistributor {
             OperatorSpecialty.BREACHER -> SpecialtyWeights(1.35, 0.65, 1.20, 1.50, 1.15, 0.0)
             OperatorSpecialty.MEDIC -> SpecialtyWeights(0.65, 0.90, 1.25, 1.60, 1.45, 5.0)
             OperatorSpecialty.COMMAND -> SpecialtyWeights(1.20, 1.00, 1.20, 1.20, 1.20, 4.0)
+            // Aviators: light kit, comms and optics over heavy armor and big guns
+            OperatorSpecialty.AVIATION -> SpecialtyWeights(0.70, 1.10, 1.55, 0.85, 1.10, 8.0)
         }
 
         // Blend MOS doctrine weights (70%) with individual operator's earned skill & medal distribution (30%).
@@ -178,7 +180,7 @@ object GearAutoDistributor {
         // Readiness & veteran priority scalar: Ready frontline soldiers claim top gear over resting Medbay;
         // higher rank & multi-school veterans break remaining ties while keeping clear specialist matches intact.
         val readinessMult = if (operator.status == OperatorStatus.READY) 1.12 else 1.0
-        val rankMult = 1.0 + operator.rank.ordinal.coerceAtMost(18) * 0.012
+        val rankMult = 1.0 + operator.rank.seniorityIndex.coerceAtMost(18) * 0.012
         val trainingDepthMult = 1.0 + operator.completedMissionIds.size.coerceAtMost(12) * 0.008
         score *= (readinessMult * rankMult * trainingDepthMult)
 
@@ -276,6 +278,11 @@ object GearAutoDistributor {
             }
             OperatorSpecialty.COMMAND -> when (gear.id) {
                 "utl_ifak_trauma", "hlm_ops_visor", "arm_jpc_light", "wpn_m4_carbine" -> 90.0
+                else -> 0.0
+            }
+            OperatorSpecialty.AVIATION -> when (gear.id) {
+                "arm_jpc_light", "hlm_mesh_comms", "hlm_ops_visor", "opt_pvs31_nvg", "utl_ifak_trauma" -> 130.0
+                "arm_avs_heavy", "wpn_m249_saw" -> -120.0
                 else -> 0.0
             }
         }

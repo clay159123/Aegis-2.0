@@ -494,6 +494,9 @@ internal fun DrawScope.drawShoulderCords(
             "cord_logistics_buff" -> {
                 drawPath(cordOuter, color = Color(0xFF9C2D2D).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
             }
+            "cord_aviation" -> {
+                drawPath(cordOuter, color = Color(0xFFE89A2B).copy(alpha = 0.85f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
         }
     }
 
@@ -533,6 +536,9 @@ internal fun DrawScope.drawShoulderCords(
             }
             "cord_logistics_buff" -> {
                 drawPath(braidOuter, color = Color(0xFF9C2D2D).copy(alpha = 0.80f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
+            }
+            "cord_aviation" -> {
+                drawPath(braidOuter, color = Color(0xFFE89A2B).copy(alpha = 0.85f), style = Stroke(width = 1.3f, cap = StrokeCap.Round))
             }
         }
     }

@@ -659,7 +659,8 @@ fun RecruitMosDropdown(
 ) {
     val extra = LocalAegisColors.current
     val options = remember {
-        OperatorSpecialty.entries.map { mos ->
+        // Aviators (153A) come only from Flight School or the WOCS Aviator recruit source
+        OperatorSpecialty.entries.filter { it != OperatorSpecialty.AVIATION }.map { mos ->
             DropdownOptionItem(
                 value = mos,
                 title = "${mos.roleTag} • ${mos.label}",
@@ -679,6 +680,42 @@ fun RecruitMosDropdown(
         supportingHint = selectedMos.recruitSummary,
         options = options,
         selectedValue = selectedMos,
+        onSelect = onSelect,
+        modifier = modifier,
+        fieldTestTag = testTag
+    )
+}
+
+/** Item 31: where the recruit comes from, which sets arrival rank, record and cost. */
+@Composable
+fun RecruitSourceDropdown(
+    selectedSource: RecruitSource,
+    onSelect: (RecruitSource) -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "dropdown_recruit_source"
+) {
+    val extra = LocalAegisColors.current
+    val options = remember {
+        RecruitSource.entries.map { src ->
+            DropdownOptionItem(
+                value = src,
+                title = src.label,
+                subtitle = "Arrives ${src.summary}",
+                primaryColor = extra.brassBright,
+                trimColor = extra.signalsCyan,
+                enabled = true,
+                testTag = "recruit_source_${src.name.lowercase()}"
+            )
+        }
+    }
+    SingleChoiceDropdown(
+        label = "Recruit Source",
+        selectedText = selectedSource.label,
+        selectedPrimaryColor = extra.brassBright,
+        selectedTrimColor = extra.signalsCyan,
+        supportingHint = "Arrives ${selectedSource.summary}",
+        options = options,
+        selectedValue = selectedSource,
         onSelect = onSelect,
         modifier = modifier,
         fieldTestTag = testTag

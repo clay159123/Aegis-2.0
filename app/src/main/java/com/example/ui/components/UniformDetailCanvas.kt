@@ -567,20 +567,20 @@ private fun DrawScope.drawDressUniformFigure(
     // 6. Shoulder Boards / Epaulets + Distinct Officer & Flag Officer Rank Insignia
     val epauletColor = when {
         tier == RankTier.FLAG_OFFICER -> trimCol
-        tier == RankTier.OFFICER && style == DressUniformStyle.HONOR_GUARD_IVORY -> Color(0xFF0C1526)
-        tier == RankTier.OFFICER -> lapelCol
+        (tier == RankTier.OFFICER || tier == RankTier.WARRANT) && style == DressUniformStyle.HONOR_GUARD_IVORY -> Color(0xFF0C1526)
+        tier == RankTier.OFFICER || tier == RankTier.WARRANT -> lapelCol
         else -> tunicCol
     }
     val epauletBorder = if (tier.isOfficer) trimCol else lapelCol
     val isFieldGrade = operator.rank.isFieldGradeOfficer
-    val epTop = if (tier == RankTier.OFFICER) h * 0.296f else h * 0.298f
-    val epHeight = if (tier == RankTier.OFFICER) h * 0.036f else h * 0.032f
-    val epWidth = if (tier == RankTier.OFFICER) w * 0.114f else w * 0.110f
+    val epTop = if ((tier == RankTier.OFFICER || tier == RankTier.WARRANT)) h * 0.296f else h * 0.298f
+    val epHeight = if ((tier == RankTier.OFFICER || tier == RankTier.WARRANT)) h * 0.036f else h * 0.032f
+    val epWidth = if ((tier == RankTier.OFFICER || tier == RankTier.WARRANT)) w * 0.114f else w * 0.110f
     val epLeftX = cx - w * 0.146f - epWidth
     val epRightX = cx + w * 0.146f
     val epStroke = when {
         tier == RankTier.FLAG_OFFICER || isFieldGrade -> 2.0f
-        tier == RankTier.OFFICER -> 1.6f
+        tier == RankTier.OFFICER || tier == RankTier.WARRANT -> 1.6f
         else -> 1.1f
     }
     drawRoundRect(epauletColor, Offset(epLeftX, epTop), Size(epWidth, epHeight), CornerRadius(4f, 4f))
@@ -595,7 +595,7 @@ private fun DrawScope.drawDressUniformFigure(
             drawStar(Offset(cx - w * 0.201f + offset, h * 0.314f), w * 0.013f, w * 0.0055f, Color(0xFF14181F))
             drawStar(Offset(cx + w * 0.201f + offset, h * 0.314f), w * 0.013f, w * 0.0055f, Color(0xFF14181F))
         }
-    } else if (tier == RankTier.OFFICER) {
+    } else if (tier == RankTier.OFFICER || tier == RankTier.WARRANT) {
         val epCenterY = epTop + epHeight * 0.5f
         val leftCenter = Offset(epLeftX + epWidth * 0.5f, epCenterY)
         val rightCenter = Offset(epRightX + epWidth * 0.5f, epCenterY)
@@ -758,7 +758,7 @@ private fun DrawScope.drawDressUniformFigure(
             drawCuffLine(1f, 0.850f, trimCol, 4.0f)
             drawCuffLine(1f, 0.875f, trimCol, 2.4f)
         }
-        RankTier.OFFICER -> {
+        RankTier.OFFICER, RankTier.WARRANT -> {
             if (operator.rank.isFieldGradeOfficer) {
                 drawCuffLine(-1f, 0.850f, trimCol.copy(alpha = 0.88f), 1.5f)
                 drawCuffLine(-1f, 0.868f, trimCol, 3.2f)
@@ -1793,6 +1793,28 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 drawStar(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.18f, badgeH * 0.08f, gold)
             }
         }
+        InsigniaShape.AVIATOR_WINGS, InsigniaShape.SENIOR_AVIATOR_WINGS, InsigniaShape.MASTER_AVIATOR_WINGS -> {
+            // Long straight wings with a shield in the middle; a star (Senior) or wreathed star (Master) above
+            drawLine(col, Offset(cx - badgeW * 0.50f, cy - badgeH * 0.02f), Offset(cx + badgeW * 0.50f, cy - badgeH * 0.02f), strokeWidth = 2.2f, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx - badgeW * 0.42f, cy + badgeH * 0.13f), Offset(cx + badgeW * 0.42f, cy + badgeH * 0.13f), strokeWidth = 1.6f, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx - badgeW * 0.30f, cy + badgeH * 0.26f), Offset(cx + badgeW * 0.30f, cy + badgeH * 0.26f), strokeWidth = 1.2f, cap = StrokeCap.Round)
+            val shield = Path().apply {
+                moveTo(cx - badgeW * 0.10f, cy - badgeH * 0.18f)
+                lineTo(cx + badgeW * 0.10f, cy - badgeH * 0.18f)
+                lineTo(cx + badgeW * 0.10f, cy + badgeH * 0.08f)
+                quadraticTo(cx + badgeW * 0.08f, cy + badgeH * 0.26f, cx, cy + badgeH * 0.34f)
+                quadraticTo(cx - badgeW * 0.08f, cy + badgeH * 0.26f, cx - badgeW * 0.10f, cy + badgeH * 0.08f)
+                close()
+            }
+            drawPath(shield, col)
+            drawPath(shield, darkBack.copy(alpha = 0.55f), style = Stroke(width = 0.9f))
+            if (shape == InsigniaShape.MASTER_AVIATOR_WINGS) {
+                drawLaurelWreathArcs(Offset(cx, cy - badgeH * 0.34f), badgeH * 0.20f, col, 1.2f)
+            }
+            if (shape != InsigniaShape.AVIATOR_WINGS) {
+                drawStar(Offset(cx, cy - badgeH * 0.34f), badgeH * 0.15f, badgeH * 0.065f, col)
+            }
+        }
         InsigniaShape.AIR_ASSAULT_WINGS -> {
             drawLine(col, Offset(cx - badgeW * 0.46f, cy + badgeH * 0.04f), Offset(cx + badgeW * 0.46f, cy + badgeH * 0.04f), strokeWidth = 2.2f, cap = StrokeCap.Round)
             drawLine(col, Offset(cx - badgeW * 0.34f, cy + badgeH * 0.18f), Offset(cx + badgeW * 0.34f, cy + badgeH * 0.18f), strokeWidth = 1.5f, cap = StrokeCap.Round)
@@ -2070,7 +2092,7 @@ private fun DrawScope.drawFieldTacticalFigure(
                 drawStar(Offset(rankTabLeft + stepX * (s + 1), tabCenter.y), starR, starR * 0.45f, threadCol)
             }
         }
-        RankTier.OFFICER -> {
+        RankTier.OFFICER, RankTier.WARRANT -> {
             drawOfficerRankDevice(
                 rank = operator.rank,
                 center = tabCenter,

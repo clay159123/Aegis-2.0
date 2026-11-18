@@ -131,13 +131,13 @@ fun PromotionBoardDialog(
                 val afterPreviewOp = remember(operator, nextRank, squads) {
                     val upgradedDress = when (nextRank.tier) {
                         RankTier.FLAG_OFFICER -> DressUniformStyle.FLAG_STAFF_FORMAL
-                        RankTier.OFFICER -> DressUniformStyle.OFFICER_SERVICE_BLUES
+                        RankTier.OFFICER, RankTier.WARRANT -> DressUniformStyle.OFFICER_SERVICE_BLUES
                         RankTier.SNCO, RankTier.NCO -> DressUniformStyle.NCO_PARADE_BLUES
                         RankTier.SOLDIER -> DressUniformStyle.ARMY_SERVICE_GREEN
                     }
                     val upgradedHeadgear = when (nextRank.tier) {
                         RankTier.FLAG_OFFICER -> HeadgearStyle.FLAG_GENERAL_CAP
-                        RankTier.OFFICER -> HeadgearStyle.OFFICER_PEAKED_CAP
+                        RankTier.OFFICER, RankTier.WARRANT -> HeadgearStyle.OFFICER_PEAKED_CAP
                         RankTier.SNCO, RankTier.NCO -> HeadgearStyle.NCO_SERVICE_CAP
                         RankTier.SOLDIER -> HeadgearStyle.ENLISTED_SERVICE_CAP
                     }
@@ -147,6 +147,7 @@ fun PromotionBoardDialog(
                         activeWardrobeKit = WardrobeKit.ALPHAS,
                         xp = nextRank.xpRequired.coerceAtLeast(operator.xp),
                         authorizedTier = nextRank.tier,
+                        warrantGrade = nextRank.warrantGrade,
                         dressStyle = upgradedDress,
                         headgearStyle = upgradedHeadgear,
                         hasDressSash = operator.hasDressSash && sashAllowed,

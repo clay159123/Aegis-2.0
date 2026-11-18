@@ -339,7 +339,7 @@ fun AegisCommandApp() {
                                     onUnequipGear = viewModel::unequipGear,
                                     onAutoDistributeGear = viewModel::autoDistributeFieldGear,
                                     onPurchaseOrUpgradeGear = viewModel::purchaseOrUpgradeGear,
-                                    onEnlistPostBasicSoldier = viewModel::enlistPostBasicSoldier,
+                                    onEnlistRecruit = viewModel::enlistRecruit,
                                     onAssignToHqStaff = viewModel::assignToHqStaff,
                                     onReassignHqStaffRole = viewModel::reassignHqStaffRole,
                                     onApproveTransferOut = viewModel::approveTransferOut,

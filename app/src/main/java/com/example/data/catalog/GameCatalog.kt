@@ -1,6 +1,7 @@
 package com.example.data.catalog
 
 import com.example.domain.model.*
+import com.example.domain.TacticalCalculator
 
 object GameCatalog {
 
@@ -319,7 +320,8 @@ object GameCatalog {
         OperatorSpecialty.SIGNALS to listOf("RELAY", "PULSE", "VECTOR", "BEACON", "PRISM"),
         OperatorSpecialty.BREACHER to listOf("HAMMER", "BREACH", "FORGE", "SLEDGE", "MASON"),
         OperatorSpecialty.MEDIC to listOf("CADUCEUS", "TRIAGE", "ANGEL", "SERUM", "VITAL"),
-        OperatorSpecialty.COMMAND to listOf("GUIDON", "AIDE", "SCEPTRE", "STANDARD", "HERALD")
+        OperatorSpecialty.COMMAND to listOf("GUIDON", "AIDE", "SCEPTRE", "STANDARD", "HERALD"),
+        OperatorSpecialty.AVIATION to listOf("ROTOR", "SKYHOOK", "DUSTOFF", "TALLY", "WINDSOCK")
     )
 
     fun createPostBasicRecruit(
@@ -327,7 +329,73 @@ object GameCatalog {
         specialty: OperatorSpecialty,
         existingCallsigns: Set<String>,
         seedIndex: Int
+    ): Operator = createRecruit(id, specialty, RecruitSource.RECEPTION, existingCallsigns, seedIndex)
+
+    /** The one MOS school (with its badge and branch cord) a leadership-school recruit arrives with. */
+    data class MosSchoolPackage(val schoolId: String?, val badgeId: String?, val cordId: String)
+
+    fun mosSchoolPackage(specialty: OperatorSpecialty): MosSchoolPackage = when (specialty) {
+        OperatorSpecialty.ASSAULT -> MosSchoolPackage(null, null, "cord_infantry_blue")
+        OperatorSpecialty.RECON -> MosSchoolPackage("msn_intel_school", "insig_intel_crest", "cord_intel_teal")
+        OperatorSpecialty.SIGNALS -> MosSchoolPackage("msn_signals_school", "insig_cyber_crest", "cord_signals_orange")
+        OperatorSpecialty.BREACHER -> MosSchoolPackage("msn_engineer_school", "insig_eod_badge", "cord_engineer_scarlet")
+        OperatorSpecialty.MEDIC -> MosSchoolPackage("msn_medical_school", "insig_cmb_medic", "cord_medical_maroon")
+        OperatorSpecialty.COMMAND -> MosSchoolPackage("msn_logistics_school", "insig_logistics_crest", "cord_logistics_buff")
+        OperatorSpecialty.AVIATION -> MosSchoolPackage("msn_flight_school", "insig_aviator_wings", "cord_aviation")
+    }
+
+    /**
+     * Award ids a recruit from [source] arrives holding. No valor, wound, combat badge or campaign awards.
+     * Reception Station recruits get only Basic Training (the old behavior).
+     */
+    fun recruitAwardPackage(source: RecruitSource, specialty: OperatorSpecialty): List<String> {
+        val ncoPackage = listOf("medal_basic_training", "medal_good_conduct", "medal_nco_dev")
+        val base = when (source) {
+            RecruitSource.RECEPTION, RecruitSource.OCS -> listOf("medal_basic_training")
+            RecruitSource.NCO_ACADEMY -> ncoPackage
+            RecruitSource.SENIOR_LEADER_COURSE, RecruitSource.WOCS_TECHNICAL, RecruitSource.WOCS_AVIATOR ->
+                ncoPackage + "medal_army_commendation"
+        }
+        if (source == RecruitSource.RECEPTION) return base
+        // A mid-career SFC carries repeat awards: Good Conduct with a numeral and an ARCOM oak leaf cluster
+        val devices = if (source == RecruitSource.SENIOR_LEADER_COURSE) {
+            listOf("medal_good_conduct", "medal_good_conduct", "medal_army_commendation")
+        } else emptyList()
+        val mos = mosSchoolPackage(specialty)
+        val ifNeeded = buildList {
+            // Infantry Blue comes from Marksmanship & Tactical Basics, which every recruit has
+            add("cord_infantry_blue")
+            mos.badgeId?.let { add(it) }
+            add(mos.cordId)
+        }
+        // Repeatable medals may appear more than once; one-time awards (badges, cords, capped ribbons) once only
+        val capped = (base + ifNeeded).distinct()
+        return capped + devices
+    }
+
+    /** Schools marked complete for a recruit from [source]: basic qual, the source school and its prerequisites, the MOS school. */
+    fun recruitCompletedSchools(source: RecruitSource, specialty: OperatorSpecialty): Set<String> {
+        if (source == RecruitSource.RECEPTION) return emptySet()
+        val ids = mutableSetOf("msn_basic_qual")
+        fun addWithPrereqs(id: String) {
+            if (!ids.add(id) && id != "msn_basic_qual") return
+            val req = missions.find { it.id == id }?.schoolRequirements ?: return
+            req.prerequisiteAllIds.forEach { addWithPrereqs(it) }
+        }
+        source.schoolId?.let { addWithPrereqs(it) }
+        if (source == RecruitSource.SENIOR_LEADER_COURSE) addWithPrereqs("msn_nco_school")
+        mosSchoolPackage(specialty).schoolId?.let { addWithPrereqs(it) }
+        return ids
+    }
+
+    fun createRecruit(
+        id: String,
+        requestedSpecialty: OperatorSpecialty,
+        source: RecruitSource,
+        existingCallsigns: Set<String>,
+        seedIndex: Int
     ): Operator {
+        val specialty = if (source == RecruitSource.WOCS_AVIATOR) OperatorSpecialty.AVIATION else requestedSpecialty
         val name = recruitNames[seedIndex % recruitNames.size]
         val pool = callsignsBySpecialty[specialty] ?: listOf("TROOPER")
         var callsign = pool[seedIndex % pool.size]
@@ -341,19 +409,24 @@ object GameCatalog {
             OperatorSpecialty.BREACHER -> listOf(13, 8, 11, 13)
             OperatorSpecialty.MEDIC -> listOf(8, 10, 12, 15)
             OperatorSpecialty.COMMAND -> listOf(11, 10, 12, 12)
+            OperatorSpecialty.AVIATION -> listOf(9, 12, 14, 11)
         }
-        return Operator(
+        val arrival = source.arrivalRank
+        // Modest stat lift above a PV2 by rank: +1 per seniority step past PV2, spread across all stats
+        val lift = ((arrival.seniorityIndex - OperatorRank.PV2.seniorityIndex) / 2).coerceAtLeast(0)
+        val tierForArrival = arrival.tier
+        val baseRecruit = Operator(
             id = id,
             name = name,
             callsign = callsign,
             branch = ServiceBranch.ARMY,
-            xp = OperatorRank.PV2.xpRequired, // Arrives Post-Basic (PV2 / E-2)
+            xp = arrival.xpRequired,
             specialty = specialty,
             status = OperatorStatus.READY,
-            baseFirepower = fp,
-            baseStealth = st,
-            baseTech = tc,
-            baseResilience = rs,
+            baseFirepower = fp + lift,
+            baseStealth = st + lift,
+            baseTech = tc + lift,
+            baseResilience = rs + lift,
             uniformMode = UniformMode.DRESS_UNIFORM,
             dressDisplayMode = DressDisplayMode.RIBBONS,
             camoPattern = CamoPattern.WOODLAND_OLIVE,
@@ -383,8 +456,17 @@ object GameCatalog {
             unlocked = true,
             recruitCreditCost = 0.0,
             recruitIntelCost = 0.0,
-            bio = "Post-Basic ${specialty.label} soldier (${specialty.roleTag}). Clean uniform — no specialty schools yet."
+            bio = if (source == RecruitSource.RECEPTION) {
+                "Post-Basic ${specialty.label} soldier (${specialty.roleTag}). Clean uniform — no specialty schools yet."
+            } else {
+                "${specialty.label} (${specialty.roleTag}) from ${source.label}, arriving as ${arrival.code}. No combat record yet."
+            },
+            authorizedTier = tierForArrival,
+            warrantGrade = arrival.warrantGrade,
+            completedMissionIds = recruitCompletedSchools(source, specialty),
+            flightSkill = if (specialty == OperatorSpecialty.AVIATION) TacticalCalculator.FLIGHT_SCHOOL_STARTING_SKILL else 0
         )
+        return baseRecruit
     }
 
     val initialGear: List<GearItem> = listOf(
@@ -1755,6 +1837,114 @@ object GameCatalog {
             techBonus = 0,
             resilienceBonus = 2,
             yieldBonusPct = 3
+        ),
+
+        // ============================================================
+        // ARMY AVIATION (Session 9): wings, branch cord, Air Medal
+        // ============================================================
+        MedalDefinition(
+            id = "insig_aviator_wings",
+            name = "Army Aviator Badge",
+            shortName = "AVIATOR",
+            category = AwardCategory.SCHOOL_INSIGNIA,
+            tier = MedalTier.TRAINING,
+            precedenceOrder = 42,
+            minTierRequired = RankTier.WARRANT,
+            insigniaShape = InsigniaShape.AVIATOR_WINGS,
+            insigniaColorHex = 0xFFDDE3EC,
+            allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
+            description = "Silver wings around a shield, earned by graduating Army Flight School.",
+            qualificationRule = "Graduate Flight School.",
+            ribbonStripeHexes = listOf(0xFF2A4FA8, 0xFFDDE3EC, 0xFF2A4FA8),
+            prestigeCost = 6,
+            minMissionsRequired = 0,
+            firepowerBonus = 0,
+            stealthBonus = 1,
+            techBonus = 2,
+            resilienceBonus = 1,
+            yieldBonusPct = 3
+        ),
+        MedalDefinition(
+            id = "insig_senior_aviator_wings",
+            name = "Senior Army Aviator Badge",
+            shortName = "SR AVIATOR",
+            category = AwardCategory.SCHOOL_INSIGNIA,
+            tier = MedalTier.SERVICE,
+            precedenceOrder = 43,
+            minTierRequired = RankTier.WARRANT,
+            insigniaShape = InsigniaShape.SENIOR_AVIATOR_WINGS,
+            insigniaColorHex = 0xFFDDE3EC,
+            allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
+            description = "Aviator wings with a star above the shield. Replaces the basic Aviator Badge.",
+            qualificationRule = "CW3+, Aviator Badge & ${TacticalCalculator.SENIOR_WINGS_FLIGHT_SKILL}+ flight skill.",
+            ribbonStripeHexes = listOf(0xFF2A4FA8, 0xFFE89A2B, 0xFF2A4FA8),
+            prestigeCost = 10,
+            minMissionsRequired = 0,
+            firepowerBonus = 0,
+            stealthBonus = 2,
+            techBonus = 3,
+            resilienceBonus = 2,
+            yieldBonusPct = 5
+        ),
+        MedalDefinition(
+            id = "insig_master_aviator_wings",
+            name = "Master Army Aviator Badge",
+            shortName = "MSTR AVIATOR",
+            category = AwardCategory.SCHOOL_INSIGNIA,
+            tier = MedalTier.SUPREME,
+            precedenceOrder = 44,
+            minTierRequired = RankTier.WARRANT,
+            insigniaShape = InsigniaShape.MASTER_AVIATOR_WINGS,
+            insigniaColorHex = 0xFFDDE3EC,
+            allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
+            description = "Aviator wings with a wreathed star above the shield. Replaces the Senior Aviator Badge.",
+            qualificationRule = "CW4+, Senior Aviator Badge & ${TacticalCalculator.MASTER_WINGS_FLIGHT_SKILL}+ flight skill.",
+            ribbonStripeHexes = listOf(0xFF2A4FA8, 0xFFF2D272, 0xFF2A4FA8),
+            prestigeCost = 16,
+            minMissionsRequired = 0,
+            firepowerBonus = 1,
+            stealthBonus = 3,
+            techBonus = 4,
+            resilienceBonus = 3,
+            yieldBonusPct = 7
+        ),
+        MedalDefinition(
+            id = "cord_aviation",
+            name = "Army Aviation Ultramarine & Orange Cord",
+            shortName = "AVIATION CORD",
+            category = AwardCategory.SHOULDER_CORD,
+            tier = MedalTier.SERVICE,
+            precedenceOrder = 45,
+            cordHex = 0xFF2A4FA8,
+            isRightShoulder = false,
+            description = "Ultramarine blue and golden orange braided cord of the Army Aviation branch.",
+            qualificationRule = "Graduate Flight School.",
+            ribbonStripeHexes = listOf(0xFF2A4FA8, 0xFFE89A2B, 0xFF2A4FA8),
+            prestigeCost = 7,
+            minMissionsRequired = 0,
+            firepowerBonus = 0,
+            stealthBonus = 2,
+            techBonus = 3,
+            resilienceBonus = 1,
+            yieldBonusPct = 4
+        ),
+        MedalDefinition(
+            id = "medal_air_medal",
+            name = "Air Medal",
+            shortName = "AIR MEDAL",
+            category = AwardCategory.MEDAL,
+            tier = MedalTier.SERVICE,
+            precedenceOrder = 46,
+            description = "Awarded to aviators for meritorious flight in combat. Repeat awards add oak leaf clusters.",
+            qualificationRule = "Every ${TacticalCalculator.SORTIES_PER_AIR_MEDAL} combat missions flown as the pilot (Flight Hours don't count).",
+            ribbonStripeHexes = listOf(0xFF1D3A8A, 0xFFF2B33D, 0xFF1D3A8A, 0xFFF2B33D, 0xFF1D3A8A),
+            prestigeCost = 9,
+            minMissionsRequired = 0,
+            firepowerBonus = 1,
+            stealthBonus = 2,
+            techBonus = 2,
+            resilienceBonus = 2,
+            yieldBonusPct = 5
         )
     )
 
@@ -2427,6 +2617,126 @@ object GameCatalog {
                 "OCS tactical decision exercises & land navigation under stress.",
                 "Company-level operations order & peer leadership board scored.",
                 "Officer Candidate School Commission Board Passed!"
+            )
+        ),
+        MissionTemplate(
+            id = "msn_wocs",
+            title = "School: Warrant Officer Candidate School (WOCS)",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 62,
+                uniformKit = WardrobeKit.BRAVOS,
+                maxAttempts = 2,
+                prerequisiteAnyIds = setOf(
+                    "msn_basic_qual",
+                    "msn_medical_school",
+                    "msn_engineer_school",
+                    "msn_logistics_school",
+                    "msn_signals_school",
+                    "msn_intel_school",
+                    "msn_nco_school"
+                ),
+                minRankTier = RankTier.NCO,
+                minTech = 12,
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
+                naturalFitSpecialties = setOf(
+                    OperatorSpecialty.SIGNALS,
+                    OperatorSpecialty.BREACHER,
+                    OperatorSpecialty.RECON
+                ),
+                suitabilitySummary = "Enlisted SGT+ • 12+ TC • Not open to the OCS path • Max 2 attempts",
+                graduationStatBonus = StatProfile(0, 1, 3, 1),
+                graduationRewardsSummary = "Grants +1 ST, +3 TC, +1 RS • Appointed WO1 in current MOS • Opens Flight School"
+            ),
+            baseSuccessRatePct = 62,
+            briefing = "Warrant Officer Candidate School: technical leadership, staff writing and the warrant officer's role as the Army's expert.",
+            durationSeconds = 28,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 90,
+            primaryFocus = "Warrant Officer Candidate School • Hard",
+            supplyCost = 14.0,
+            rewardCredits = 60.0,
+            rewardSupplies = 10.0,
+            rewardIntel = 16.0,
+            rewardPrestige = 12.0,
+            rewardXp = 120,
+            commsFeed = listOf(
+                "Candidates briefed on the warrant officer's technical charter.",
+                "Staff study and leadership evaluation under review.",
+                "WOCS graduation: appointed Warrant Officer 1!"
+            )
+        ),
+        MissionTemplate(
+            id = "msn_flight_school",
+            title = "School: Army Flight School",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 58,
+                uniformKit = WardrobeKit.FIELD,
+                maxAttempts = 2,
+                allowedSpecialties = OperatorSpecialty.entries.toSet(),
+                minTech = 14,
+                naturalFitSpecialties = setOf(OperatorSpecialty.RECON, OperatorSpecialty.SIGNALS),
+                suitabilitySummary = "Warrant officers only • Needs an Airfield • 14+ TC • Max 2 attempts",
+                graduationStatBonus = StatProfile(0, 1, 2, 1),
+                graduationRewardsSummary = "Grants +1 ST, +2 TC, +1 RS • Becomes 153A Aviator • Aviator Badge & Aviation Cord • Starting flight skill ${TacticalCalculator.FLIGHT_SCHOOL_STARTING_SKILL}"
+            ),
+            baseSuccessRatePct = 58,
+            briefing = "Initial entry rotary-wing training: primary flight, instruments, and combat skills in the aircraft.",
+            durationSeconds = 32,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 92,
+            primaryFocus = "Army Flight School • Hard",
+            supplyCost = 18.0,
+            rewardCredits = 50.0,
+            rewardSupplies = 8.0,
+            rewardIntel = 10.0,
+            rewardPrestige = 12.0,
+            rewardXp = 130,
+            commsFeed = listOf(
+                "Primary flight: hover, autorotation and traffic pattern work.",
+                "Instrument and night vision goggle flights graded.",
+                "Wings pinned: Army Aviator!"
+            )
+        ),
+        MissionTemplate(
+            id = "msn_flight_hours",
+            title = "Flight Hours",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 100,
+                uniformKit = WardrobeKit.FIELD,
+                maxAttempts = null,
+                allowedSpecialties = setOf(OperatorSpecialty.AVIATION),
+                naturalFitSpecialties = setOf(OperatorSpecialty.AVIATION),
+                suitabilitySummary = "Aviators only • Needs an Airfield • Repeatable",
+                graduationRewardsSummary = "+${TacticalCalculator.FLIGHT_HOURS_SKILL_GAIN} flight skill (max ${TacticalCalculator.MAX_FLIGHT_SKILL}) • Counts toward Senior and Master wings"
+            ),
+            baseSuccessRatePct = 100,
+            briefing = "Training sorties from the Airfield to build flight skill. Not a deployment: no combat credit.",
+            durationSeconds = 12,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 30,
+            primaryFocus = "Flight Hours • Repeatable",
+            supplyCost = 4.0,
+            rewardCredits = 0.0,
+            rewardSupplies = 0.0,
+            rewardIntel = 0.0,
+            rewardPrestige = 1.0,
+            rewardXp = 30,
+            commsFeed = listOf(
+                "Preflight complete; rotors turning.",
+                "Pattern work and terrain flight logged.",
+                "Aircraft down safe; hours entered in the logbook."
             )
         ),
         MissionTemplate(

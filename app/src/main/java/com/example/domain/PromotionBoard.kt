@@ -78,8 +78,13 @@ object PromotionBoardEvaluator {
     ): PromotionBoardEvaluation {
         val currentRank = operator.rank
         val nextRank = OperatorRank.nextRank(currentRank)
-        val creditCost = currentRank.promotionCreditCost()
-        val prestigeCost = currentRank.promotionPrestigeCost()
+        // A seated Command Chief Warrant Officer mentors the warrant corps: cheaper warrant boards
+        val warrantDiscountPct = if (currentRank.isWarrant) {
+            allOperators.filter { it.status == OperatorStatus.HQ_STAFF && it.id != operator.id }
+                .maxOfOrNull { it.hqRole?.warrantPromotionDiscountPct ?: 0 } ?: 0
+        } else 0
+        val creditCost = currentRank.promotionCreditCost() * (100 - warrantDiscountPct) / 100.0
+        val prestigeCost = currentRank.promotionPrestigeCost() * (100 - warrantDiscountPct) / 100
 
         if (nextRank == null) {
             return PromotionBoardEvaluation(
@@ -95,7 +100,7 @@ object PromotionBoardEvaluator {
             )
         }
 
-        val isCrossTier = nextRank.tier != currentRank.tier
+        val isCrossTier = OperatorRank.isBoardGate(currentRank, nextRank)
         if (!isCrossTier) {
             return PromotionBoardEvaluation(
                 currentRank = currentRank,
@@ -144,6 +149,31 @@ object PromotionBoardEvaluator {
 
         // 3. Tier-specific Leadership School & Merit Prerequisites
         when (nextRank.tier) {
+            RankTier.WARRANT -> {
+                val opsNeeded = TacticalCalculator.warrantOpsRequired(nextRank)
+                meritChecks += PromotionMeritCheck(
+                    id = "ops_warrant",
+                    label = "Warrant Service Record",
+                    statusText = "$totalOps/$opsNeeded Ops Completed",
+                    satisfied = totalOps >= opsNeeded
+                )
+                if (operator.isAviator) {
+                    val skillNeeded = TacticalCalculator.warrantFlightSkillRequired(nextRank)
+                    meritChecks += PromotionMeritCheck(
+                        id = "flight_warrant",
+                        label = "Flight Proficiency",
+                        statusText = "Flight Skill ${operator.flightSkill}/$skillNeeded",
+                        satisfied = operator.flightSkill >= skillNeeded
+                    )
+                } else if (nextRank.warrantGrade >= 3) {
+                    meritChecks += PromotionMeritCheck(
+                        id = "honors_warrant",
+                        label = "Technical Merit",
+                        statusText = "${opMedalDefs.size}/1 Decoration Held",
+                        satisfied = opMedalDefs.isNotEmpty()
+                    )
+                }
+            }
             RankTier.NCO -> {
                 requiredSchoolId = "msn_nco_school"
                 requiredSchoolTitle = "Basic Leader Course (BLC)"
@@ -386,6 +416,7 @@ object PromotionBoardEvaluator {
             RankTier.SNCO -> "SNCOs"
             RankTier.OFFICER -> "Officers"
             RankTier.FLAG_OFFICER -> "Flag Officers"
+            RankTier.WARRANT -> "Warrant Officers"
             else -> "${nextRank.tier.shortLabel}s"
         }
         val overcrowdingNote = when {
