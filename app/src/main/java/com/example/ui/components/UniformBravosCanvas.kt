@@ -37,26 +37,32 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     awardDevices: Map<String, UniformRegaliaRules.AwardDeviceInfo>,
     textMeasurer: TextMeasurer
 ) {
-    // Distinct Enlisted (AGSU Khaki/Tan shirt + Olive slacks) vs Officer (ASU Sky-Blue/Pearl shirt + Navy slacks)
+    // Item 57: Bravos follow the uniform family. AGSU (green) at any rank: tan shirt and olive slacks.
+    // Blue family: officers in sky-blue (flag officers pearl) with navy slacks and gold stripes; enlisted in
+    // white with navy slacks and a light-blue stripe. Officers in AGSU and in Blues no longer look alike.
     val isOfficer = tier.isOfficer
+    val greenFamily = operator.dressStyle == DressUniformStyle.ARMY_SERVICE_GREEN
     val shirtCol = when {
+        greenFamily -> Color(0xFFD5C49A)
         tier == RankTier.FLAG_OFFICER -> Color(0xFFEAF0F7)
         isOfficer -> Color(0xFFD6E2F0)
-        else -> Color(0xFFD5C49A)
+        else -> Color(0xFFF2F2EE)
     }
     val shirtShadeCol = when {
+        greenFamily -> Color(0xFFB3A178)
         tier == RankTier.FLAG_OFFICER -> Color(0xFFC5D0DE)
         isOfficer -> Color(0xFFB3C3D8)
-        else -> Color(0xFFB3A178)
+        else -> Color(0xFFCBCCC6)
     }
-    val trouserCol = if (isOfficer) Color(0xFF13223A) else Color(0xFF3E4A31)
+    val trouserCol = if (greenFamily) Color(0xFF3E4A31) else Color(0xFF13223A)
     val trouserStripeCol = when {
+        greenFamily -> Color(0xFF28311F)
         tier == RankTier.FLAG_OFFICER -> Color(0xFFF2D272)
         isOfficer -> Color(0xFFD8B24C)
-        else -> Color(0xFF28311F)
+        else -> Color(0xFF4A78A8)
     }
     val trimCol = if (isOfficer) Color(0xFFF0CB65) else Color(0xFFD8B24C)
-    val beltCol = if (isOfficer) Color(0xFF111622) else Color(0xFF2B3221)
+    val beltCol = if (greenFamily) Color(0xFF2B3221) else Color(0xFF111622)
     val pocketOutline = shirtShadeCol.copy(alpha = 0.92f)
 
     // 1. Service Trousers starting cleanly below the tucked shirt belt line

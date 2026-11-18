@@ -3,6 +3,7 @@ package com.example.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,7 +33,8 @@ fun MissionPrepDialog(
     onAutoGear: () -> Unit,
     onFieldKit: (List<String>) -> Unit,
     onLaunch: (teamIds: List<String>, insertion: InsertionMethod, pilotId: String?, platoonLeaderId: String?) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSetTeamCamo: (List<String>, CamoPattern?) -> Unit = { _, _ -> }
 ) {
     val extra = LocalAegisColors.current
     var teamIds by remember(mission.id) { mutableStateOf(initialTeamIds) }
@@ -156,6 +158,44 @@ fun MissionPrepDialog(
                                 onClick = {},
                                 label = { Text((if (ok) "✓ " else "✗ ") + mos.roleTag.substringAfter(' ')) },
                                 border = BorderStroke(1.dp, if (ok) extra.signalsCyan else extra.textMuted.copy(alpha = 0.5f))
+                            )
+                        }
+                    }
+                }
+
+                // Item 94: terrain and team camo
+                val terrain = mission.theater.terrain
+                if (mission.scope == MissionScope.FIELD_COMBAT && terrain != Terrain.GARRISON) {
+                    val camoEffect = TacticalCalculator.teamCamoEffect(mission, team, uiState.squads, uiState.smartWardrobeEnabled)
+                    Text("Terrain: ${terrain.label}", style = MaterialTheme.typography.labelMedium, color = extra.brassBright)
+                    Text(
+                        "Camo: ${camoEffect.label}" + (TacticalCalculator.bestCamoFor(terrain)?.let { " • Best: ${it.label}" } ?: ""),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = when {
+                            camoEffect.passDelta > 0 -> extra.signalsCyan
+                            camoEffect.passDelta < 0 -> extra.amberTelemetry
+                            else -> extra.textMuted
+                        },
+                        modifier = Modifier.testTag("prep_camo_effect")
+                    )
+                    val groundIds = team.filter { !it.isAviator }.map { it.id }
+                    val explicit = team.filter { !it.isAviator }.map { it.wardrobe.field.camoPattern }.distinct()
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = explicit == listOf(null),
+                            onClick = { onSetTeamCamo(groundIds, null) },
+                            label = { Text("Auto") },
+                            modifier = Modifier.testTag("prep_camo_auto")
+                        )
+                        CamoPattern.SELECTABLE.forEach { c ->
+                            FilterChip(
+                                selected = explicit == listOf(c),
+                                onClick = { onSetTeamCamo(groundIds, c) },
+                                label = { Text(c.label + if (c.fitFor(terrain) == CamoFit.MATCH) " ✓" else "") },
+                                modifier = Modifier.testTag("prep_camo_${c.name.lowercase()}")
                             )
                         }
                     }

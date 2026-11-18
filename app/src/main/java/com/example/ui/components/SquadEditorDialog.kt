@@ -557,7 +557,7 @@ private fun KitStandardSection(
 
 @Composable
 private fun CamoStandardDropdown(value: CamoPattern?, onSelect: (CamoPattern) -> Unit) {
-    val options = remember { CamoPattern.entries.map { DropdownOptionItem<CamoPattern?>(it, it.label, null, Color(it.primaryHex), Color(it.accentHex)) } }
+    val options = remember { CamoPattern.SELECTABLE.map { DropdownOptionItem<CamoPattern?>(it, it.label, null, Color(it.primaryHex), Color(it.accentHex)) } }
     SingleChoiceDropdown(
         label = "Camo Pattern",
         selectedText = value?.label ?: "Choose",

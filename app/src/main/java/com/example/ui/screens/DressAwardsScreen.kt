@@ -403,7 +403,7 @@ fun DressAwardsScreen(
                                     .padding(8.dp)
                             ) {
                                 Text(
-                                    text = previewKit.shortLabel.uppercase(),
+                                    text = previewKit.shortLabelFor(selectedOp).uppercase(),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = extra.signalsCyan,
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
@@ -461,7 +461,7 @@ fun DressAwardsScreen(
                                     },
                                     label = {
                                         Text(
-                                            text = if (!available) "${kit.shortLabel} (HQ)" else kit.shortLabel,
+                                            text = if (!available) "${kit.shortLabel} (${if (selectedOp.isAviator) "N/A" else "HQ"})" else kit.shortLabelFor(selectedOp),
                                             style = MaterialTheme.typography.labelMedium,
                                             maxLines = 1
                                         )

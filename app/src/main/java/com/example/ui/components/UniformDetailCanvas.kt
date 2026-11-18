@@ -178,7 +178,28 @@ fun OperatorUniformPreview(
                     hasNvg = hasNvg,
                     textMeasurer = textMeasurer
                 )
-                WardrobeKit.BRAVOS -> drawBravosShortSleeveFigure(
+                // Item 93: aviators wear the flight suit in the Bravos slot
+                WardrobeKit.BRAVOS -> if (renderOperator.isAviator) drawFieldTacticalFigure(
+                    w = w,
+                    h = h,
+                    cx = cx,
+                    operator = renderOperator.copy(camoPattern = CamoPattern.FLIGHT_SAGE),
+                    wornRegalia = wornRegalia,
+                    combatPatch = combatPatch,
+                    leaderRole = LeaderRole.NONE,
+                    equippedWeaponId = null,
+                    skinTone = skinTone,
+                    skinShadow = skinShadow,
+                    visorTone = visorTone,
+                    armorId = null,
+                    utilityId = null,
+                    helmetId = null,
+                    hasHelmet = false,
+                    hasWeapon = false,
+                    hasNvg = false,
+                    textMeasurer = textMeasurer,
+                    flightSuit = true
+                ) else drawBravosShortSleeveFigure(
                     w = w,
                     h = h,
                     cx = cx,
@@ -1370,7 +1391,10 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
             val flashTopY = h * 0.080f
             val flashW = w * 0.036f
             val flashH = h * 0.026f
-            val flashFill = when (operator.headgearStyle) {
+            // Item 66: squad members wear a flash in their squad's division patch colors (fill and diagonal
+            // stripe); soldiers with no squad wear the plain Army flash for their beret
+            val squadPatch = operator.tailorOverrides.unitPatch.takeIf { it.isDivision }
+            val flashFill = squadPatch?.let { Color(it.primaryHex) } ?: when (operator.headgearStyle) {
                 HeadgearStyle.TAN_BERET -> Color(0xFF14181F)
                 HeadgearStyle.MAROON_BERET -> Color(0xFF1C4378)
                 HeadgearStyle.EMERALD_BERET -> Color(0xFF143D2C)
@@ -1384,7 +1408,14 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
                 close()
             }
             drawPath(flashPath, color = flashFill)
-            if (operator.headgearStyle == HeadgearStyle.MAROON_BERET) {
+            if (squadPatch != null) {
+                drawLine(
+                    color = Color(squadPatch.accentHex),
+                    start = Offset(flashCx - flashW * 0.34f, flashTopY + flashH * 0.72f),
+                    end = Offset(flashCx + flashW * 0.34f, flashTopY + flashH * 0.14f),
+                    strokeWidth = 1.5f
+                )
+            } else if (operator.headgearStyle == HeadgearStyle.MAROON_BERET) {
                 drawLine(
                     color = Color.White.copy(alpha = 0.85f),
                     start = Offset(flashCx - flashW * 0.34f, flashTopY + flashH * 0.70f),
@@ -1981,7 +2012,8 @@ private fun DrawScope.drawFieldTacticalFigure(
     hasHelmet: Boolean,
     hasWeapon: Boolean,
     hasNvg: Boolean,
-    textMeasurer: TextMeasurer
+    textMeasurer: TextMeasurer,
+    flightSuit: Boolean = false
 ) {
     val primaryCamo = Color(operator.camoPattern.primaryHex)
     // Sewn-on items are subdued: tan thread on dark olive, readable on every camo and on the darker tapes
@@ -2024,7 +2056,8 @@ private fun DrawScope.drawFieldTacticalFigure(
         addPath(sleeveR)
         addPath(torsoPath)
     }
-    drawFieldUniformTexture(w, h, cx, uniformOutline, primaryCamo, secondaryCamo, accentCamo)
+    // The flight suit is one plain color with no camo pattern
+    if (!flightSuit) drawFieldUniformTexture(w, h, cx, uniformOutline, primaryCamo, secondaryCamo, accentCamo)
     drawFieldBeltAndTrousers(w, h, cx, primaryCamo, secondaryCamo, utilityId)
 
     // Field sleeve cross-section (u = 0 inner seam, 1 outer silhouette), following the sleeve paths above
@@ -2107,7 +2140,7 @@ private fun DrawScope.drawFieldTacticalFigure(
         }
     }
 
-    drawFieldLoadBearing(w, h, cx, fieldLoadBearingStyleFor(armorId), utilityId, secondaryCamo, accentCamo)
+    if (!flightSuit) drawFieldLoadBearing(w, h, cx, fieldLoadBearingStyleFor(armorId), utilityId, secondaryCamo, accentCamo)
 
     // Center Chest ACU Velcro Rank Patch (visible on both plate carrier and combat shirt)
     val rankTabW = w * 0.074f
@@ -2218,14 +2251,40 @@ private fun DrawScope.drawFieldTacticalFigure(
     val tapeTop = h * 0.512f
     val nameCx = cx - w * 0.112f
     val branchCx = cx + w * 0.112f
-    listOf(nameCx to operator.callsign.trim().uppercase().take(10), branchCx to "AEGIS").forEach { (tx, label) ->
-        drawRoundRect(secondaryCamo, Offset(tx - tapeW / 2f, tapeTop), Size(tapeW, tapeH), CornerRadius(1.5f, 1.5f))
-        drawRoundRect(threadCol.copy(alpha = 0.55f), Offset(tx - tapeW / 2f, tapeTop), Size(tapeW, tapeH), CornerRadius(1.5f, 1.5f), style = Stroke(width = 0.8f))
-        drawFieldTapeText(label, Offset(tx, tapeTop + tapeH / 2f), tapeW, tapeH, threadCol, textMeasurer)
+    if (flightSuit) {
+        // Item 93: flight suit front zipper and the black leather name tag with gold aviator wings
+        drawLine(Color.Black.copy(alpha = 0.45f), Offset(cx, h * 0.31f), Offset(cx, h * 0.86f), strokeWidth = 1.6f)
+        drawLine(Color(0xFFB8BCA8).copy(alpha = 0.6f), Offset(cx + 1.2f, h * 0.31f), Offset(cx + 1.2f, h * 0.86f), strokeWidth = 0.6f)
+        val tagW = w * 0.150f
+        val tagH = h * 0.046f
+        val tagTop = h * 0.470f
+        drawRoundRect(Color(0xFF15120F), Offset(branchCx - tagW / 2f, tagTop), Size(tagW, tagH), CornerRadius(2f, 2f))
+        drawRoundRect(Color(0xFF3A332B), Offset(branchCx - tagW / 2f, tagTop), Size(tagW, tagH), CornerRadius(2f, 2f), style = Stroke(width = 0.9f))
+        // Wings across the top of the tag
+        val wingY = tagTop + tagH * 0.30f
+        val gold = Color(0xFFE2C35E)
+        drawCircle(gold, radius = tagH * 0.13f, center = Offset(branchCx, wingY))
+        for (side in listOf(-1f, 1f)) {
+            val wing = Path().apply {
+                moveTo(branchCx + side * tagH * 0.12f, wingY - tagH * 0.06f)
+                lineTo(branchCx + side * tagW * 0.42f, wingY - tagH * 0.12f)
+                lineTo(branchCx + side * tagW * 0.30f, wingY + tagH * 0.06f)
+                lineTo(branchCx + side * tagH * 0.12f, wingY + tagH * 0.06f)
+                close()
+            }
+            drawPath(wing, gold)
+        }
+        drawFieldTapeText(operator.callsign.trim().uppercase().take(10), Offset(branchCx, tagTop + tagH * 0.72f), tagW, tagH * 0.5f, gold, textMeasurer)
+    } else {
+        listOf(nameCx to operator.callsign.trim().uppercase().take(10), branchCx to "AEGIS").forEach { (tx, label) ->
+            drawRoundRect(secondaryCamo, Offset(tx - tapeW / 2f, tapeTop), Size(tapeW, tapeH), CornerRadius(1.5f, 1.5f))
+            drawRoundRect(threadCol.copy(alpha = 0.55f), Offset(tx - tapeW / 2f, tapeTop), Size(tapeW, tapeH), CornerRadius(1.5f, 1.5f), style = Stroke(width = 0.8f))
+            drawFieldTapeText(label, Offset(tx, tapeTop + tapeH / 2f), tapeW, tapeH, threadCol, textMeasurer)
+        }
     }
 
     // Above the AEGIS tape: Slot 1 (combat/expert) badge with the Slot 2 skill badge below it, sewn on subdued
-    val fieldBadges = listOfNotNull(wornRegalia.chestPinAboveRack, wornRegalia.chestPinLeftPocket)
+    val fieldBadges = if (flightSuit) emptyList() else listOfNotNull(wornRegalia.chestPinAboveRack, wornRegalia.chestPinLeftPocket)
     val badgeW = w * 0.086f
     val badgeH = h * 0.022f
     subduedLayer(subduedLow, subduedHigh) {
@@ -2250,7 +2309,15 @@ private fun DrawScope.drawFieldTacticalFigure(
     unscaledForBuild(operator, cx) {
     drawRect(skinShadow, Offset(cx - w * 0.05f, h * 0.30f), Size(w * 0.10f, h * 0.08f))
     drawOval(skinTone, Offset(cx - w * 0.095f, h * 0.14f), Size(w * 0.19f, h * 0.19f))
-    drawRoundRect(visorTone, Offset(cx - w * 0.075f, h * 0.205f), Size(w * 0.15f, h * 0.042f), CornerRadius(6f, 6f))
+    if (flightSuit) {
+        // Aviator: bare face and a sage patrol cap
+        drawCircle(Color(0xFF1A1E24), radius = w * 0.009f, center = Offset(cx - w * 0.036f, h * 0.225f))
+        drawCircle(Color(0xFF1A1E24), radius = w * 0.009f, center = Offset(cx + w * 0.036f, h * 0.225f))
+        drawRoundRect(primaryCamo, Offset(cx - w * 0.100f, h * 0.128f), Size(w * 0.200f, h * 0.052f), CornerRadius(5f, 5f))
+        drawRoundRect(secondaryCamo, Offset(cx - w * 0.104f, h * 0.172f), Size(w * 0.208f, h * 0.014f), CornerRadius(3f, 3f))
+    } else {
+        drawRoundRect(visorTone, Offset(cx - w * 0.075f, h * 0.205f), Size(w * 0.15f, h * 0.042f), CornerRadius(6f, 6f))
+    }
 
     if (helmetId == "hlm_mesh_comms") {
         // Comms headset only, no ballistic shell

@@ -792,7 +792,7 @@ object TacticalCalculator {
             mission, team, gearItems, citations, facilities, hqStaffCount, hqStaffSummary, squads, smartWardrobeEnabled,
             insertion = insertion
         )
-        val survival = (squadAvgSurvivalPct(mission, team, gearItems, citations, facilities, hqStaffCount, hqStaffSummary, squads) +
+        val survival = (squadAvgSurvivalPct(mission, team, gearItems, citations, facilities, hqStaffCount, hqStaffSummary, squads, smartWardrobeEnabled) +
             insertionSurvivalDelta(insertion, pilot, airOps, scattered = false)).coerceIn(42, 98)
         val duration = (mission.durationSeconds * durationMultiplier(facilities, hqStaffSummary) *
             insertionDurationMultiplier(insertion, pilot)).roundToInt()
@@ -819,6 +819,9 @@ object TacticalCalculator {
                 if (survDelta != 0) append(" • +$survDelta survival")
                 if (scatter > 0) append(" • $scatter% scatter risk")
             })
+            if (mission.scope == MissionScope.FIELD_COMBAT && mission.theater.terrain != Terrain.GARRISON) {
+                add("Camo" to "${mission.theater.terrain.label}: ${teamCamoEffect(mission, team, squads, smartWardrobeEnabled).label}")
+            }
             add("Cohesion" to when {
                 cohesion == null -> "None"
                 cohesion.mixedSquads -> "+${cohesion.successOddsBonusPct}% (mixed squads, cut 25%)"
@@ -1306,7 +1309,7 @@ object TacticalCalculator {
         // Schools dress their students automatically, whatever the wardrobe setting.
         // Field schools put HQ staff in Field kit too, for the length of the course.
         when (dutyContext) {
-            DutyUniformContext.FIELD_SCHOOL -> return WardrobeKit.FIELD
+            DutyUniformContext.FIELD_SCHOOL -> return if (operator.isAviator) WardrobeKit.BRAVOS else WardrobeKit.FIELD
             DutyUniformContext.TRAINING_MISSION -> return WardrobeKit.BRAVOS
             else -> Unit
         }
@@ -1319,9 +1322,14 @@ object TacticalCalculator {
                 DutyUniformContext.MEMORIAL_HONORS -> WardrobeKit.ALPHAS
                 DutyUniformContext.DIPLOMATIC_MISSION -> WardrobeKit.MESS
             }
+        } else if (operator.status == OperatorStatus.HQ_STAFF && dutyContext == DutyUniformContext.DIPLOMATIC_MISSION) {
+            // Item 91: HQ staff change into Mess for diplomatic missions
+            WardrobeKit.MESS
         } else {
             operator.activeWardrobeKit
         }
+        // Item 93: aviators have no field uniform; their working uniform is the flight suit (Bravos slot)
+        if (resolved == WardrobeKit.FIELD && operator.isAviator) return WardrobeKit.BRAVOS
         return if (!resolved.isAvailableFor(operator)) WardrobeKit.ALPHAS else resolved
     }
 
@@ -1409,13 +1417,50 @@ object TacticalCalculator {
         else -> KitStandard(dressStyle = squad.standardMessDressStyle, headgear = squad.standardMessHeadgear, gloves = squad.standardMessGloves)
     }
 
+    /**
+     * Item 56: a squad standard names a style ("service cap", "service blues", "mess blues"); each soldier
+     * wears their own tier's version of it. Berets, AGSU and Honor Guard are the same for every tier.
+     */
+    fun tierVersionOf(std: KitStandard, tier: RankTier): KitStandard =
+        std.copy(dressStyle = std.dressStyle?.let { tierVersionOf(it, tier) }, headgear = std.headgear?.let { tierVersionOf(it, tier) })
+
+    fun tierVersionOf(style: DressUniformStyle, tier: RankTier): DressUniformStyle {
+        val serviceBlues = setOf(
+            DressUniformStyle.ARMY_DRESS_BLUES, DressUniformStyle.NCO_PARADE_BLUES,
+            DressUniformStyle.OFFICER_SERVICE_BLUES, DressUniformStyle.FLAG_STAFF_FORMAL
+        )
+        val messBlues = setOf(DressUniformStyle.ENLISTED_MESS_BLUES, DressUniformStyle.OFFICER_MESS_BLUES, DressUniformStyle.FLAG_MESS_FORMAL)
+        return when (style) {
+            in serviceBlues -> when (tier) {
+                RankTier.SOLDIER -> DressUniformStyle.ARMY_DRESS_BLUES
+                RankTier.NCO, RankTier.SNCO -> DressUniformStyle.NCO_PARADE_BLUES
+                RankTier.OFFICER, RankTier.WARRANT -> DressUniformStyle.OFFICER_SERVICE_BLUES
+                RankTier.FLAG_OFFICER -> DressUniformStyle.FLAG_STAFF_FORMAL
+            }
+            in messBlues -> when (tier) {
+                RankTier.SOLDIER, RankTier.NCO, RankTier.SNCO -> DressUniformStyle.ENLISTED_MESS_BLUES
+                RankTier.OFFICER, RankTier.WARRANT -> DressUniformStyle.OFFICER_MESS_BLUES
+                RankTier.FLAG_OFFICER -> DressUniformStyle.FLAG_MESS_FORMAL
+            }
+            else -> style
+        }
+    }
+
+    fun tierVersionOf(headgear: HeadgearStyle, tier: RankTier): HeadgearStyle =
+        if (headgear.kind == HeadgearKind.BERET) headgear else when (tier) {
+            RankTier.SOLDIER -> HeadgearStyle.ENLISTED_SERVICE_CAP
+            RankTier.NCO, RankTier.SNCO -> HeadgearStyle.NCO_SERVICE_CAP
+            RankTier.OFFICER, RankTier.WARRANT -> HeadgearStyle.OFFICER_PEAKED_CAP
+            RankTier.FLAG_OFFICER -> HeadgearStyle.FLAG_GENERAL_CAP
+        }
+
     fun squadStandardFor(
         operator: Operator,
         squads: List<TacticalSquad>,
         kit: WardrobeKit,
         ownedMedalIds: Set<String>
     ): KitStandard {
-        val raw = rawKitStandard(standardSquadFor(operator, squads), kit)
+        val raw = tierVersionOf(rawKitStandard(standardSquadFor(operator, squads), kit), operator.rank.tier)
         val free = operator.tailorOverrides.freeTailorOverride
         return raw.copy(
             dressStyle = raw.dressStyle?.takeIf { free || evaluateDressStyleEligibility(it, operator, ownedMedalIds, kit).eligible },
@@ -1434,7 +1479,7 @@ object TacticalCalculator {
         ownedMedalIds: Set<String>
     ): List<String> {
         if (operator.tailorOverrides.freeTailorOverride) return emptyList()
-        val raw = rawKitStandard(standardSquadFor(operator, squads), kit)
+        val raw = tierVersionOf(rawKitStandard(standardSquadFor(operator, squads), kit), operator.rank.tier)
         val worn = resolveKitAppearance(operator, kit, squads, ownedMedalIds)
         return buildList {
             raw.dressStyle?.let { want ->
@@ -1448,6 +1493,51 @@ object TacticalCalculator {
         }
     }
 
+    // ============================================================
+    // Item 94: camouflage matched to the theater's terrain
+    // ============================================================
+    const val CAMO_MATCH_PASS_BONUS = 3
+    const val CAMO_MATCH_SURVIVAL_BONUS = 2
+    const val CAMO_WRONG_PASS_PENALTY = 2
+    const val CAMO_WRONG_SURVIVAL_PENALTY = 1
+
+    /** The pattern Smart Duty-Dress picks for this terrain, or null where nothing matches (garrison). */
+    fun bestCamoFor(terrain: Terrain): CamoPattern? = CamoPattern.SELECTABLE.firstOrNull { terrain in it.suitedTerrains }
+
+    /**
+     * The field camo this soldier wears on this mission: their own Tailor pick, then (with Smart
+     * Duty-Dress on) the pattern matching the terrain, then the squad standard, then their default.
+     */
+    fun missionCamo(op: Operator, mission: MissionTemplate, squads: List<TacticalSquad>, smartWardrobeEnabled: Boolean): CamoPattern =
+        op.wardrobe.field.camoPattern
+            ?: (if (smartWardrobeEnabled) bestCamoFor(mission.theater.terrain) else null)
+            ?: squads.firstOrNull { op.id in it.memberIds }?.standardCamo
+            ?: op.camoPattern
+
+    data class CamoEffect(val matched: Int, val wrong: Int, val teamSize: Int, val passDelta: Int, val survivalDelta: Int) {
+        val label: String get() = when {
+            passDelta > 0 -> "$matched/$teamSize matched • +$passDelta% pass, +$survivalDelta survival"
+            passDelta < 0 -> "$wrong/$teamSize wrong for the ground • $passDelta% pass, $survivalDelta survival"
+            else -> "$matched/$teamSize matched • no effect"
+        }
+    }
+
+    /** Field missions only: most of the team in matching camo helps; most of it clearly wrong hurts. */
+    fun teamCamoEffect(mission: MissionTemplate, team: List<Operator>, squads: List<TacticalSquad>, smartWardrobeEnabled: Boolean): CamoEffect {
+        val ground = team.filter { !it.isAviator }
+        if (mission.scope != MissionScope.FIELD_COMBAT || ground.isEmpty() || mission.theater.terrain == Terrain.GARRISON) {
+            return CamoEffect(0, 0, ground.size, 0, 0)
+        }
+        val fits = ground.map { missionCamo(it, mission, squads, smartWardrobeEnabled).fitFor(mission.theater.terrain) }
+        val matched = fits.count { it == CamoFit.MATCH }
+        val wrong = fits.count { it == CamoFit.WRONG }
+        return when {
+            matched * 2 >= ground.size -> CamoEffect(matched, wrong, ground.size, CAMO_MATCH_PASS_BONUS, CAMO_MATCH_SURVIVAL_BONUS)
+            wrong * 2 > ground.size -> CamoEffect(matched, wrong, ground.size, -CAMO_WRONG_PASS_PENALTY, -CAMO_WRONG_SURVIVAL_PENALTY)
+            else -> CamoEffect(matched, wrong, ground.size, 0, 0)
+        }
+    }
+
     fun resolveKitAppearance(
         operator: Operator,
         kit: WardrobeKit,
@@ -1455,7 +1545,9 @@ object TacticalCalculator {
         ownedMedalIds: Set<String> = emptySet(),
         allowFieldForHqStaff: Boolean = false
     ): Operator {
-        val effectiveKit = if (kit.isAvailableFor(operator) || (allowFieldForHqStaff && kit == WardrobeKit.FIELD)) {
+        val effectiveKit = if (kit == WardrobeKit.FIELD && operator.isAviator) {
+            WardrobeKit.BRAVOS
+        } else if (kit.isAvailableFor(operator) || (allowFieldForHqStaff && kit == WardrobeKit.FIELD)) {
             kit
         } else {
             WardrobeKit.ALPHAS
@@ -1482,7 +1574,13 @@ object TacticalCalculator {
                 operator.copy(
                     activeWardrobeKit = WardrobeKit.BRAVOS,
                     uniformMode = UniformMode.DRESS_UNIFORM,
-                    dressStyle = defaultDressStyleForKit(WardrobeKit.BRAVOS, operator.rank.tier, settings.dressStyle ?: std.dressStyle),
+                    // Item 57: Bravos follow the soldier's Alphas uniform family unless set separately
+                    dressStyle = defaultDressStyleForKit(
+                        WardrobeKit.BRAVOS,
+                        operator.rank.tier,
+                        settings.dressStyle ?: std.dressStyle ?: operator.wardrobe.alphas.dressStyle
+                            ?: operator.dressStyle.takeIf { !it.isCutawayMess }
+                    ),
                     headgearStyle = defaultHeadgearForKit(WardrobeKit.BRAVOS, operator, ownedMedalIds, settings.headgearStyle ?: std.headgear),
                     dressDisplayMode = bravosDisplay,
                     hasWhiteGloves = false,
@@ -1491,7 +1589,8 @@ object TacticalCalculator {
                 )
             }
             WardrobeKit.ALPHAS -> {
-                val rawSash = settings.hasDressSash ?: operator.hasDressSash
+                // Item 91: HQ staff wear the waist sash by default
+                val rawSash = settings.hasDressSash ?: (operator.hasDressSash || operator.status == OperatorStatus.HQ_STAFF)
                 operator.copy(
                     activeWardrobeKit = WardrobeKit.ALPHAS,
                     uniformMode = UniformMode.DRESS_UNIFORM,
@@ -1680,7 +1779,8 @@ object TacticalCalculator {
         val insertionDelta = insertionPassDelta(mission, insertion, scatteredDrop)
         val platoonBonus = if (platoonLeaderFor(mission, selectedOperators) != null) PLATOON_LEADER_PASS_BONUS else 0
         val theaterPerk = if (mission.scope == MissionScope.FIELD_COMBAT) campaignFieldPassBonus() else 0
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk)
+        val camo = teamCamoEffect(mission, selectedOperators, squads, smartWardrobeEnabled).passDelta
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo)
             .coerceIn(minOdds, maxOdds)
     }
 
@@ -1966,7 +2066,8 @@ object TacticalCalculator {
         facilities: List<FacilityState>,
         hqStaffCount: Int = 0,
         hqStaffSummary: HqStaffSummary? = null,
-        squads: List<TacticalSquad> = emptyList()
+        squads: List<TacticalSquad> = emptyList(),
+        smartWardrobeEnabled: Boolean = false
     ): Int {
         if (selectedOperators.isEmpty()) return 0
         val baseAvg = selectedOperators.map {
@@ -1976,7 +2077,8 @@ object TacticalCalculator {
         val cohesionSurv = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads, mission.requiredSquads > 1)?.survivalBonusPct ?: 0
         val platoonSurv = if (platoonLeaderFor(mission, selectedOperators) != null) PLATOON_LEADER_SURVIVAL_BONUS else 0
         val theaterPerk = if (mission.scope == MissionScope.FIELD_COMBAT) campaignSurvivalBonus() else 0
-        return (baseAvg + cohesionSurv + platoonSurv + theaterPerk).roundToInt().coerceIn(42, 98)
+        val camo = teamCamoEffect(mission, selectedOperators, squads, smartWardrobeEnabled).survivalDelta
+        return (baseAvg + cohesionSurv + platoonSurv + theaterPerk + camo).roundToInt().coerceIn(42, 98)
     }
 
     fun isRepeatableAward(medal: MedalDefinition): Boolean =

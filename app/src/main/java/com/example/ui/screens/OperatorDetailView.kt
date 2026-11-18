@@ -211,7 +211,7 @@ fun OperatorDetailView(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = portraitKit.shortLabel,
+                        text = portraitKit.shortLabelFor(operator),
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
@@ -551,7 +551,7 @@ fun OperatorDetailView(
                                     },
                                     label = {
                                         Text(
-                                            text = if (!available) "${kit.shortLabel} (HQ)" else kit.shortLabel,
+                                            text = if (!available) "${kit.shortLabel} (${if (operator.isAviator) "N/A" else "HQ"})" else kit.shortLabelFor(operator),
                                             style = MaterialTheme.typography.labelMedium,
                                             maxLines = 1
                                         )

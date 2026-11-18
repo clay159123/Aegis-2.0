@@ -142,6 +142,35 @@ fun SquadArmoryScreen(
         uiState.gearItems.any { it.unlocked }
     }
 
+    // Item 67: collapsible roster sections, remembered between visits
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("aegis_ops_prefs", android.content.Context.MODE_PRIVATE) }
+    var openSections by remember { mutableStateOf(prefs.getStringSet("squad_open_sections", emptySet())!!.toSet()) }
+    fun toggleSection(id: String) {
+        openSections = if (id in openSections) openSections - id else openSections + id
+        prefs.edit().putStringSet("squad_open_sections", openSections).apply()
+    }
+    val rosterSections = remember(groundOps, aviationPool, uiState.squads) {
+        val squadSections = uiState.squads.map { squad ->
+            val members = groundOps.filter { it.id in squad.memberIds }
+            RosterSection(
+                id = "sq_${squad.id}",
+                title = squad.name,
+                summary = "${members.size} soldier${if (members.size == 1) "" else "s"} • ${squad.cohesionTier.label} (${squad.cohesionScore})",
+                members = members
+            )
+        }
+        val inSquad = uiState.squads.flatMap { it.memberIds }.toSet()
+        val unassigned = groundOps.filter { it.id !in inSquad }
+        squadSections +
+            listOfNotNull(
+                RosterSection("unassigned", "Unassigned", "${unassigned.size} soldier${if (unassigned.size == 1) "" else "s"} without a squad", unassigned)
+                    .takeIf { unassigned.isNotEmpty() },
+                RosterSection("aviation", "Aviation Pool", "${aviationPool.size} pilot${if (aviationPool.size == 1) "" else "s"} • fly insertions and Flight Hours; no squads", aviationPool)
+                    .takeIf { aviationPool.isNotEmpty() }
+            )
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -364,14 +393,17 @@ fun SquadArmoryScreen(
             }
         }
 
-        items(rosterOrder, key = { it.id }) { op ->
-            if (op.id == firstAviatorId) {
-                SectionHeader(
-                    title = "Aviation Pool (${aviationPool.size})",
-                    subtitle = "Warrant officer pilots. They fly insertions and Flight Hours; they don't join squads."
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-            }
+        rosterSections.forEach { section ->
+        item(key = "roster_hdr_${section.id}") {
+            CollapsibleRosterHeader(
+                title = section.title,
+                summary = section.summary,
+                expanded = section.id in openSections,
+                onToggle = { toggleSection(section.id) },
+                modifier = Modifier.testTag("roster_section_${section.id}")
+            )
+        }
+        if (section.id in openSections) items(section.members, key = { it.id }) { op ->
             val equipped = uiState.gearItems.equippedBy(op)
             val opMedals = uiState.citations.filter { it.operatorId == op.id }
                 .mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
@@ -532,9 +564,20 @@ fun SquadArmoryScreen(
             }
         }
 
+        }
+
         // HQ Staff Wing Section (SGT E-5+ Support Cadre)
         item {
             Spacer(modifier = Modifier.height(6.dp))
+            CollapsibleRosterHeader(
+                title = "HQ Staff Wing",
+                summary = "${hqStaffOps.size}/${uiState.maxHqStaffSlots} billets filled",
+                expanded = "hq" in openSections,
+                onToggle = { toggleSection("hq") },
+                modifier = Modifier.testTag("roster_section_hq")
+            )
+        }
+        if ("hq" in openSections) item {
             SectionHeader(
                 title = "HQ Staff Wing (${hqStaffOps.size}/${uiState.maxHqStaffSlots})",
                 subtitle = if (hqStaffOps.isEmpty()) {
@@ -555,7 +598,7 @@ fun SquadArmoryScreen(
             )
         }
 
-        items(hqStaffOps, key = { "staff_${it.id}" }) { op ->
+        if ("hq" in openSections) items(hqStaffOps, key = { "staff_${it.id}" }) { op ->
             val opMedals = uiState.citations.filter { it.operatorId == op.id }
                 .mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
                 .sortedBy { it.precedenceOrder }
@@ -643,6 +686,15 @@ fun SquadArmoryScreen(
 
         // Recruiting (item 31): Reception Station PV2s, or leadership-school graduates at higher ranks
         item {
+            CollapsibleRosterHeader(
+                title = "Recruiting",
+                summary = "${fieldOps.size}/${uiState.maxFieldRosterSlots} field slots used • ${recruitableOps.size} cadre transfers waiting",
+                expanded = "recruiting" in openSections,
+                onToggle = { toggleSection("recruiting") },
+                modifier = Modifier.testTag("roster_section_recruiting")
+            )
+        }
+        if ("recruiting" in openSections) item {
             Spacer(modifier = Modifier.height(6.dp))
             SectionHeader(
                 title = "Recruiting • ${selectedRecruitSource.label}",
@@ -698,7 +750,7 @@ fun SquadArmoryScreen(
             }
         }
 
-        if (recruitableOps.isNotEmpty()) {
+        if (recruitableOps.isNotEmpty() && "recruiting" in openSections) {
             item {
                 Spacer(modifier = Modifier.height(6.dp))
                 SectionHeader(
@@ -707,7 +759,7 @@ fun SquadArmoryScreen(
                 )
             }
 
-            items(recruitableOps, key = { it.id }) { op ->
+            if ("recruiting" in openSections) items(recruitableOps, key = { it.id }) { op ->
                 val canRecruit = !fieldSlotsFull &&
                     uiState.resources.credits >= op.recruitCreditCost &&
                     uiState.resources.intel >= op.recruitIntelCost
@@ -1068,6 +1120,45 @@ private fun ArmoryCatalogSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+private data class RosterSection(val id: String, val title: String, val summary: String, val members: List<Operator>)
+
+/** Item 67: a one-line section header (name and summary) that opens and closes its section. */
+@Composable
+private fun CollapsibleRosterHeader(
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val extra = LocalAegisColors.current
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (expanded) extra.brass.copy(alpha = 0.6f) else extra.borderSubtle),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .defaultMinSize(minHeight = 40.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(summary, style = MaterialTheme.typography.labelSmall, color = extra.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse $title" else "Expand $title",
+                tint = extra.textMuted
+            )
         }
     }
 }

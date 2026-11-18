@@ -326,6 +326,7 @@ fun AegisCommandApp() {
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
                                     onSwitchOperatorsToKit = viewModel::switchOperatorsToKit,
+                                    onSetTeamCamo = viewModel::setTeamFieldCamo,
                                     onRefreshRotatingMissions = viewModel::refreshRotatingMissions,
                                     onOpenSettings = { showSettings = true },
                                     onOpenCommandGuide = {
