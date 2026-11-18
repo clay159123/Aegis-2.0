@@ -230,7 +230,11 @@ fun MissionPrepDialog(
                     Column(Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.weight(1f)) {
-                                Text("${op.rank.code} ${op.callsign} • ${op.specialty.roleTag}", style = MaterialTheme.typography.bodySmall)
+                                NameWithSfMarker(
+                                    "${op.rank.code} ${op.callsign} • ${op.specialty.roleTag}",
+                                    TacticalCalculator.isSfQualified(op),
+                                    MaterialTheme.typography.bodySmall
+                                )
                                 Text(
                                     (squadOf(op.id)?.name ?: "No squad") + " • " +
                                         (if (gear.isEmpty()) "No gear" else gear.joinToString { it.name.substringBefore(' ') }),
@@ -257,9 +261,10 @@ fun MissionPrepDialog(
                                     },
                                     modifier = Modifier.fillMaxWidth().testTag("prep_swap_in_${cand.id}")
                                 ) {
-                                    Text(
+                                    NameWithSfMarker(
                                         "${cand.rank.code} ${cand.callsign} • ${cand.specialty.roleTag} (${squadOf(cand.id)?.name ?: "no squad"})",
-                                        style = MaterialTheme.typography.labelSmall,
+                                        TacticalCalculator.isSfQualified(cand),
+                                        MaterialTheme.typography.labelSmall,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }

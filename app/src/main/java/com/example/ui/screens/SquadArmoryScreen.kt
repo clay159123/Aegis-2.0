@@ -16,6 +16,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.catalog.GameCatalog
 import com.example.domain.TacticalCalculator
@@ -430,13 +431,17 @@ fun SquadArmoryScreen(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f, fill = false)
                             ) {
                                 RankInsigniaBadge(rank = op.rank)
                                 Text(
                                     text = op.callsign,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
                             Surface(
@@ -460,11 +465,15 @@ fun SquadArmoryScreen(
                             }
                         }
 
-                        Text(
-                            text = "${op.rank.title} ${op.name} • ${op.specialty.roleTag}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        // Item 68 (early): SF chip ahead of the soldier's name line
+                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            if (TacticalCalculator.isSfQualified(op)) SfMarker(modifier = Modifier.padding(top = 1.dp))
+                            Text(
+                                text = "${op.rank.title} ${op.name} • ${op.specialty.roleTag}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
 
                         val assignedSquad = uiState.squads.firstOrNull { op.id in it.memberIds }
                         if (assignedSquad != null) {
@@ -588,13 +597,17 @@ fun SquadArmoryScreen(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f, fill = false)
                             ) {
                                 RankInsigniaBadge(rank = op.rank)
                                 Text(
                                     text = op.callsign,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
                             Surface(
@@ -609,11 +622,15 @@ fun SquadArmoryScreen(
                                 )
                             }
                         }
-                        Text(
-                            text = "${op.rank.title} ${op.name} • ${op.hqRole?.title ?: op.specialty.label}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        // Item 68 (early): SF chip ahead of the soldier's name line
+                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            if (TacticalCalculator.isSfQualified(op)) SfMarker(modifier = Modifier.padding(top = 1.dp))
+                            Text(
+                                text = "${op.rank.title} ${op.name} • ${op.hqRole?.title ?: op.specialty.label}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Text(
                             text = "Supported ${op.staffOpsSupported} Field Ops • ${opMedals.size} Honors (+30% Staff XP/op)",
                             style = MaterialTheme.typography.labelSmall,
@@ -711,6 +728,7 @@ fun SquadArmoryScreen(
                                     style = MaterialTheme.typography.titleSmall,
                                     color = extra.brassBright
                                 )
+                                if (TacticalCalculator.isSfQualified(op)) SfMarker()
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(

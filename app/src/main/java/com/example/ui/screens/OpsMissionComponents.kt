@@ -23,6 +23,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,6 +36,7 @@ import com.example.domain.SquadCohesionRules
 import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.components.RankInsigniaBadge
+import com.example.ui.components.SfMarker
 import com.example.ui.components.TacticalPanelCard
 import com.example.ui.components.formatCountdown
 import com.example.ui.theme.LocalAegisColors
@@ -209,7 +213,13 @@ internal fun CompactHqMissionCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+        // Item 48: each theater has its own color stripe down the card's left edge
+        val theaterAccent = Color(mission.theater.accentArgb)
+        Column(
+            modifier = Modifier
+                .drawBehind { drawRect(theaterAccent, size = Size(4.dp.toPx(), size.height)) }
+                .padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -861,6 +871,7 @@ internal fun HqStagingSheet(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 RankInsigniaBadge(rank = op.rank)
+                                if (TacticalCalculator.isSfQualified(op)) SfMarker()
                                 Column {
                                     Text(
                                         text = buildString {
@@ -1092,7 +1103,7 @@ internal fun TheaterCampaignCard(
                     Text(
                         text = "${campaign.theater.label.uppercase()} • ${campaign.difficultyLabel.uppercase()}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = extra.textMuted,
+                        color = if (isUnlocked) Color(campaign.theater.accentArgb) else extra.textMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

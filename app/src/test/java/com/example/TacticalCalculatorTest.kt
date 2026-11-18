@@ -2633,23 +2633,24 @@ class TacticalCalculatorTest {
                 assertTrue(TacticalCalculator.isCampaignStageUnlocked(stage, emptySet(), allCleared))
             }
         }
-        assertEquals(1.10, TacticalCalculator.campaignIntelYieldMultiplier(allCleared), 0.0001)
-        assertEquals(1.10, TacticalCalculator.campaignCreditYieldMultiplier(allCleared), 0.0001)
+        // Campaign X adds +5% on top of the Boreal and Obsidian perks
+        assertEquals(1.155, TacticalCalculator.campaignIntelYieldMultiplier(allCleared), 0.0001)
+        assertEquals(1.155, TacticalCalculator.campaignCreditYieldMultiplier(allCleared), 0.0001)
         assertEquals(1.10, TacticalCalculator.campaignPrestigeAndXpMultiplier(allCleared), 0.0001)
 
         // 5. Rotating standalone board always picks 4 distinct contracts covering low/mod combat, high/extreme combat, and diplomatic/staff
         val seededRandom = kotlin.random.Random(42)
         val firstBatch = TacticalCalculator.pickNextRotatingMissions(previousIds = emptyList(), random = seededRandom)
-        assertEquals(4, firstBatch.size)
-        assertEquals(4, firstBatch.toSet().size)
+        assertEquals(TacticalCalculator.ROTATING_BOARD_SIZE, firstBatch.size)
+        assertEquals(TacticalCalculator.ROTATING_BOARD_SIZE, firstBatch.toSet().size)
         val firstMissions = firstBatch.map { id -> GameCatalog.rotatingStandalonePool.first { it.id == id } }
         assertTrue(firstMissions.any { it.scope == MissionScope.FIELD_COMBAT && (it.risk == MissionRisk.LOW || it.risk == MissionRisk.MODERATE) })
         assertTrue(firstMissions.any { it.scope == MissionScope.FIELD_COMBAT && (it.risk == MissionRisk.HIGH || it.risk == MissionRisk.EXTREME) })
         assertTrue(firstMissions.any { it.scope == MissionScope.STAFF_DIPLOMATIC })
 
         val secondBatch = TacticalCalculator.pickNextRotatingMissions(previousIds = firstBatch, random = seededRandom)
-        assertEquals(4, secondBatch.size)
-        assertEquals(4, secondBatch.toSet().size)
+        assertEquals(TacticalCalculator.ROTATING_BOARD_SIZE, secondBatch.size)
+        assertEquals(TacticalCalculator.ROTATING_BOARD_SIZE, secondBatch.toSet().size)
         assertTrue(secondBatch.any { it !in firstBatch })
     }
 

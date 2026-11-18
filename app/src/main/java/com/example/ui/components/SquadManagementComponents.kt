@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.domain.TacticalCalculator
 import com.example.domain.SquadCohesionRules
 import com.example.domain.model.*
 import com.example.ui.theme.LocalAegisColors
@@ -228,12 +229,11 @@ fun FieldSquadsSection(
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
-                                        Text(
+                                        NameWithSfMarker(
                                             text = member.callsign,
+                                            sfQualified = TacticalCalculator.isSfQualified(member),
                                             style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
                                             text = if (isDeployed) "DEPLOYED" else if (member.status == OperatorStatus.RECOVERING) "MEDBAY" else member.specialty.roleTag,

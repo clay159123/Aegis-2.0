@@ -26,7 +26,13 @@ object MissionNameGenerator {
         TheaterRegion.KESTREL_STRAIT to (listOf("Salt", "Coastal", "Riptide", "Strait", "Tidal") to listOf("Causeway", "Breakwater", "Strait", "Shoal", "Lighthouse")),
         TheaterRegion.BOREAL_RELAY to (listOf("Frozen", "Arctic", "Polar", "Glacial", "Frost") to listOf("Glacier", "Aurora", "Tundra", "Icefield", "Relay")),
         TheaterRegion.OBSIDIAN_HARBOR to (listOf("Black", "Obsidian", "Smoke", "Dockside", "Night") to listOf("Pier", "Drydock", "Wharf", "Quay", "Breaker")),
-        TheaterRegion.DIPLOMATIC_CORPS to (listOf("Allied", "Civil", "Marble", "Grand", "Neutral") to listOf("Accord", "Charter", "Envoy", "Assembly", "Concord"))
+        TheaterRegion.DIPLOMATIC_CORPS to (listOf("Allied", "Civil", "Marble", "Grand", "Neutral") to listOf("Accord", "Charter", "Envoy", "Assembly", "Concord")),
+        TheaterRegion.SAHR_EXPANSE to (listOf("Desert", "Sand", "Scorched", "Dune", "Sun") to listOf("Dune", "Oasis", "Mirage", "Wadi", "Caravan")),
+        TheaterRegion.VERDANCE_BASIN to (listOf("Jungle", "Emerald", "Monsoon", "Vine", "Canopy") to listOf("Canopy", "Delta", "Lagoon", "Temple", "Mangrove")),
+        TheaterRegion.MERIDIAN_CITY to (listOf("Concrete", "Glass", "Neon", "Downtown", "Urban") to listOf("Tower", "Plaza", "Boulevard", "Metro", "Skyline")),
+        TheaterRegion.KARST_PEAKS to (listOf("Alpine", "Summit", "Thin", "Granite", "Eagle") to listOf("Pass", "Peak", "Crag", "Glacier", "Aerie")),
+        TheaterRegion.TALON_ARCHIPELAGO to (listOf("Island", "Coral", "Reef", "Atoll", "Trade") to listOf("Atoll", "Reef", "Cove", "Lagoon", "Isle")),
+        TheaterRegion.IRONHOLD to (listOf("Iron", "Citadel", "Rampart", "Bastion", "Gray") to listOf("Gate", "Keep", "Rampart", "Wall", "Throne"))
     )
 
     /** "Op", "Contract" or "Diplomatic": the prefix of the mission's catalog title. */

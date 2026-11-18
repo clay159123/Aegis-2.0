@@ -81,6 +81,9 @@ fun HqOpsScreen(
     var collapsedGroupIds by remember { mutableStateOf(setOf("campaigns")) }
     var expandedMissionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expandedCampaignIds by remember { mutableStateOf(setOf("camp_veridian")) }
+    val theaterCampaignIds = remember { GameCatalog.campaigns.filter { !it.isSpecialForces }.map { it.id }.toSet() }
+    val theaterTotal = theaterCampaignIds.size
+    val theaterCleared = uiState.completedCampaignIds.count { it in theaterCampaignIds }
     var stagingMission by remember { mutableStateOf<MissionTemplate?>(null) }
     var prepMission by remember { mutableStateOf<MissionTemplate?>(null) }
     var prepTeamIds by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -146,7 +149,7 @@ fun HqOpsScreen(
         if (ids.isNotEmpty()) {
             ids.toSet()
         } else {
-            GameCatalog.rotatingStandalonePool.take(4).map { it.id }.toSet()
+            GameCatalog.rotatingStandalonePool.take(TacticalCalculator.ROTATING_BOARD_SIZE).map { it.id }.toSet()
         }
     }
 
@@ -589,7 +592,7 @@ fun HqOpsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionHeader(
                     title = "Campaigns, Rotating Ops & Schools",
-                    subtitle = "Advance Campaigns I–IV in sequence or deploy on 4m rotating standalone contracts"
+                    subtitle = "Advance Campaigns I to X in order or take rotating single missions"
                 )
 
                 Row(
@@ -663,7 +666,7 @@ fun HqOpsScreen(
             if (selectedTab == OpsBoardTab.ALL) {
                 item(key = "header_campaigns") {
                     OpsSectionBanner(
-                        title = "Theater Campaigns (${uiState.completedCampaignIds.size}/${GameCatalog.campaigns.size})",
+                        title = "Theater Campaigns (${theaterCleared}/${theaterTotal})",
                         badgeText = if (uiState.allCampaignsCleared) "ALL UNLOCKED" else "SEQUENTIAL",
                         badgeAccent = if (uiState.allCampaignsCleared) extra.brassBright else extra.signalsCyan,
                         expanded = isCampaignsExpanded,
@@ -692,18 +695,18 @@ fun HqOpsScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
                                 text = if (uiState.allCampaignsCleared) {
-                                    "ALL 4 CAMPAIGNS CLEARED — FULL FREE REPLAY ACTIVE"
+                                    "ALL 10 CAMPAIGNS CLEARED: FULL FREE REPLAY ACTIVE"
                                 } else {
-                                    "SEQUENTIAL THEATER CAMPAIGNS (${uiState.completedCampaignIds.size}/${GameCatalog.campaigns.size})"
+                                    "SEQUENTIAL THEATER CAMPAIGNS ($theaterCleared/$theaterTotal)"
                                 },
                                 style = MaterialTheme.typography.labelLarge,
                                 color = if (uiState.allCampaignsCleared) extra.brassBright else extra.signalsCyan
                             )
                             Text(
                                 text = if (uiState.allCampaignsCleared) {
-                                    "Every stage across Campaigns I–IV is now open for unrestricted replay, plus all 4 Theater Mastery buffs."
+                                    "Every stage across Campaigns I to X is open for replay, and all 10 Theater Perks are active."
                                 } else {
-                                    "Clear Campaigns I → II → III → IV in ascending difficulty to earn permanent Theater Perks & unlock all stages for replay."
+                                    "Clear Campaigns I to X in order, each harder than the last, to earn permanent Theater Perks and open every stage for replay."
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant

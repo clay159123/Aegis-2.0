@@ -1290,13 +1290,35 @@ data class UniformTailorRequest(
     }
 }
 
-enum class TheaterRegion(val label: String) {
-    HQ_GROUNDS("FOB Training & Schools"),
-    DIPLOMATIC_CORPS("Allied Diplomatic Wing"),
-    VERIDIAN_RIDGE("Veridian Ridge"),
-    KESTREL_STRAIT("Kestrel Strait"),
-    BOREAL_RELAY("Boreal Relay"),
-    OBSIDIAN_HARBOR("Obsidian Harbor")
+/**
+ * Where a mission happens. [terrain] names the ground (camouflage matching in Session 16 uses it) and
+ * [accentArgb] gives each theater its own look on mission cards (item 48).
+ */
+enum class TheaterRegion(val label: String, val terrain: Terrain, val accentArgb: Long) {
+    HQ_GROUNDS("FOB Training & Schools", Terrain.GARRISON, 0xFF8A93A0),
+    DIPLOMATIC_CORPS("Allied Diplomatic Wing", Terrain.GARRISON, 0xFFB9A46A),
+    VERIDIAN_RIDGE("Veridian Ridge", Terrain.WOODLAND, 0xFF5E8C4A),
+    KESTREL_STRAIT("Kestrel Strait", Terrain.COASTAL, 0xFF3F8FB5),
+    BOREAL_RELAY("Boreal Relay", Terrain.ARCTIC, 0xFFA9D3E8),
+    OBSIDIAN_HARBOR("Obsidian Harbor", Terrain.URBAN, 0xFF6F6A80),
+    SAHR_EXPANSE("Sahr Expanse", Terrain.DESERT, 0xFFD2A45C),
+    VERDANCE_BASIN("Verdance Basin", Terrain.JUNGLE, 0xFF2F9E6B),
+    MERIDIAN_CITY("Meridian City", Terrain.URBAN, 0xFFC0784E),
+    KARST_PEAKS("Karst Peaks", Terrain.MOUNTAIN, 0xFF9C8FB8),
+    TALON_ARCHIPELAGO("Talon Archipelago", Terrain.COASTAL, 0xFF3DB8B0),
+    IRONHOLD("Ironhold", Terrain.URBAN, 0xFFB24A4A)
+}
+
+/** The ground a theater is fought on. */
+enum class Terrain(val label: String) {
+    GARRISON("Garrison"),
+    WOODLAND("Woodland"),
+    COASTAL("Coastal"),
+    ARCTIC("Arctic"),
+    URBAN("Urban"),
+    DESERT("Desert"),
+    JUNGLE("Jungle"),
+    MOUNTAIN("High Mountain")
 }
 
 enum class MissionScope(val label: String, val hqStaffAllowed: Boolean) {
@@ -1349,7 +1371,7 @@ data class TheaterCampaign(
     val completionBonusPrestige: Double,
     val theaterBuffLabel: String,
     val stageMissionIds: List<String>,
-    /** Item 36: Special Forces campaign (Unconventional Warfare); not part of the four theater campaigns. */
+    /** Item 36: Special Forces campaign (Unconventional Warfare); not one of the ten theater campaigns. */
     val isSpecialForces: Boolean = false
 )
 
@@ -1394,7 +1416,8 @@ data class MissionTemplate(
     /** Item 40: stats this mission trains through experience. Empty for schools. */
     val trainsStats: Set<StatType> = emptySet(),
     /** On the water: Maritime insertion is possible (SF missions only). */
-    val coastal: Boolean = theater == TheaterRegion.KESTREL_STRAIT || theater == TheaterRegion.OBSIDIAN_HARBOR
+    val coastal: Boolean = theater == TheaterRegion.KESTREL_STRAIT || theater == TheaterRegion.OBSIDIAN_HARBOR ||
+        theater == TheaterRegion.TALON_ARCHIPELAGO
 ) {
     /** False for schools, which take any number of eligible soldiers in one class */
     val hasClassCap: Boolean get() = maxOperators != NO_CLASS_CAP

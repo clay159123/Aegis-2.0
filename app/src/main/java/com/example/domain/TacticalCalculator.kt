@@ -107,7 +107,7 @@ object TacticalCalculator {
         else -> "insig_cab"
     }
 
-    /** The four theater campaigns; the SF Unconventional Warfare campaign is endgame and doesn't count. */
+    /** The ten theater campaigns; the SF Unconventional Warfare campaign is endgame and doesn't count. */
     fun isAllCampaignsCleared(completedCampaignIds: Set<String>): Boolean =
         GameCatalog.campaigns.any { !it.isSpecialForces } &&
             GameCatalog.campaigns.filter { !it.isSpecialForces }.all { it.id in completedCampaignIds }
@@ -149,20 +149,51 @@ object TacticalCalculator {
         if ("camp_veridian" in completedCampaignIds) 0.92 else 1.0
 
     fun campaignIntelYieldMultiplier(completedCampaignIds: Set<String>): Double =
-        if ("camp_boreal" in completedCampaignIds) 1.10 else 1.0
+        (if ("camp_boreal" in completedCampaignIds) 1.10 else 1.0) * ironholdYield(completedCampaignIds)
 
     fun campaignCreditYieldMultiplier(completedCampaignIds: Set<String>): Double =
-        if ("camp_obsidian" in completedCampaignIds) 1.10 else 1.0
+        (if ("camp_obsidian" in completedCampaignIds) 1.10 else 1.0) * ironholdYield(completedCampaignIds)
 
     fun campaignPrestigeAndXpMultiplier(completedCampaignIds: Set<String>): Double =
         if ("camp_kestrel" in completedCampaignIds) 1.10 else 1.0
+
+    /** Cleared campaigns, set from game state, for theater perks applied deep in the calculations. */
+    @Volatile
+    var clearedCampaignIds: Set<String> = emptySet()
+
+    /** Campaign X: +5% credits, supplies and intel. */
+    private fun ironholdYield(completedCampaignIds: Set<String>): Double =
+        if ("camp_ironhold" in completedCampaignIds) 1.05 else 1.0
+
+    /** Campaign V (+10%) and X (+5%): supplies earned on missions. */
+    fun campaignSupplyYieldMultiplier(completedCampaignIds: Set<String>): Double =
+        (if ("camp_sahr" in completedCampaignIds) 1.10 else 1.0) * ironholdYield(completedCampaignIds)
+
+    /** Campaign VI: missions run 8% shorter. */
+    fun campaignDurationMultiplier(completedCampaignIds: Set<String> = clearedCampaignIds): Double =
+        if ("camp_verdance" in completedCampaignIds) 0.92 else 1.0
+
+    /** Campaign VII: +2% pass chance on field ops. */
+    fun campaignFieldPassBonus(completedCampaignIds: Set<String> = clearedCampaignIds): Int =
+        if ("camp_meridian" in completedCampaignIds) 2 else 0
+
+    /** Campaign VIII: Medbay recovery 20% faster. */
+    fun campaignRecoveryMultiplier(completedCampaignIds: Set<String> = clearedCampaignIds): Double =
+        if ("camp_karst" in completedCampaignIds) 0.80 else 1.0
+
+    /** Campaign IX: +2 survival on field ops. */
+    fun campaignSurvivalBonus(completedCampaignIds: Set<String> = clearedCampaignIds): Int =
+        if ("camp_talon" in completedCampaignIds) 2 else 0
+
+    /** Single missions on the rotating board at once. */
+    const val ROTATING_BOARD_SIZE = 5
 
     fun pickNextRotatingMissions(
         previousIds: List<String> = emptyList(),
         random: kotlin.random.Random = kotlin.random.Random
     ): List<String> {
         val pool = GameCatalog.rotatingStandalonePool
-        if (pool.size <= 4) return pool.map { it.id }
+        if (pool.size <= ROTATING_BOARD_SIZE) return pool.map { it.id }
 
         val prevSet = previousIds.toSet()
         val picked = mutableListOf<MissionTemplate>()
@@ -175,20 +206,15 @@ object TacticalCalculator {
             picked += source[random.nextInt(source.size)]
         }
 
-        // Balanced 4-contract rotating board:
-        // 1. Entry/Moderate Field Combat, 2. High/Extreme Field Combat, 3. Diplomatic/Staff, 4. Wildcard
-        pickFrom(
-            pool.filter {
-                it.scope == MissionScope.FIELD_COMBAT &&
-                    (it.risk == MissionRisk.LOW || it.risk == MissionRisk.MODERATE)
-            }
-        )
-        pickFrom(
-            pool.filter {
-                it.scope == MissionScope.FIELD_COMBAT &&
-                    (it.risk == MissionRisk.HIGH || it.risk == MissionRisk.EXTREME)
-            }
-        )
+        fun fieldAt(vararg risks: MissionRisk) = pool.filter {
+            it.scope == MissionScope.FIELD_COMBAT && it.requiredSquads == 1 && it.risk in risks
+        }
+
+        // Item 88: every board has a one-squad High and a one-squad Extreme mission.
+        // 1. Low/Moderate field, 2. High field, 3. Extreme field, 4. Diplomatic/Staff, 5. Wildcard
+        pickFrom(fieldAt(MissionRisk.LOW, MissionRisk.MODERATE))
+        pickFrom(fieldAt(MissionRisk.HIGH))
+        pickFrom(fieldAt(MissionRisk.EXTREME))
         pickFrom(pool.filter { it.scope == MissionScope.STAFF_DIPLOMATIC })
         pickFrom(pool)
 
@@ -485,7 +511,8 @@ object TacticalCalculator {
 
     /** Aid Station: medbay recovery time multiplier, -7% per level (floor 37%). */
     fun aidRecoveryMultiplier(facilities: List<FacilityState>): Double =
-        (1.0 - facilityLevel(facilities, FacilityType.AID_STATION).coerceAtLeast(0) * 0.07).coerceAtLeast(0.37)
+        (1.0 - facilityLevel(facilities, FacilityType.AID_STATION).coerceAtLeast(0) * 0.07).coerceAtLeast(0.37) *
+            campaignRecoveryMultiplier()
 
     /** Aid Station: chance a would-be fatality is pulled back as wounded instead, +5% per level. */
     fun aidSaveChancePct(facilities: List<FacilityState>): Int =
@@ -1649,7 +1676,8 @@ object TacticalCalculator {
         val mosBonus = mosCoverage(mission, selectedOperators).second
         val insertionDelta = insertionPassDelta(mission, insertion, scatteredDrop)
         val platoonBonus = if (platoonLeaderFor(mission, selectedOperators) != null) PLATOON_LEADER_PASS_BONUS else 0
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus)
+        val theaterPerk = if (mission.scope == MissionScope.FIELD_COMBAT) campaignFieldPassBonus() else 0
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk)
             .coerceIn(minOdds, maxOdds)
     }
 
@@ -1821,7 +1849,7 @@ object TacticalCalculator {
         val reconLevel = facilityLevel(facilities, FacilityType.RECON_ARRAY)
         val facMult = (1.0 - (reconLevel - 1) * 0.04).coerceAtLeast(0.60)
         val staffMult = 1.0 - (hqStaffSummary?.durationReductionPct ?: 0) / 100.0
-        return (facMult * staffMult).coerceAtLeast(0.50)
+        return (facMult * staffMult * campaignDurationMultiplier()).coerceAtLeast(0.50)
     }
 
     fun gearBonusMultiplier(facilities: List<FacilityState>): Double {
@@ -1944,7 +1972,8 @@ object TacticalCalculator {
         if (mission.risk.isTraining) return baseAvg.roundToInt()
         val cohesionSurv = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads, mission.requiredSquads > 1)?.survivalBonusPct ?: 0
         val platoonSurv = if (platoonLeaderFor(mission, selectedOperators) != null) PLATOON_LEADER_SURVIVAL_BONUS else 0
-        return (baseAvg + cohesionSurv + platoonSurv).roundToInt().coerceIn(42, 98)
+        val theaterPerk = if (mission.scope == MissionScope.FIELD_COMBAT) campaignSurvivalBonus() else 0
+        return (baseAvg + cohesionSurv + platoonSurv + theaterPerk).roundToInt().coerceIn(42, 98)
     }
 
     fun isRepeatableAward(medal: MedalDefinition): Boolean =
