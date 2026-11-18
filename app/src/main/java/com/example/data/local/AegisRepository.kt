@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 10
+        const val SAVE_FORMAT_VERSION = 11
     }
 
     private val commanderMutex = Mutex()
@@ -726,7 +726,9 @@ private fun DeploymentEntity.toDomain(): ActiveDeployment = ActiveDeployment(
     durationMillis = durationMillis,
     efficiencyPct = efficiencyPct,
     avgSurvivalPct = avgSurvivalPct,
-    squadId = squadId
+    squadId = squadId,
+    insertion = InsertionMethod.entries.find { it.name == insertionName } ?: InsertionMethod.GROUND,
+    pilotId = pilotId
 )
 
 private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
@@ -737,7 +739,9 @@ private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
     durationMillis = durationMillis,
     efficiencyPct = efficiencyPct,
     avgSurvivalPct = avgSurvivalPct,
-    squadId = squadId
+    squadId = squadId,
+    insertionName = insertion.name,
+    pilotId = pilotId
 )
 
 /** Citations stored as "missionId|title|millis|member+member;..." */

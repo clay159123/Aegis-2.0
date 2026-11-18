@@ -527,6 +527,216 @@ object TacticalCalculator {
         else -> 0
     }
 
+    // ---- Session 10: MOS fit and insertion methods (items 32, 33) ----
+    /** Pass chance per recommended MOS on the team (counted once per MOS). Also used for SF coverage (item 36). */
+    const val MOS_COVERAGE_BONUS_PCT = 3
+    const val MOS_COVERAGE_BONUS_CAP_PCT = 12
+
+    const val AIRBORNE_SCHOOL_ID = "msn_night_qual"
+    const val COMBAT_DIVER_SCHOOL_ID = "msn_combat_diver_school"
+    const val COMBAT_DIVER_BADGE_ID = "insig_combat_diver"
+    /** Military Free Fall school arrives with SF missions (item 36). */
+    const val MFF_SCHOOL_ID = "msn_mff_school"
+
+    const val HELO_DURATION_MULT = 0.75
+    /** Each point of pilot flight skill trims helicopter time a little more, down to [HELO_MIN_DURATION_MULT]. */
+    const val HELO_DURATION_PER_SKILL = 0.001
+    const val HELO_MIN_DURATION_MULT = 0.65
+    /** Casualty risk cut: survival points added for every soldier. */
+    const val HELO_SURVIVAL_BONUS = 3
+    /** Extra survival per 20 points of pilot flight skill. */
+    const val HELO_SURVIVAL_PER_20_SKILL = 1
+    const val HELO_BASE_SUPPLY_COST = 12.0
+    /** Each Airfield level cuts helicopter supply cost by this share, up to [HELO_MAX_AIRFIELD_DISCOUNT]. */
+    const val HELO_AIRFIELD_DISCOUNT_PER_LEVEL = 0.06
+    const val HELO_MAX_AIRFIELD_DISCOUNT = 0.5
+
+    const val AIRBORNE_DURATION_MULT = 0.6
+    const val AIRBORNE_SCATTER_CHANCE_PCT = 15
+    const val SCATTER_PASS_PENALTY = 10
+    const val SCATTER_SURVIVAL_PENALTY = 6
+
+    const val HALO_DURATION_MULT = 0.6
+    const val HALO_STEALTH_PASS_BONUS = 15
+    const val HALO_SCATTER_CHANCE_PCT = 5
+
+    const val MARITIME_DURATION_MULT = 0.85
+    const val MARITIME_STEALTH_PASS_BONUS = 10
+
+    private val stealthFocusWords = listOf("Stealth", "Recon", "Infiltration", "Night", "Intel")
+
+    /** Missions that reward a quiet approach (HALO and Maritime bonuses apply). */
+    fun isStealthWeighted(mission: MissionTemplate): Boolean =
+        stealthFocusWords.any { mission.primaryFocus.contains(it, ignoreCase = true) }
+
+    /** Recommended MOS the team covers, and the pass bonus (+3% each, up to +12%). Untagged missions: none. */
+    fun mosCoverage(mission: MissionTemplate, team: List<Operator>): Pair<Set<OperatorSpecialty>, Int> {
+        if (mission.recommendedSpecialties.isEmpty()) return emptySet<OperatorSpecialty>() to 0
+        val covered = mission.recommendedSpecialties.filter { mos -> team.any { it.specialty == mos } }.toSet()
+        return covered to (covered.size * MOS_COVERAGE_BONUS_PCT).coerceAtMost(MOS_COVERAGE_BONUS_CAP_PCT)
+    }
+
+    fun isAirborneQualified(op: Operator): Boolean = AIRBORNE_SCHOOL_ID in op.completedMissionIds
+    fun isFreeFallQualified(op: Operator): Boolean = MFF_SCHOOL_ID in op.completedMissionIds
+    fun isCombatDiver(op: Operator): Boolean = COMBAT_DIVER_SCHOOL_ID in op.completedMissionIds
+
+    /** Why this team can't use [method] on [mission], or null when it can. */
+    fun insertionBlocker(
+        mission: MissionTemplate,
+        method: InsertionMethod,
+        team: List<Operator>,
+        pilot: Operator?,
+        facilities: List<FacilityState>
+    ): String? {
+        if (method !in mission.allowedInsertions) return "Not available for this mission"
+        return when (method) {
+            InsertionMethod.GROUND -> null
+            InsertionMethod.HELICOPTER -> when {
+                facilityLevel(facilities, FacilityType.AIRFIELD) < 1 -> "Needs an Airfield"
+                pilot == null -> "Assign a pilot from the Aviation Pool"
+                !(pilot.isAviator && pilot.isWarrantOfficer) -> "Pilot must be a warrant officer aviator"
+                else -> null
+            }
+            InsertionMethod.AIRBORNE -> team.firstOrNull { !isAirborneQualified(it) }
+                ?.let { "${it.callsign} isn't Airborne-qualified" }
+            InsertionMethod.HALO -> team.firstOrNull { !isFreeFallQualified(it) }
+                ?.let { "${it.callsign} isn't Military Free Fall qualified" }
+            InsertionMethod.MARITIME -> when {
+                !mission.coastal -> "Coastal missions only"
+                else -> team.firstOrNull { !isCombatDiver(it) }?.let { "${it.callsign} isn't a Combat Diver" }
+            }
+        }
+    }
+
+    fun insertionDurationMultiplier(method: InsertionMethod, pilot: Operator?): Double = when (method) {
+        InsertionMethod.GROUND -> 1.0
+        InsertionMethod.HELICOPTER ->
+            (HELO_DURATION_MULT - (pilot?.flightSkill ?: 0) * HELO_DURATION_PER_SKILL).coerceAtLeast(HELO_MIN_DURATION_MULT)
+        InsertionMethod.AIRBORNE -> AIRBORNE_DURATION_MULT
+        InsertionMethod.HALO -> HALO_DURATION_MULT
+        InsertionMethod.MARITIME -> MARITIME_DURATION_MULT
+    }
+
+    fun scatterChancePct(method: InsertionMethod): Int = when (method) {
+        InsertionMethod.AIRBORNE -> AIRBORNE_SCATTER_CHANCE_PCT
+        InsertionMethod.HALO -> HALO_SCATTER_CHANCE_PCT
+        else -> 0
+    }
+
+    /** Pass-chance points from the insertion (a scattered drop costs points). */
+    fun insertionPassDelta(mission: MissionTemplate, method: InsertionMethod, scattered: Boolean): Int {
+        val bonus = when (method) {
+            InsertionMethod.HALO -> if (isStealthWeighted(mission)) HALO_STEALTH_PASS_BONUS else 0
+            InsertionMethod.MARITIME -> if (isStealthWeighted(mission)) MARITIME_STEALTH_PASS_BONUS else 0
+            else -> 0
+        }
+        return bonus - if (scattered) SCATTER_PASS_PENALTY else 0
+    }
+
+    /** Survival points from the insertion for each soldier: helicopters cut risk; scattered drops raise it. */
+    fun insertionSurvivalDelta(method: InsertionMethod, pilot: Operator?, airOpsBonusPct: Int, scattered: Boolean): Int {
+        val helo = if (method == InsertionMethod.HELICOPTER) {
+            val skill = (pilot?.flightSkill ?: 0) / 20 * HELO_SURVIVAL_PER_20_SKILL
+            val airOps = (HELO_SURVIVAL_BONUS * airOpsBonusPct / 100.0).roundToInt()
+            HELO_SURVIVAL_BONUS + skill + airOps
+        } else 0
+        return helo - if (scattered) SCATTER_SURVIVAL_PENALTY else 0
+    }
+
+    /** Extra supply for a helicopter lift: Airfield levels and the Air Operations Officer cut it. */
+    fun insertionSupplyCost(method: InsertionMethod, facilities: List<FacilityState>, airOpsBonusPct: Int): Int {
+        if (method != InsertionMethod.HELICOPTER) return 0
+        val airfield = facilityLevel(facilities, FacilityType.AIRFIELD).coerceAtLeast(0)
+        val fieldCut = (airfield * HELO_AIRFIELD_DISCOUNT_PER_LEVEL).coerceAtMost(HELO_MAX_AIRFIELD_DISCOUNT)
+        return (HELO_BASE_SUPPLY_COST * (1.0 - fieldCut) * (1.0 - airOpsBonusPct / 100.0)).roundToInt()
+    }
+
+    /** The seated Air Operations Officer's helicopter bonus, or 0. */
+    fun airOpsBonusPct(operators: List<Operator>): Int =
+        operators.filter { it.status == OperatorStatus.HQ_STAFF }.maxOfOrNull { it.hqRole?.heloInsertionBonusPct ?: 0 } ?: 0
+
+    /** Everything the prep screen shows, and what launch uses. Ground team only: the pilot is separate. */
+    data class MissionPlanPreview(
+        val passPct: Int,
+        val survivalPct: Int,
+        val durationSeconds: Int,
+        val supplyCost: Int,
+        val insertionBlocker: String?,
+        val coveredMos: Set<OperatorSpecialty>,
+        val mosBonusPct: Int,
+        val scatterChancePct: Int,
+        val cohesionOddsBonusPct: Int,
+        val mixedSquads: Boolean,
+        val breakdown: List<Pair<String, String>>
+    )
+
+    fun previewMissionPlan(
+        mission: MissionTemplate,
+        team: List<Operator>,
+        insertion: InsertionMethod,
+        pilot: Operator?,
+        allOperators: List<Operator>,
+        gearItems: List<GearItem>,
+        citations: List<AwardedMedal>,
+        facilities: List<FacilityState>,
+        hqStaffCount: Int,
+        hqStaffSummary: HqStaffSummary?,
+        squads: List<TacticalSquad>,
+        smartWardrobeEnabled: Boolean,
+        completedCampaignIds: Set<String> = emptySet()
+    ): MissionPlanPreview {
+        val airOps = airOpsBonusPct(allOperators)
+        val blocker = insertionBlocker(mission, insertion, team, pilot, facilities)
+        val pass = missionSuccessOddsPct(
+            mission, team, gearItems, citations, facilities, hqStaffCount, hqStaffSummary, squads, smartWardrobeEnabled,
+            insertion = insertion
+        )
+        val survival = (squadAvgSurvivalPct(mission, team, gearItems, citations, facilities, hqStaffCount, hqStaffSummary, squads) +
+            insertionSurvivalDelta(insertion, pilot, airOps, scattered = false)).coerceIn(42, 98)
+        val duration = (mission.durationSeconds * durationMultiplier(facilities, hqStaffSummary) *
+            insertionDurationMultiplier(insertion, pilot)).roundToInt()
+        val supply = dispatchSupplyCost(mission, team.size, supplyCostMultiplier(facilities, hqStaffSummary, completedCampaignIds)) +
+            insertionSupplyCost(insertion, facilities, airOps)
+        val (covered, mosBonus) = mosCoverage(mission, team)
+        val cohesion = SquadCohesionRules.evaluateActiveBonus(team, squads)
+        val scatter = scatterChancePct(insertion)
+        val breakdown = buildList {
+            if (mission.recommendedSpecialties.isNotEmpty()) {
+                add("MOS coverage" to "+$mosBonus% (${covered.size}/${mission.recommendedSpecialties.size})")
+            }
+            add("Insertion" to buildString {
+                append(insertion.shortLabel)
+                val passDelta = insertionPassDelta(mission, insertion, false)
+                if (passDelta != 0) append(" • +$passDelta% pass")
+                val survDelta = insertionSurvivalDelta(insertion, pilot, airOps, false)
+                if (survDelta != 0) append(" • +$survDelta survival")
+                if (scatter > 0) append(" • $scatter% scatter risk")
+            })
+            add("Cohesion" to when {
+                cohesion == null -> "None"
+                cohesion.mixedSquads -> "+${cohesion.successOddsBonusPct}% (mixed squads, cut 25%)"
+                else -> "+${cohesion.successOddsBonusPct}% (${cohesion.squad.name})"
+            })
+            val wo = technicalWarrantOddsBonus(mission, team)
+            if (wo > 0) add("Warrant officer" to "+$wo%")
+            val officer = team.filter { it.rank.isCommissioned }.maxByOrNull { it.rank.seniorityIndex }
+            if (officer != null) add("Officer" to "${officer.rank.code} ${officer.callsign} leading")
+        }
+        return MissionPlanPreview(
+            passPct = pass,
+            survivalPct = survival,
+            durationSeconds = duration,
+            supplyCost = supply,
+            insertionBlocker = blocker,
+            coveredMos = covered,
+            mosBonusPct = mosBonus,
+            scatterChancePct = scatter,
+            cohesionOddsBonusPct = cohesion?.successOddsBonusPct ?: 0,
+            mixedSquads = cohesion?.mixedSquads == true,
+            breakdown = breakdown
+        )
+    }
+
     /** True once a soldier has started (attempted) or finished this school. */
     private fun hasEnteredSchool(operator: Operator, missionId: String): Boolean =
         missionId in operator.completedMissionIds || (operator.schoolAttempts[missionId] ?: 0) > 0
@@ -1234,7 +1444,9 @@ object TacticalCalculator {
         hqStaffCount: Int = 0,
         hqStaffSummary: HqStaffSummary? = null,
         squads: List<TacticalSquad> = emptyList(),
-        smartWardrobeEnabled: Boolean = false
+        smartWardrobeEnabled: Boolean = false,
+        insertion: InsertionMethod = InsertionMethod.GROUND,
+        scatteredDrop: Boolean = false
     ): Int {
         if (selectedOperators.isEmpty()) return 0
         if (mission.risk.isTraining) {
@@ -1270,7 +1482,9 @@ object TacticalCalculator {
             MissionRisk.EXTREME -> 12 to 62
         }
         val warrantBonus = if (mission.scope == MissionScope.TRAINING) 0 else technicalWarrantOddsBonus(mission, selectedOperators)
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus)
+        val mosBonus = mosCoverage(mission, selectedOperators).second
+        val insertionDelta = insertionPassDelta(mission, insertion, scatteredDrop)
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta)
             .coerceIn(minOdds, maxOdds)
     }
 
@@ -1977,6 +2191,11 @@ object TacticalCalculator {
                     missing += "Complete 3+ Ops (${operator.missionsCompleted}/3)"
                 }
             }
+            COMBAT_DIVER_BADGE_ID -> {
+                if (COMBAT_DIVER_SCHOOL_ID !in operator.completedMissionIds) {
+                    missing += "Graduate Combat Diver Qualification"
+                }
+            }
             AVIATOR_WINGS_ID -> {
                 if (FLIGHT_SCHOOL_MISSION_ID !in operator.completedMissionIds) {
                     missing += "Graduate Flight School"
@@ -2282,6 +2501,10 @@ object TacticalCalculator {
                                 // Ranger awards the Ranger Tab only, for every MOS
                                 val medalId = firstEligibleUnowned(listOf("insig_ranger_tab"), includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} in small-unit tactics, mountaineering & patrol leadership — Tan Beret authorized."
+                            }
+                            COMBAT_DIVER_SCHOOL_ID -> {
+                                val medalId = firstEligibleUnowned(listOf(COMBAT_DIVER_BADGE_ID), includeGeneralFallback = false)
+                                medalId to "Graduated ${mission.title}: closed-circuit dives and surf passage complete."
                             }
                             FLIGHT_SCHOOL_MISSION_ID -> {
                                 val medalId = firstEligibleUnowned(listOf(AVIATOR_WINGS_ID, "cord_aviation"), includeGeneralFallback = false)

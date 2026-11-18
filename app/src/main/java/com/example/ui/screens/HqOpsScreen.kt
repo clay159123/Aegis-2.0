@@ -60,6 +60,9 @@ fun HqOpsScreen(
     onRushFacility: (FacilityType) -> Unit = {},
     onStartDeployment: (MissionTemplate, List<String>) -> Unit,
     onStartDeploymentWithSquad: ((MissionTemplate, List<String>, String?) -> Unit)? = null,
+    /** Item 34: field missions launch from the prep screen with an insertion method and optional pilot. */
+    onLaunchPrepared: ((MissionTemplate, List<String>, String?, InsertionMethod, String?) -> Unit)? = null,
+    onAutoGear: () -> Unit = {},
     onClaimDeployment: (String) -> Unit,
     onTreatWounded: (String) -> Unit,
     onNavigateToDress: () -> Unit,
@@ -78,6 +81,9 @@ fun HqOpsScreen(
     var expandedMissionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expandedCampaignIds by remember { mutableStateOf(setOf("camp_veridian")) }
     var stagingMission by remember { mutableStateOf<MissionTemplate?>(null) }
+    var prepMission by remember { mutableStateOf<MissionTemplate?>(null) }
+    var prepTeamIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var prepSquadId by remember { mutableStateOf<String?>(null) }
     var selectedOperatorIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedSquadId by remember { mutableStateOf<String?>(null) }
 
@@ -809,6 +815,30 @@ fun HqOpsScreen(
         }
     }
 
+    val missionForPrep = prepMission
+    val launchPrepared = onLaunchPrepared
+    if (missionForPrep != null && launchPrepared != null) {
+        com.example.ui.components.MissionPrepDialog(
+            mission = missionForPrep,
+            uiState = uiState,
+            initialTeamIds = prepTeamIds,
+            deployedOpIds = deployedOpIds,
+            onAutoGear = onAutoGear,
+            onFieldKit = { ids -> onSwitchOperatorsToKit(ids, WardrobeKit.FIELD) },
+            onLaunch = { ids, insertion, pilotId ->
+                launchPrepared(missionForPrep, ids, prepSquadId, insertion, pilotId)
+                prepMission = null
+                prepTeamIds = emptyList()
+                prepSquadId = null
+            },
+            onBack = {
+                prepMission = null
+                prepTeamIds = emptyList()
+                prepSquadId = null
+            }
+        )
+    }
+
     val missionToStage = stagingMission
     if (missionToStage != null) {
         val stagingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -864,7 +894,12 @@ fun HqOpsScreen(
                 },
                 onLaunch = {
                     val launchWithSquad = onStartDeploymentWithSquad
-                    if (launchWithSquad != null) {
+                    if (missionToStage.scope == MissionScope.FIELD_COMBAT && onLaunchPrepared != null) {
+                        // Field missions get the prep screen first
+                        prepMission = missionToStage
+                        prepTeamIds = selectedOperatorIds
+                        prepSquadId = selectedSquadId
+                    } else if (launchWithSquad != null) {
                         launchWithSquad(missionToStage, selectedOperatorIds, selectedSquadId)
                     } else {
                         onStartDeployment(missionToStage, selectedOperatorIds)

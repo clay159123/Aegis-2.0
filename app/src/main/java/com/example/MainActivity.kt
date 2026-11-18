@@ -298,6 +298,8 @@ fun AegisCommandApp() {
                                     onRushFacility = viewModel::rushFacility,
                                     onStartDeployment = { m, ids -> viewModel.startDeployment(m, ids) },
                                     onStartDeploymentWithSquad = viewModel::startDeployment,
+                                    onLaunchPrepared = viewModel::startDeployment,
+                                    onAutoGear = viewModel::autoDistributeFieldGear,
                                     onClaimDeployment = viewModel::claimDeployment,
                                     onTreatWounded = viewModel::treatWoundedOperator,
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },

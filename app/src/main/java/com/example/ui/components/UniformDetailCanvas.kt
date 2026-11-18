@@ -1793,6 +1793,14 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 drawStar(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.18f, badgeH * 0.08f, gold)
             }
         }
+        InsigniaShape.DIVER_BADGE -> {
+            // Dive helmet with a faceplate, over a pair of crossed tridents
+            drawLine(col, Offset(cx - badgeW * 0.34f, cy + badgeH * 0.34f), Offset(cx + badgeW * 0.34f, cy - badgeH * 0.30f), strokeWidth = 1.3f, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx + badgeW * 0.34f, cy + badgeH * 0.34f), Offset(cx - badgeW * 0.34f, cy - badgeH * 0.30f), strokeWidth = 1.3f, cap = StrokeCap.Round)
+            drawCircle(col, radius = badgeH * 0.30f, center = Offset(cx, cy))
+            drawCircle(darkBack, radius = badgeH * 0.13f, center = Offset(cx, cy - badgeH * 0.02f))
+            drawRect(col, Offset(cx - badgeW * 0.14f, cy + badgeH * 0.24f), Size(badgeW * 0.28f, badgeH * 0.10f))
+        }
         InsigniaShape.AVIATOR_WINGS, InsigniaShape.SENIOR_AVIATOR_WINGS, InsigniaShape.MASTER_AVIATOR_WINGS -> {
             // Long straight wings with a shield in the middle; a star (Senior) or wreathed star (Master) above
             drawLine(col, Offset(cx - badgeW * 0.50f, cy - badgeH * 0.02f), Offset(cx + badgeW * 0.50f, cy - badgeH * 0.02f), strokeWidth = 2.2f, cap = StrokeCap.Round)

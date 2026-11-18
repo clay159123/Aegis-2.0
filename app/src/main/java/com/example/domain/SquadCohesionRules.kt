@@ -49,6 +49,9 @@ object SquadCohesionRules {
             .firstOrNull()
     }
 
+    /** Share of the cohesion bonus lost when the team mixes in soldiers from another squad (this mission only). */
+    const val MIXED_SQUAD_COHESION_CUT = 0.25
+
     /** Cohesion XP a Team Leader adds when present on a mission (a smaller version of the squad leader's bonus). */
     const val TEAM_LEADER_COHESION_XP = 8
 
@@ -191,16 +194,23 @@ object SquadCohesionRules {
 
         if (effBonus <= 0 && survBonus <= 0 && oddsBonus <= 0 && !fullStrength) return null
 
+        // Item 34: anyone on the team who belongs to a different squad mixes the squads for this mission
+        val mixed = selectedOperators.any { op ->
+            op.id !in squad.memberIds && squads.any { other -> other.id != squad.id && op.id in other.memberIds }
+        }
+        fun cut(v: Int): Int = if (mixed) (v * (1.0 - MIXED_SQUAD_COHESION_CUT)).roundToInt() else v
+
         return ActiveSquadCohesionBonus(
             squad = squad,
             deployedMemberCount = deployedCount,
             leaderPresent = leaderPresent,
             cohesionScore = score,
             tier = tier,
-            efficiencyBonusPct = effBonus,
-            survivalBonusPct = survBonus + fullStrengthBonus,
-            successOddsBonusPct = oddsBonus + fullStrengthBonus,
-            fullStrength = fullStrength
+            efficiencyBonusPct = cut(effBonus),
+            survivalBonusPct = cut(survBonus + fullStrengthBonus),
+            successOddsBonusPct = cut(oddsBonus + fullStrengthBonus),
+            fullStrength = fullStrength,
+            mixedSquads = mixed
         )
     }
 

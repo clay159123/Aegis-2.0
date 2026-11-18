@@ -918,7 +918,8 @@ enum class InsigniaShape {
     STAFF_CREST,
     AVIATOR_WINGS,
     SENIOR_AVIATOR_WINGS,
-    MASTER_AVIATOR_WINGS
+    MASTER_AVIATOR_WINGS,
+    DIVER_BADGE
 }
 
 enum class ChestBadgeSlot(val label: String, val ruleHint: String) {
@@ -1342,7 +1343,13 @@ data class MissionTemplate(
     val campaignStageOrder: Int? = null,
     val isEvergreenStandalone: Boolean = false,
     val isRotatingStandalone: Boolean = false,
-    val contractTag: String? = null
+    val contractTag: String? = null,
+    /** Item 32: specialties that clearly help on this mission. Empty for general missions (no MOS bonus). */
+    val recommendedSpecialties: List<OperatorSpecialty> = emptyList(),
+    /** Item 33: how the team can get there. Ground is always allowed. */
+    val allowedInsertions: List<InsertionMethod> = listOf(InsertionMethod.GROUND),
+    /** On the water: Maritime insertion is possible (SF missions only). */
+    val coastal: Boolean = theater == TheaterRegion.KESTREL_STRAIT || theater == TheaterRegion.OBSIDIAN_HARBOR
 ) {
     /** False for schools, which take any number of eligible soldiers in one class */
     val hasClassCap: Boolean get() = maxOperators != NO_CLASS_CAP
@@ -1353,6 +1360,15 @@ data class MissionTemplate(
     companion object {
         const val NO_CLASS_CAP = Int.MAX_VALUE
     }
+}
+
+/** Item 33: how a team reaches the objective. All tuning numbers live in TacticalCalculator. */
+enum class InsertionMethod(val label: String, val shortLabel: String) {
+    GROUND("Ground / Vehicle", "Ground"),
+    HELICOPTER("Helicopter", "Helo"),
+    AIRBORNE("Airborne (static line)", "Airborne"),
+    HALO("HALO free fall", "HALO"),
+    MARITIME("Maritime (combat divers)", "Maritime")
 }
 
 /** Leadership a soldier's uniform shows: a pin above the nameplate on dress uniforms, a chest tab in the field. */
@@ -1499,7 +1515,9 @@ data class ActiveSquadCohesionBonus(
     val efficiencyBonusPct: Int,
     val survivalBonusPct: Int,
     val successOddsBonusPct: Int,
-    val fullStrength: Boolean = false
+    val fullStrength: Boolean = false,
+    /** Soldiers from another squad joined for this mission: bonus cut 25% for this mission only. */
+    val mixedSquads: Boolean = false
 )
 
 data class ActiveDeployment(
@@ -1510,8 +1528,14 @@ data class ActiveDeployment(
     val durationMillis: Long,
     val efficiencyPct: Int,
     val avgSurvivalPct: Int,
-    val squadId: String? = null
+    val squadId: String? = null,
+    val insertion: InsertionMethod = InsertionMethod.GROUND,
+    /** Helicopter pilot riding this mission; also listed in [operatorIds] so they're marked deployed. */
+    val pilotId: String? = null
 ) {
+    /** The soldiers on the ground (everyone but the pilot). */
+    val groundOperatorIds: List<String> get() = operatorIds.filter { it != pilotId }
+
     fun progressFraction(nowMillis: Long): Float {
         if (durationMillis <= 0L) return 1f
         return ((nowMillis - startedAtMillis).toFloat() / durationMillis.toFloat()).coerceIn(0f, 1f)

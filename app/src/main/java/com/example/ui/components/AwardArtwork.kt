@@ -425,6 +425,13 @@ fun AwardVisualThumbnail(
                             drawStar(Offset(cx, h * 0.22f), h * 0.15f, h * 0.065f, Color(0xFFF2D272))
                         }
                     }
+                    InsigniaShape.DIVER_BADGE -> {
+                        drawLine(col, Offset(w * 0.18f, h * 0.90f), Offset(w * 0.82f, h * 0.10f), strokeWidth = (h * 0.06f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
+                        drawLine(col, Offset(w * 0.82f, h * 0.90f), Offset(w * 0.18f, h * 0.10f), strokeWidth = (h * 0.06f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
+                        drawCircle(col, radius = h * 0.30f, center = Offset(cx, cy))
+                        drawCircle(Color(0xFF121722), radius = h * 0.13f, center = Offset(cx, cy - h * 0.02f))
+                        drawRect(col, Offset(cx - w * 0.12f, cy + h * 0.24f), Size(w * 0.24f, h * 0.10f))
+                    }
                     InsigniaShape.AVIATOR_WINGS, InsigniaShape.SENIOR_AVIATOR_WINGS, InsigniaShape.MASTER_AVIATOR_WINGS -> {
                         val shape = medal.insigniaShape
                         drawLine(col, Offset(w * 0.04f, cy - h * 0.02f), Offset(w * 0.96f, cy - h * 0.02f), strokeWidth = (h * 0.10f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
