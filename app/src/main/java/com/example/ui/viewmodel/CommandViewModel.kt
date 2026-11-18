@@ -633,7 +633,9 @@ class CommandViewModel(
     fun startDeployment(
         mission: MissionTemplate,
         selectedOperatorIds: List<String>,
-        squadId: String? = null
+        squadId: String? = null,
+        insertion: InsertionMethod = InsertionMethod.GROUND,
+        pilotId: String? = null
     ) {
         val state = uiState.value
         if (mission.scope != MissionScope.TRAINING && state.occupiedDeploymentSlots >= state.maxDeploymentSlots) {
@@ -698,7 +700,17 @@ class CommandViewModel(
             showBanner(msg)
             return
         }
-        val effectiveSupplyCost = TacticalCalculator.dispatchSupplyCost(
+        // Item 33: the insertion must be allowed and the team (and pilot) qualified
+        val pilot = if (insertion == InsertionMethod.HELICOPTER) {
+            state.operators.find { it.id == pilotId && it.id !in deployedIds && it.status == OperatorStatus.READY }
+        } else null
+        val insertionBlocker = TacticalCalculator.insertionBlocker(mission, insertion, chosenOps, pilot, state.facilities)
+        if (insertionBlocker != null) {
+            showBanner("${insertion.shortLabel} insertion: $insertionBlocker")
+            return
+        }
+        val airOps = TacticalCalculator.airOpsBonusPct(state.operators)
+        val effectiveSupplyCost = (TacticalCalculator.dispatchSupplyCost(
             mission = mission,
             soldierCount = chosenOps.size,
             multiplier = TacticalCalculator.supplyCostMultiplier(
@@ -706,7 +718,7 @@ class CommandViewModel(
                 hqStaffSummary = state.hqStaffSummary,
                 completedCampaignIds = state.completedCampaignIds
             )
-        ).toDouble()
+        ) + TacticalCalculator.insertionSupplyCost(insertion, state.facilities, airOps)).toDouble()
         if (state.resources.supplies < effectiveSupplyCost) {
             showBanner("Need ${effectiveSupplyCost.toInt()} SUP to deploy.")
             return
@@ -716,7 +728,8 @@ class CommandViewModel(
         val resolvedSquadId = squadId?.takeIf { id -> state.squads.any { it.id == id } }
             ?: activeBonus?.squad?.id
 
-        val durationMs = (mission.durationSeconds * 1000.0 * TacticalCalculator.durationMultiplier(state.facilities, state.hqStaffSummary)).toLong()
+        val durationMs = (mission.durationSeconds * 1000.0 * TacticalCalculator.durationMultiplier(state.facilities, state.hqStaffSummary) *
+            TacticalCalculator.insertionDurationMultiplier(insertion, pilot)).toLong()
         val effPct = TacticalCalculator.missionEfficiencyPct(
             mission = mission,
             selectedOperators = chosenOps,
@@ -757,12 +770,16 @@ class CommandViewModel(
         val deployment = ActiveDeployment(
             id = "dep_${UUID.randomUUID().toString().take(8)}",
             templateId = mission.id,
-            operatorIds = selectedOperatorIds,
+            // The pilot rides along, so they're listed (and marked deployed) with the team
+            operatorIds = selectedOperatorIds + listOfNotNull(pilot?.id),
             startedAtMillis = now,
             durationMillis = durationMs,
             efficiencyPct = effPct,
-            avgSurvivalPct = previewOddsPct,
-            squadId = resolvedSquadId
+            avgSurvivalPct = (previewOddsPct + if (mission.risk.isTraining) 0 else
+                TacticalCalculator.insertionSurvivalDelta(insertion, pilot, airOps, scattered = false)).coerceIn(0, 98),
+            squadId = resolvedSquadId,
+            insertion = insertion,
+            pilotId = pilot?.id
         )
 
         viewModelScope.launch {
@@ -803,6 +820,7 @@ class CommandViewModel(
         val outcomes = mutableListOf<OperatorDebriefOutcome>()
 
         val missionSucceeded: Boolean
+        var scatteredDrop = false
         val rifleQualResults = mutableListOf<TacticalCalculator.RifleQualResult>()
         if (mission.risk.isTraining) {
             var anyPassed = false
@@ -946,9 +964,18 @@ class CommandViewModel(
             }
             missionSucceeded = anyPassed
         } else {
+            val pilotId = deployment.pilotId
+            val groundOps = targetOps.filter { it.id != pilotId }
+            val pilotOp = targetOps.find { it.id == pilotId }
+            val airOps = TacticalCalculator.airOpsBonusPct(state.operators)
+            // Airborne and HALO drops can scatter: harder mission, more casualties
+            scatteredDrop = Random.nextInt(100) < TacticalCalculator.scatterChancePct(deployment.insertion)
+            val insertionSurvival = TacticalCalculator.insertionSurvivalDelta(deployment.insertion, pilotOp, airOps, scatteredDrop)
             val successOdds = TacticalCalculator.missionSuccessOddsPct(
+                insertion = deployment.insertion,
+                scatteredDrop = scatteredDrop,
                 mission = mission,
-                selectedOperators = targetOps,
+                selectedOperators = groundOps,
                 gearItems = state.gearItems,
                 citations = state.citations,
                 facilities = state.facilities,
@@ -958,7 +985,7 @@ class CommandViewModel(
                 smartWardrobeEnabled = state.smartWardrobeEnabled
             )
             missionSucceeded = Random.nextInt(100) < successOdds
-            val activeCohesionBonus = SquadCohesionRules.evaluateActiveBonus(targetOps, state.squads)
+            val activeCohesionBonus = SquadCohesionRules.evaluateActiveBonus(groundOps, state.squads)
             val cohesionSurvBonus = activeCohesionBonus?.survivalBonusPct ?: 0
 
             var petitionAlreadyActive = state.operators.any {
@@ -975,7 +1002,7 @@ class CommandViewModel(
                     facilities = state.facilities,
                     hqStaffCount = state.hqStaffCount,
                     hqStaffSummary = state.hqStaffSummary
-                ) + cohesionSurvBonus).coerceIn(42, 98)
+                ) + (if (op.id == pilotId) 0 else cohesionSurvBonus) + insertionSurvival).coerceIn(38, 98)
                 val survivalPct = if (missionSucceeded) baseSurvivalPct else (baseSurvivalPct - 8).coerceAtLeast(38)
                 val roll = Random.nextInt(100)
                 val outcome = when {
@@ -1098,9 +1125,30 @@ class CommandViewModel(
                     hqRole = if (outcome == OperatorOutcomeType.FALLEN) null else op.hqRole,
                     recoveryUntilMillis = recoveryAt,
                     transferRequested = askTransfer,
-                    retirementRequested = if (outcome == OperatorOutcomeType.FALLEN) false else askRetirement
+                    retirementRequested = if (outcome == OperatorOutcomeType.FALLEN) false else askRetirement,
+                    // The pilot logs a combat sortie (Air Medal progress)
+                    combatSortiesFlown = op.combatSortiesFlown + if (op.id == pilotId && isCombatOp) 1 else 0
                 )
                 updatedOperators.add(updatedOp)
+                if (op.id == pilotId && isCombatOp && outcome != OperatorOutcomeType.FALLEN) {
+                    val airMedal = GameCatalog.medals.first { it.id == TacticalCalculator.AIR_MEDAL_ID }
+                    val owned = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet()
+                    val alreadyPending = state.pendingDeeds.any { it.operatorId == op.id && it.recommendedMedalId == airMedal.id }
+                    if (!alreadyPending &&
+                        TacticalCalculator.evaluateAwardEligibility(airMedal, updatedOp, owned, state.citations).eligible
+                    ) {
+                        newDeeds.add(
+                            PendingDeed(
+                                id = "deed_${UUID.randomUUID().toString().take(8)}",
+                                operatorId = op.id,
+                                missionTitle = mission.title,
+                                deedSummary = "Flew ${updatedOp.combatSortiesFlown} combat sorties as pilot in command, most recently ${mission.title}.",
+                                recommendedMedalId = airMedal.id,
+                                createdAtMillis = now
+                            )
+                        )
+                    }
+                }
 
                 val existingAndQueuedMedals = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet() +
                     state.pendingDeeds.filter { it.operatorId == op.id }.map { it.recommendedMedalId }.toSet()
@@ -1471,7 +1519,14 @@ class CommandViewModel(
                 intelEarned = intelEarned + bonusIntel,
                 prestigeEarned = prestigeEarned + bonusPrestige,
                 operatorOutcomes = outcomes,
-                squadCohesionNote = cohesionSummaryNote,
+                squadCohesionNote = listOfNotNull(
+                    when {
+                        deployment.insertion == InsertionMethod.GROUND || mission.risk.isTraining -> null
+                        scatteredDrop -> "${deployment.insertion.shortLabel} insertion: scattered drop (-${TacticalCalculator.SCATTER_PASS_PENALTY}% pass, higher casualties)."
+                        else -> "${deployment.insertion.shortLabel} insertion went in clean."
+                    },
+                    cohesionSummaryNote
+                ).joinToString(" ").ifBlank { null },
                 campaignProgressNote = campaignProgressNote
             )
         }

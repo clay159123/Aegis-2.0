@@ -1945,10 +1945,79 @@ object GameCatalog {
             techBonus = 2,
             resilienceBonus = 2,
             yieldBonusPct = 5
+        ),
+        MedalDefinition(
+            id = "insig_combat_diver",
+            name = "Special Operations Diver Badge",
+            shortName = "DIVER",
+            category = AwardCategory.SCHOOL_INSIGNIA,
+            tier = MedalTier.SUPREME,
+            precedenceOrder = 47,
+            minTierRequired = RankTier.NCO,
+            insigniaShape = InsigniaShape.DIVER_BADGE,
+            insigniaColorHex = 0xFFDDE3EC,
+            allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
+            description = "Silver dive helmet badge of the Special Forces Combat Diver Qualification Course.",
+            qualificationRule = "Graduate Combat Diver Qualification (SF-qualified).",
+            ribbonStripeHexes = listOf(0xFF14365C, 0xFFDDE3EC, 0xFF14365C),
+            prestigeCost = 14,
+            minMissionsRequired = 0,
+            firepowerBonus = 1,
+            stealthBonus = 4,
+            techBonus = 1,
+            resilienceBonus = 3,
+            yieldBonusPct = 5
         )
     )
 
-    val missions: List<MissionTemplate> = listOf(
+    /** Missions with Session 10 MOS and insertion tags applied (see [tagMission]). */
+    val missions: List<MissionTemplate> by lazy { baseMissions.map { tagMission(it) } }
+
+    /**
+     * Item 32/33 tags, kept in one table. Only missions where a specialty clearly matters get MOS tags.
+     * Every field mission can go by ground; most allow helicopters; open terrain allows Airborne drops.
+     * HALO and Maritime arrive with Special Forces missions (Session 11).
+     */
+    private fun tagMission(m: MissionTemplate): MissionTemplate {
+        if (m.scope != MissionScope.FIELD_COMBAT) return m
+        val A = OperatorSpecialty.ASSAULT
+        val R = OperatorSpecialty.RECON
+        val S = OperatorSpecialty.SIGNALS
+        val B = OperatorSpecialty.BREACHER
+        val M = OperatorSpecialty.MEDIC
+        val G = InsertionMethod.GROUND
+        val H = InsertionMethod.HELICOPTER
+        val AB = InsertionMethod.AIRBORNE
+        val tags: Map<String, Pair<List<OperatorSpecialty>, List<InsertionMethod>>> = mapOf(
+            "msn_ridge_patrol" to (emptyList<OperatorSpecialty>() to listOf(G, H)),
+            "msn_relay_sync" to (listOf(S) to listOf(G, H)),
+            "msn_harbor_overwatch" to (listOf(R) to listOf(G, H)),
+            "msn_convoy_escort" to (emptyList<OperatorSpecialty>() to listOf(G)),
+            "msn_citadel_recovery" to (listOf(B, M) to listOf(G, H)),
+            "msn_deep_expedition" to (listOf(A, M, S) to listOf(G, H, AB)),
+            "msn_sa_timber_cache" to (listOf(R) to listOf(G, H, AB)),
+            "msn_sa_medevac_lift" to (listOf(M) to listOf(G, H)),
+            "msn_sa_mine_sweep" to (listOf(B) to listOf(G, H)),
+            "msn_sa_blackout_raid" to (listOf(S, A) to listOf(G, H, AB)),
+            "msn_sa_strait_interdict" to (listOf(A, B) to listOf(G, H)),
+            "camp_veridian_1" to (listOf(R) to listOf(G, H, AB)),
+            "camp_veridian_2" to (listOf(A) to listOf(G, H)),
+            "camp_veridian_3" to (listOf(S, A) to listOf(G, H, AB)),
+            "camp_boreal_1" to (listOf(S) to listOf(G, H)),
+            "camp_boreal_3" to (emptyList<OperatorSpecialty>() to listOf(G)),
+            "camp_boreal_4" to (listOf(B, A) to listOf(G, H)),
+            "camp_obsidian_1" to (listOf(R) to listOf(G, H)),
+            "camp_obsidian_2" to (listOf(B) to listOf(G, H)),
+            "camp_obsidian_3" to (listOf(A, B, M) to listOf(G, H)),
+            "camp_kestrel_1" to (listOf(A) to listOf(G, H)),
+            "camp_kestrel_3" to (listOf(A, B) to listOf(G, H, AB)),
+            "camp_kestrel_4" to (listOf(A, M, S) to listOf(G, H, AB))
+        )
+        val (mos, insertions) = tags[m.id] ?: return m.copy(allowedInsertions = listOf(G, H))
+        return m.copy(recommendedSpecialties = mos, allowedInsertions = insertions)
+    }
+
+    private val baseMissions: List<MissionTemplate> = listOf(
         MissionTemplate(
             id = "msn_basic_qual",
             title = "School: Marksmanship & Tactical Basics",
@@ -2479,6 +2548,45 @@ object GameCatalog {
                 "SFAS Star Course nocturnal land navigation under heavy ruck.",
                 "Small-unit unconventional warfare & Robin Sage exercise live.",
                 "Q-Course Cadre Board adjourned — Welcome to the Green Berets!"
+            )
+        ),
+        MissionTemplate(
+            id = "msn_combat_diver_school",
+            title = "School: Special Forces Combat Diver Qualification",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 45,
+                uniformKit = WardrobeKit.FIELD,
+                maxAttempts = 2,
+                prerequisiteAllIds = setOf("msn_sf_school"),
+                minRankTier = RankTier.NCO,
+                minStealth = 18,
+                minResilience = 18,
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
+                naturalFitSpecialties = setOf(OperatorSpecialty.RECON, OperatorSpecialty.ASSAULT),
+                suitabilitySummary = "SF-qualified only • NCO+ • 18 ST/18 RS • Max 2 attempts",
+                graduationStatBonus = StatProfile(0, 2, 1, 2),
+                graduationRewardsSummary = "Grants +2 ST, +1 TC, +2 RS • Awards Special Operations Diver Badge • Opens Maritime insertion"
+            ),
+            baseSuccessRatePct = 45,
+            briefing = "Closed-circuit diving, waterborne navigation and surf passage for Special Forces teams.",
+            durationSeconds = 34,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 150,
+            primaryFocus = "Combat Diver • Very Hard",
+            supplyCost = 18.0,
+            rewardCredits = 90.0,
+            rewardSupplies = 14.0,
+            rewardIntel = 18.0,
+            rewardPrestige = 14.0,
+            rewardXp = 150,
+            commsFeed = listOf(
+                "Pool week: drownproofing and equipment recovery.",
+                "Night closed-circuit navigation swim under way.",
+                "Divers qualified: Special Operations Diver Badge!"
             )
         ),
         MissionTemplate(
