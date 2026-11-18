@@ -171,7 +171,7 @@ class WarrantAviationTest {
         assertFalse(TacticalCalculator.evaluateAwardEligibility(airMedal, threeSorties, setOf(airMedal.id), held).eligible)
         assertTrue(TacticalCalculator.evaluateAwardEligibility(airMedal, pilot.copy(combatSortiesFlown = 6), setOf(airMedal.id), held).eligible)
         assertTrue(TacticalCalculator.isRepeatableAward(airMedal))
-        assertNull(TacticalCalculator.perSoldierCapForAward(airMedal.id))
+        assertEquals(TacticalCalculator.MAX_REPEAT_AWARDS, TacticalCalculator.perSoldierCapForAward(airMedal.id))
     }
 
     @Test

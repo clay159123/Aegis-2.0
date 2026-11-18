@@ -299,10 +299,11 @@ internal fun DrawScope.drawRibbonDeviceOverlay(
     val cy = rectTopLeft.y + rectSize.height * 0.5f
     val devTokens = buildList {
         if (deviceInfo.hasValorV) add(0) // 0 = Brass V device
-        repeat(deviceInfo.silverOakLeaves.coerceAtMost(2)) { add(1) } // 1 = Silver OLC
-        repeat(deviceInfo.bronzeOakLeaves.coerceAtMost(3)) { add(2) } // 2 = Bronze OLC
-        repeat(deviceInfo.silverServiceStars.coerceAtMost(2)) { add(3) } // 3 = Silver service star
-        repeat(deviceInfo.bronzeServiceStars.coerceAtMost(4)) { add(4) } // 4 = Bronze service star
+        // Regulation: four devices at most, silver before bronze
+        repeat(deviceInfo.silverOakLeaves) { add(1) } // 1 = Silver OLC
+        repeat(deviceInfo.bronzeOakLeaves) { add(2) } // 2 = Bronze OLC
+        repeat(deviceInfo.silverServiceStars) { add(3) } // 3 = Silver service star
+        repeat(deviceInfo.bronzeServiceStars) { add(4) } // 4 = Bronze service star
     }.take(4)
 
     val spacing = (rectSize.width / (devTokens.size + 1)).coerceAtLeast(2.2f)
