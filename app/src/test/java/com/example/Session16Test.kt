@@ -90,4 +90,21 @@ class Session16Test {
         val blues = officer.copy(dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES)
         assertEquals(DressUniformStyle.OFFICER_SERVICE_BLUES, TacticalCalculator.resolveKitAppearance(blues, WardrobeKit.BRAVOS).dressStyle)
     }
+
+    @Test
+    fun awardAllEligibleFindsEveryFirstTimeAward() {
+        val vet = base.copy(
+            missionsCompleted = 4, combatMissionsCompleted = 4, highestRiskSurvived = MissionRisk.HIGH,
+            completedMissionIds = base.completedMissionIds + setOf("msn_night_qual", "msn_convoy_escort")
+        )
+        val cits = listOf(AwardedMedal("c1", vet.id, "medal_bronze_valor", "", awardedAtMillis = 1L))
+        val ids = com.example.domain.AwardRules.eligibleFirstTimeAwards(vet, cits, emptySet()).map { it.id }
+        assertTrue("medal_expeditionary" in ids)
+        assertTrue("insig_parachutist" in ids)
+        assertTrue("cord_valor_fourragere" in ids)
+        assertFalse("medal_bronze_valor" in ids) // already held
+        assertFalse("medal_silver_vanguard" in ids) // needs a valor citation
+        assertTrue("medal_silver_vanguard" in com.example.domain.AwardRules.eligibleFirstTimeAwards(vet, cits, setOf("medal_silver_vanguard")).map { it.id })
+        assertFalse("medal_nco_dev" in ids) // needs NCO school
+    }
 }

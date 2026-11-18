@@ -2735,6 +2735,26 @@ class CommandViewModel(
         return picks.map { it.first.id }.toSet()
     }
 
+    /** Award All Eligible on the Uniform tab: every first-time award this soldier qualifies for now. */
+    fun awardAllEligible(operatorId: String) {
+        val state = uiState.value
+        val op = state.operators.find { it.id == operatorId && it.unlocked } ?: return
+        val pending = state.pendingDeeds.filter { it.operatorId == op.id }
+        val now = System.currentTimeMillis()
+        val deeds = AwardRules.eligibleFirstTimeAwards(op, state.citations, pending.map { it.recommendedMedalId }.toSet())
+            .map { medal ->
+                pending.firstOrNull { it.recommendedMedalId == medal.id } ?: PendingDeed(
+                    id = "deed_${UUID.randomUUID().toString().take(8)}",
+                    operatorId = op.id,
+                    missionTitle = "Uniform Tab Review",
+                    deedSummary = "Met the standard for the ${medal.name}.",
+                    recommendedMedalId = medal.id,
+                    createdAtMillis = now
+                )
+            }
+        awardAll(deeds)
+    }
+
     /** Award all on the Honors screen: every soldier's pending first-time awards. */
     fun awardAllPending() {
         awardAll(uiState.value.pendingDeeds)

@@ -2400,7 +2400,11 @@ object TacticalCalculator {
                     missing += "Complete 1+ Field Combat Deployment (non-training)"
                 }
             }
-            "medal_nco_dev" -> Unit
+            "medal_nco_dev" -> {
+                if ("msn_nco_school" !in operator.completedMissionIds && "msn_snco_school" !in operator.completedMissionIds) {
+                    missing += "Graduate the NCO Academy or Senior Leader Course"
+                }
+            }
             "medal_good_conduct" -> {
                 if (!operator.rank.tier.isEnlisted) {
                     missing += "Enlisted & NCO only (E-1 to E-9)"

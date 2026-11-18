@@ -401,6 +401,30 @@ object AwardRules {
         else -> AwardGroup.BADGES
     }
 
+    /**
+     * Every award this soldier doesn't hold yet and qualifies for right now, in an order that lets chained
+     * awards come through (jump wings before Master Parachutist). Roll-only awards count only when a
+     * citation is waiting for them. Used by Award All Eligible on the Uniform tab.
+     */
+    fun eligibleFirstTimeAwards(op: Operator, citations: List<AwardedMedal>, pendingMedalIds: Set<String>): List<MedalDefinition> {
+        val owned = citations.filter { it.operatorId == op.id }.map { it.medalId }.toMutableSet()
+        val picks = mutableListOf<MedalDefinition>()
+        var changed = true
+        while (changed) {
+            changed = false
+            for (medal in GameCatalog.medals.sortedBy { it.precedenceOrder }) {
+                if (medal.id in owned) continue
+                val cited = medal.id in pendingMedalIds
+                if (TacticalCalculator.evaluateAwardEligibility(medal, op, owned, citations, heroismCited = cited).eligible) {
+                    owned += medal.id
+                    picks += medal
+                    changed = true
+                }
+            }
+        }
+        return picks
+    }
+
     /** Held count per award for one soldier. */
     fun heldCounts(operatorId: String, citations: List<AwardedMedal>): Map<String, Int> =
         citations.filter { it.operatorId == operatorId }.groupingBy { it.medalId }.eachCount()

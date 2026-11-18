@@ -399,6 +399,7 @@ fun AegisCommandApp() {
                                     onSelectWardrobeKit = viewModel::selectWardrobeKit,
                                     onToggleSmartWardrobe = viewModel::toggleSmartWardrobe,
                                     onAwardAllPending = viewModel::awardAllPending,
+                                    onAwardAllEligible = viewModel::awardAllEligible,
                                     onConductKitInspection = { opId, kit ->
                                         viewModel.conductUniformInspection(operatorId = opId, inspectedKit = kit)
                                     }
