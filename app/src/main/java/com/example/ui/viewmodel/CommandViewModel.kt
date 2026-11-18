@@ -8,6 +8,7 @@ import com.example.data.local.AegisRepository
 import com.example.data.local.CommanderStateEntity
 import com.example.domain.PromotionEndorsementFocus
 import com.example.domain.SquadCohesionRules
+import com.example.domain.GameTiming
 import com.example.domain.TacticalCalculator
 import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
@@ -1045,7 +1046,7 @@ class CommandViewModel(
                     OperatorOutcomeType.FALLEN -> OperatorStatus.FALLEN
                 }
                 val recoveryAt = if (outcome == OperatorOutcomeType.WOUNDED) {
-                    now + (TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities)).roundToLong()
+                    now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities)).roundToLong())
                 } else {
                     0L
                 }
@@ -1608,6 +1609,20 @@ class CommandViewModel(
                 )
             }
             repository.saveOperator(op.copy(unlocked = true))
+            // Item 43: cadre transfers arrive holding everything their record earns
+            val held = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet()
+            TacticalCalculator.earnedStartingAwards(op.copy(unlocked = true), held).forEachIndexed { i, medalId ->
+                repository.addCitation(
+                    AwardedMedal(
+                        id = "cit_${UUID.randomUUID().toString().take(8)}",
+                        operatorId = op.id,
+                        medalId = medalId,
+                        citationNote = "Earned before transferring to Aegis HQ.",
+                        missionTitle = "Prior Service Record",
+                        awardedAtMillis = now + i
+                    )
+                )
+            }
             showBanner("${op.rank.code} ${op.callsign} (${op.rank.tier.shortLabel}) reported to HQ!")
         }
     }
@@ -1634,6 +1649,7 @@ class CommandViewModel(
             requestedSpecialty = specialty,
             source = source,
             existingCallsigns = state.operators.map { it.callsign }.toSet(),
+            usedNames = state.operators.map { it.name }.toSet(),
             seedIndex = state.operators.size + Random.nextInt(100)
         )
         // Officers and warrant officers arrive in their tier's uniforms
@@ -1775,19 +1791,24 @@ class CommandViewModel(
         }
     }
 
+    /**
+     * Item 46: transfer a soldier to another command. Works for any rank at HQ. Soldiers who asked for the
+     * transfer earn +10 PRS; a player-initiated transfer earns nothing. The soldier stays on file as
+     * TRANSFERRED so their name and callsign aren't reused.
+     */
     fun approveTransferOut(operatorId: String) {
         val state = uiState.value
-        val op = state.operators.find { it.id == operatorId && it.unlocked } ?: return
+        val op = state.operators.find { it.id == operatorId && it.unlocked && !it.status.isOutOfActiveService } ?: return
         val deployedOpIds = state.deployments.flatMap { it.operatorIds }.toSet()
         if (op.id in deployedOpIds || op.status == OperatorStatus.DEPLOYED) {
             showBanner("Cannot transfer ${op.callsign} while on active deployment.")
             return
         }
-        if (!op.rank.isCareerEligibleForStaffOrTransfer) {
-            showBanner("Unit transfer eligibility opens at ${OperatorRank.SGT.code} (E-5).")
+        if (op.status == OperatorStatus.RECOVERING) {
+            showBanner("${op.callsign} is in the Medbay. Transfer after recovery.")
             return
         }
-
+        val requested = op.transferRequested
         val updatedSquads = SquadCohesionRules.pruneUnavailableMembers(
             squads = state.squads,
             operators = state.operators.filter { it.id != op.id }
@@ -1798,14 +1819,23 @@ class CommandViewModel(
             if (updatedSquads.isNotEmpty()) {
                 repository.saveSquads(updatedSquads)
             }
-            repository.updateCommanderState { cur ->
-                cur.copy(
-                    prestige = cur.prestige + 10.0,
-                    lastSimulatedAtMillis = now
-                )
+            if (requested) {
+                repository.updateCommanderState { cur ->
+                    cur.copy(prestige = cur.prestige + 10.0, lastSimulatedAtMillis = now)
+                }
             }
-            repository.deleteOperatorAndRecords(op.id)
-            showBanner("${op.rank.code} ${op.callsign} transferred to external unit (+10 PRS). Roster slot freed.")
+            repository.saveOperator(
+                op.copy(
+                    status = OperatorStatus.TRANSFERRED,
+                    hqRole = null,
+                    transferRequested = false,
+                    retirementRequested = false
+                )
+            )
+            showBanner(
+                if (requested) "${op.rank.code} ${op.callsign} transferred to another command (+10 PRS). Roster slot freed."
+                else "${op.rank.code} ${op.callsign} transferred to another command. Roster slot freed."
+            )
         }
     }
 

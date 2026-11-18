@@ -168,7 +168,8 @@ enum class FacilityType(
         (baseSupplyCost * 1.42.pow(currentLevel - 1)).roundToInt().toDouble()
 
     /** Seconds to build from [currentLevel] to the next level. */
-    fun buildSeconds(currentLevel: Int): Long = facilityBuildSeconds(currentLevel + 1)
+    fun buildSeconds(currentLevel: Int): Long =
+        com.example.domain.GameTiming.seconds(facilityBuildSeconds(currentLevel + 1))
 }
 
 /** Random part of a rifle qualification score: 0 until this value. */
@@ -379,9 +380,11 @@ enum class OperatorStatus(val label: String) {
     RECOVERING("MEDBAY"),
     HQ_STAFF("HQ STAFF"),
     RETIRED("RETIRED"),
-    FALLEN("MEMORIAL");
+    FALLEN("MEMORIAL"),
+    /** Item 46: transferred to another command; kept on file so names and callsigns aren't reused. */
+    TRANSFERRED("TRANSFERRED");
 
-    val isOutOfActiveService: Boolean get() = this == FALLEN || this == RETIRED
+    val isOutOfActiveService: Boolean get() = this == FALLEN || this == RETIRED || this == TRANSFERRED
 }
 
 enum class HqStaffRole(
@@ -1314,6 +1317,8 @@ data class SchoolRequirements(
     val prerequisiteAllIds: Set<String> = emptySet(),
     val prerequisiteAnyIds: Set<String> = emptySet(),
     val minRankTier: RankTier = RankTier.SOLDIER,
+    /** A specific minimum rank, when the tier alone is too coarse (for example SF School at SPC). */
+    val minRank: OperatorRank? = null,
     val minCombatRisk: MissionRisk? = null,
     val minFirepower: Int = 0,
     val minStealth: Int = 0,

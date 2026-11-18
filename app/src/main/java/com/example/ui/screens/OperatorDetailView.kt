@@ -624,7 +624,8 @@ fun OperatorDetailView(
                             !isDeployed &&
                             operator.status == OperatorStatus.READY &&
                             uiState.hqStaffCount < uiState.maxHqStaffSlots
-                        val canTransfer = eligible && !isDeployed
+                        // Item 46: any soldier at HQ can be transferred out (not deployed, in Medbay or held)
+                        val canTransfer = !isDeployed && operator.status != OperatorStatus.RECOVERING
                         val retirementElig = TacticalCalculator.evaluateRetirementEligibility(operator)
                         val retirementPreview = TacticalCalculator.previewRetirementLegacy(
                             operator = operator,
@@ -789,9 +790,24 @@ fun OperatorDetailView(
                                                 contentColor = MaterialTheme.colorScheme.error
                                             )
                                         ) {
-                                            Text("Transfer Unit (+10 PRS)")
+                                            Text(if (operator.transferRequested) "Approve Transfer (+10 PRS)" else "Transfer Out")
                                         }
                                     }
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = { showTransferConfirm = true },
+                                    enabled = canTransfer,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .testTag("transfer_unit_${operator.id}"),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error
+                                    )
+                                ) {
+                                    Text("Transfer to Another Command")
                                 }
                             }
                         }
@@ -1029,7 +1045,11 @@ fun OperatorDetailView(
             },
             text = {
                 Text(
-                    text = "Approving PCS orders removes ${operator.callsign} permanently from Aegis HQ. We lose command control and career tracking, equipped gear returns to the Armory, a roster slot opens, and HQ receives +10 PRS.",
+                    text = if (operator.transferRequested) {
+                        "Approving PCS orders removes ${operator.callsign} permanently from Aegis HQ. They leave their squad and billet, a roster slot opens, and HQ receives +10 PRS for honoring the request."
+                    } else {
+                        "Transfer ${operator.callsign} to another command? They leave Aegis HQ for good, along with their squad and billet, and a roster slot opens. Their awards go with them. No prestige is earned for a transfer they didn't ask for."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1049,7 +1069,7 @@ fun OperatorDetailView(
                         contentColor = MaterialTheme.colorScheme.onError
                     )
                 ) {
-                    Text("Approve Transfer")
+                    Text(if (operator.transferRequested) "Approve Transfer" else "Transfer Out")
                 }
             },
             dismissButton = {

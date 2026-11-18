@@ -74,6 +74,7 @@ object TacticalCalculator {
     /** Ribbons and medals that can only ever be earned once per soldier. */
     val ONE_TIME_RIBBON_IDS: Set<String> = setOf(
         "medal_basic_training", // Army Service Ribbon
+        "medal_national_defense", // National Defense Service (on joining)
         "medal_night_owl"       // Night Ops Qualification Ribbon
     )
 
@@ -1059,6 +1060,7 @@ object TacticalCalculator {
         when (operator.status) {
             OperatorStatus.FALLEN -> return EligibilityResult(false, listOf("Fallen"))
             OperatorStatus.RETIRED -> return EligibilityResult(false, listOf("Honorably Retired"))
+            OperatorStatus.TRANSFERRED -> return EligibilityResult(false, listOf("Transferred out"))
             OperatorStatus.RECOVERING -> return EligibilityResult(false, listOf("In Medbay"))
             OperatorStatus.DEPLOYED -> return EligibilityResult(false, listOf("Already Deployed"))
             OperatorStatus.HQ_STAFF -> {
@@ -1122,6 +1124,11 @@ object TacticalCalculator {
 
                 if (req.minRankTier.order > RankTier.SOLDIER.order && operator.rank.tier.order < req.minRankTier.order) {
                     missing += "Requires ${req.minRankTier.shortLabel}+ rank (currently ${operator.rank.code})"
+                }
+                req.minRank?.let { min ->
+                    if (operator.rank.seniorityIndex < min.seniorityIndex) {
+                        missing += "Requires ${min.code} (${min.payGrade})+ (currently ${operator.rank.code})"
+                    }
                 }
                 req.minCombatRisk?.let { minRisk ->
                     val maxHazard = operator.highestRiskSurvived?.baseDangerPenalty ?: -1
@@ -1686,9 +1693,9 @@ object TacticalCalculator {
         }
         val legacyMult = 1.0 + (veteranLegacyBps.coerceIn(0, MAX_VETERAN_LEGACY_BPS) / 10_000.0)
         return ResourceBundle(
-            credits = credits * crMult * legacyMult,
-            supplies = supplies * supMult * legacyMult,
-            intel = intel * intMult * legacyMult
+            credits = GameTiming.income(credits * crMult * legacyMult),
+            supplies = GameTiming.income(supplies * supMult * legacyMult),
+            intel = GameTiming.income(intel * intMult * legacyMult)
         )
     }
 
@@ -1926,7 +1933,32 @@ object TacticalCalculator {
 
     fun isRepeatableAward(medal: MedalDefinition): Boolean =
         (medal.category == AwardCategory.MEDAL || medal.category == AwardCategory.RIBBON) &&
-            medal.id != "medal_sovereign_star"
+            medal.id != "medal_sovereign_star" &&
+            medal.id !in ONE_TIME_RIBBON_IDS
+
+    /**
+     * Item 43: every non-repeatable award, badge, tab and cord this soldier's record already earns, plus the
+     * National Defense Service ribbon. Runs until nothing new qualifies, so awards that need another award
+     * first (Master Parachutist after jump wings) come through. Used for starting soldiers and cadre transfers.
+     */
+    fun earnedStartingAwards(op: Operator, alreadyHeld: Set<String> = emptySet()): List<String> {
+        val owned = alreadyHeld.toMutableSet()
+        val granted = mutableListOf<String>()
+        if ("medal_national_defense" !in owned) { owned += "medal_national_defense"; granted += "medal_national_defense" }
+        var changed = true
+        while (changed) {
+            changed = false
+            for (medal in GameCatalog.medals) {
+                if (medal.id in owned || isRepeatableAward(medal)) continue
+                if (evaluateAwardEligibility(medal, op, owned).eligible) {
+                    owned += medal.id
+                    granted += medal.id
+                    changed = true
+                }
+            }
+        }
+        return granted
+    }
 
     fun missionEfficiencyPct(
         mission: MissionTemplate,
@@ -2334,6 +2366,7 @@ object TacticalCalculator {
                     missing += "Complete 3+ Ops (${operator.missionsCompleted}/3)"
                 }
             }
+            "medal_national_defense" -> Unit // every soldier, on joining
             MFF_BADGE_ID -> {
                 if (MFF_SCHOOL_ID !in operator.completedMissionIds) missing += "Graduate Military Free Fall School"
             }
