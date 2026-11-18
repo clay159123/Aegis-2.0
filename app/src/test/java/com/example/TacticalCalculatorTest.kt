@@ -33,10 +33,10 @@ class TacticalCalculatorTest {
         GameCatalog.medals
             .filter { it.category == AwardCategory.SCHOOL_INSIGNIA || it.category == AwardCategory.SHOULDER_CORD }
             .forEach { assertEquals(it.id, 1, TacticalCalculator.perSoldierCapForAward(it.id)) }
-        assertNull(TacticalCalculator.perSoldierCapForAward("medal_army_commendation"))
-        assertNull(TacticalCalculator.perSoldierCapForAward("medal_bronze_valor"))
-        assertNull(TacticalCalculator.perSoldierCapForAward("medal_purple_shield"))
-        assertNull(TacticalCalculator.perSoldierCapForAward("medal_good_conduct"))
+        assertEquals(TacticalCalculator.MAX_REPEAT_AWARDS, TacticalCalculator.perSoldierCapForAward("medal_army_commendation"))
+        assertEquals(TacticalCalculator.MAX_REPEAT_AWARDS, TacticalCalculator.perSoldierCapForAward("medal_bronze_valor"))
+        assertEquals(TacticalCalculator.MAX_REPEAT_AWARDS, TacticalCalculator.perSoldierCapForAward("medal_purple_shield"))
+        assertEquals(TacticalCalculator.MAX_REPEAT_AWARDS, TacticalCalculator.perSoldierCapForAward("medal_good_conduct"))
     }
 
     @Test
@@ -1216,7 +1216,7 @@ class TacticalCalculatorTest {
         assertNull(TacticalCalculator.campaignCapForAward(sovereignStar.id))
         assertEquals(1, TacticalCalculator.perSoldierCapForAward(sovereignStar.id))
         assertNull(TacticalCalculator.campaignCapForAward(serviceCross.id))
-        assertNull(TacticalCalculator.perSoldierCapForAward(serviceCross.id))
+        assertEquals(TacticalCalculator.MAX_REPEAT_AWARDS, TacticalCalculator.perSoldierCapForAward(serviceCross.id))
         assertNull(TacticalCalculator.campaignCapForAward(defenseSuperior.id))
 
         val crossCitations = listOf(

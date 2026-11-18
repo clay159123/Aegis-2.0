@@ -1629,6 +1629,7 @@ class CommandViewModel(
                     ?: AwardRules.SOLDIERS_MEDAL_ID.takeIf { Random.nextDouble() < AwardRules.soldiersMedalOdds(mission, o.outcome) }
             } ?: continue
             if (state.pendingDeeds.any { it.operatorId == o.operatorId && it.recommendedMedalId == medalId }) continue
+            if (TacticalCalculator.isAtAwardLimit(o.operatorId, medalId, state.citations)) continue
             val text = AwardRules.heroismText(medalId, mission, o.outcome)
             newDeeds.add(
                 PendingDeed(

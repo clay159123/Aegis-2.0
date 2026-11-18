@@ -212,6 +212,7 @@ object AwardRules {
         val awards = mutableListOf<String>()
         fun eligible(id: String): Boolean {
             if (id in pending || id in awards) return false
+            if ((held[id] ?: 0) >= (TacticalCalculator.perSoldierCapForAward(id) ?: Int.MAX_VALUE)) return false
             val medal = GameCatalog.medals.find { it.id == id } ?: return false
             val heldIds = held.filterValues { it > 0 }.keys
             return TacticalCalculator.evaluateAwardEligibility(medal, op, heldIds).eligible

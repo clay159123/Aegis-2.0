@@ -92,8 +92,22 @@ object TacticalCalculator {
         val category = GameCatalog.medals.find { it.id == medalId }?.category ?: return null
         return when (category) {
             AwardCategory.SCHOOL_INSIGNIA, AwardCategory.SHOULDER_CORD -> 1
-            AwardCategory.MEDAL, AwardCategory.RIBBON -> null
+            AwardCategory.MEDAL, AwardCategory.RIBBON -> MAX_REPEAT_AWARDS
         }
+    }
+
+    /**
+     * Army regulations allow at most four devices on one ribbon, and a silver oak leaf cluster (or silver
+     * service star) stands for five bronze ones. Four silver devices = 20 more awards, so 21 is the most
+     * any repeatable award can be held.
+     */
+    const val MAX_RIBBON_DEVICES = 4
+    const val MAX_REPEAT_AWARDS = 1 + MAX_RIBBON_DEVICES * 5
+
+    /** True when this soldier already holds the most of [medalId] allowed. */
+    fun isAtAwardLimit(operatorId: String, medalId: String, citations: List<AwardedMedal>): Boolean {
+        val cap = perSoldierCapForAward(medalId) ?: return false
+        return citations.count { it.operatorId == operatorId && it.medalId == medalId } >= cap
     }
 
     /** SF-qualified soldiers count as infantry for the CIB and EIB, whatever their MOS. */
