@@ -2061,17 +2061,17 @@ class CommandViewModel(
         // Only hand-picked fields become manual picks; untouched ones keep following Auto or the squad standard
         val reset = request.followSquadStandard
         val savedDress: DressUniformStyle? = when {
-            reset -> null
+            reset || request.dressAuto -> null
             request.dressTouched -> finalDress
             else -> currentKitSettings.dressStyle
         }
         val savedCamo: CamoPattern? = when {
-            reset -> null
+            reset || request.camoAuto -> null
             request.camoTouched -> request.camoPattern
             else -> currentKitSettings.camoPattern
         }
         val savedGloves: Boolean? = when {
-            reset -> null
+            reset || request.glovesAuto -> null
             request.glovesTouched -> finalGloves
             else -> currentKitSettings.hasWhiteGloves
         }
@@ -2131,12 +2131,12 @@ class CommandViewModel(
                     callsign = sanitizedCallsign,
                     uniformMode = if (op.activeWardrobeKit == WardrobeKit.FIELD) UniformMode.FIELD_TACTICAL else UniformMode.DRESS_UNIFORM,
                     dressDisplayMode = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD) updatedKitSettings.dressDisplayMode ?: op.dressDisplayMode else op.dressDisplayMode,
-                    camoPattern = if (targetKit == WardrobeKit.FIELD && request.camoTouched) request.camoPattern else op.camoPattern,
-                    dressStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD && request.dressTouched && !reset) finalDress else op.dressStyle,
+                    camoPattern = if (targetKit == WardrobeKit.FIELD && request.camoTouched && !request.camoAuto) request.camoPattern else op.camoPattern,
+                    dressStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD && request.dressTouched && !request.dressAuto && !reset) finalDress else op.dressStyle,
                     headgearStyle = if (syncTopLevelDress && targetKit != WardrobeKit.FIELD && request.headgearTouched && !request.headgearAuto) finalHeadgear else op.headgearStyle,
                     equippedLeftCordId = finalLeftCord,
                     equippedRightCordId = finalRightCord,
-                    hasWhiteGloves = if (targetKit == WardrobeKit.ALPHAS && request.glovesTouched && !reset) finalGloves else op.hasWhiteGloves,
+                    hasWhiteGloves = if (targetKit == WardrobeKit.ALPHAS && request.glovesTouched && !request.glovesAuto && !reset) finalGloves else op.hasWhiteGloves,
                     hasDressSash = if (targetKit == WardrobeKit.ALPHAS) finalSash else op.hasDressSash,
                     tailorOverrides = finalOverrides,
                     wardrobe = updatedWardrobe,
@@ -2737,9 +2737,15 @@ class CommandViewModel(
     fun disbandSquad(squadId: String) {
         val state = uiState.value
         val squad = state.squads.find { it.id == squadId } ?: return
+        // Soldiers keep the unit citations they earned with this squad after it's gone
+        val keepers = state.operators.mapNotNull { op ->
+            val earned = squad.unitCitations.count { op.id in it.memberIds }
+            if (earned > 0) op.copy(retainedUnitCitations = op.retainedUnitCitations + earned) else null
+        }
         viewModelScope.launch {
+            if (keepers.isNotEmpty()) repository.saveOperators(keepers)
             repository.deleteSquad(squadId)
-            showBanner("Disbanded ${squad.name}.")
+            showBanner("Disbanded ${squad.name}." + if (keepers.isNotEmpty()) " Its unit citation stays with the ${keepers.size} soldiers who earned it." else "")
         }
     }
 

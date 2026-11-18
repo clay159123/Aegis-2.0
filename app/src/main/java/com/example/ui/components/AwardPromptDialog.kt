@@ -23,6 +23,8 @@ fun AwardPromptDialog(
     position: Int,
     total: Int,
     canAfford: Boolean,
+    /** For a repeat award, what the soldier will receive, e.g. "2nd award: 1 Bronze OLC" */
+    repeatLabel: String? = null,
     onAward: () -> Unit,
     onSkip: () -> Unit
 ) {
@@ -51,6 +53,9 @@ fun AwardPromptDialog(
                         Text(medal.name, style = MaterialTheme.typography.titleMedium)
                         Text(deed.missionTitle, style = MaterialTheme.typography.labelSmall, color = extra.brassBright)
                     }
+                }
+                repeatLabel?.let {
+                    Text(it, style = MaterialTheme.typography.labelLarge, color = extra.signalsCyan, modifier = Modifier.testTag("award_prompt_repeat"))
                 }
                 Text(deed.deedSummary, style = MaterialTheme.typography.bodySmall)
                 Text(
