@@ -270,6 +270,8 @@ enum class OperatorRank(
     val isWarrant: Boolean get() = tier == RankTier.WARRANT
     /** 1..5 for WO1..CW5, 0 otherwise. */
     val warrantGrade: Int get() = if (isWarrant) insigniaCount else 0
+    /** 1..4 for BG..GEN, 0 otherwise. */
+    val flagGrade: Int get() = if (tier == RankTier.FLAG_OFFICER) ordinal - BG.ordinal + 1 else 0
 
     /**
      * Position on one seniority ladder for stat bonuses, sorting and minimum-rank checks. Warrant grades sit
@@ -322,6 +324,10 @@ enum class OperatorRank(
 
         fun forWarrantGrade(grade: Int): OperatorRank = warrantRanks[(grade.coerceIn(1, 5)) - 1]
 
+        val flagRanks: List<OperatorRank> get() = listOf(BG, MG, LTG, GEN)
+
+        fun forFlagGrade(grade: Int): OperatorRank = flagRanks[(grade.coerceIn(1, 4)) - 1]
+
         fun ceilingXpForTier(tier: RankTier): Int? =
             if (tier == RankTier.WARRANT) null
             else entries.firstOrNull { !it.isWarrant && it.tier.order > tier.order }?.xpRequired
@@ -340,8 +346,9 @@ enum class OperatorRank(
             return if (idx in 0 until entries.lastIndex) entries[idx + 1] else null
         }
 
-        /** Warrant grades are each their own board, like a tier crossing. */
-        fun isBoardGate(from: OperatorRank, to: OperatorRank): Boolean = to.tier != from.tier || to.isWarrant
+        /** Warrant grades and every general's star (item 61) are each their own board, like a tier crossing. */
+        fun isBoardGate(from: OperatorRank, to: OperatorRank): Boolean =
+            to.tier != from.tier || to.isWarrant || to.tier == RankTier.FLAG_OFFICER
     }
 }
 
@@ -1199,6 +1206,8 @@ data class Operator(
     val lastQualScore: Int = 0,
     /** 1..5 for WO1..CW5 while [authorizedTier] is WARRANT; 0 otherwise */
     val warrantGrade: Int = 0,
+    /** Item 61: 1..4 for BG..GEN once promoted by a general's board; 0 means the rank follows XP. */
+    val flagGrade: Int = 0,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */
@@ -1251,8 +1260,12 @@ data class Operator(
         get() = bodyBuildOverride ?: BodyBuild.entries[Math.floorMod("$id#build".hashCode(), BodyBuild.entries.size)]
 
     val rank: OperatorRank
-        get() = if (authorizedTier == RankTier.WARRANT) OperatorRank.forWarrantGrade(warrantGrade)
-        else OperatorRank.forXp(xp, authorizedTier)
+        get() = when {
+            authorizedTier == RankTier.WARRANT -> OperatorRank.forWarrantGrade(warrantGrade)
+            // Item 61: generals hold their grade until the next board
+            authorizedTier == RankTier.FLAG_OFFICER && flagGrade > 0 -> OperatorRank.forFlagGrade(flagGrade)
+            else -> OperatorRank.forXp(xp, authorizedTier)
+        }
 
     val isAtCategoryPromotionGate: Boolean
         get() {
@@ -1270,7 +1283,8 @@ data class Operator(
     fun promotedTo(next: OperatorRank): Operator = copy(
         xp = maxOf(xp, next.xpRequired),
         authorizedTier = if (next.isWarrant || next.tier.order > authorizedTier.order || authorizedTier == RankTier.WARRANT) next.tier else authorizedTier,
-        warrantGrade = next.warrantGrade
+        warrantGrade = next.warrantGrade,
+        flagGrade = next.flagGrade
     )
 }
 
@@ -1669,7 +1683,9 @@ data class ActiveDeployment(
     /** Item 35: the officer leading a two-squad mission (one of the team). */
     val platoonLeaderId: String? = null,
     /** Item 50: the mission's name when it launched, kept until it's claimed even if the board rotates. */
-    val missionTitle: String? = null
+    val missionTitle: String? = null,
+    /** Item 95: hours booked for a Flight Hours session (1..10); 0 for everything else. */
+    val flightHours: Int = 0
 ) {
     /** The soldiers on the ground (everyone but the pilot). */
     val groundOperatorIds: List<String> get() = operatorIds.filter { it != pilotId }

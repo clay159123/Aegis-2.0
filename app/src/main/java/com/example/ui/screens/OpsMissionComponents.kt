@@ -454,7 +454,9 @@ internal fun HqStagingSheet(
     onSwitchOperatorsToKit: (List<String>, WardrobeKit) -> Unit = { _, _ -> },
     onEditKits: () -> Unit,
     onLaunch: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    flightHours: Int = TacticalCalculator.FLIGHT_HOURS_PER_SESSION,
+    onFlightHoursChange: (Int) -> Unit = {}
 ) {
     val extra = LocalAegisColors.current
     val unlockedOps = uiState.operators.filter { it.unlocked && !it.status.isOutOfActiveService }
@@ -517,6 +519,13 @@ internal fun HqStagingSheet(
             completedCampaignIds = uiState.completedCampaignIds
         )
     )
+        // Item 96: retrying an SF school past the old limit costs more
+        .plus(
+            TacticalCalculator.schoolRetrySurcharge(
+                mission, selectedOps,
+                TacticalCalculator.supplyCostMultiplier(uiState.facilities, uiState.hqStaffSummary, uiState.completedCampaignIds)
+            )
+        )
     val validCount = selectedOperatorIds.size in mission.minOperators..mission.maxOperators
     val canAfford = uiState.resources.supplies >= supplyCost
 
@@ -552,6 +561,29 @@ internal fun HqStagingSheet(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        // Item 95: pick how many hours to fly
+        if (mission.id == TacticalCalculator.FLIGHT_HOURS_MISSION_ID) {
+            val hoursMult = TacticalCalculator.flightHoursDurationMultiplier(flightHours)
+            Text(
+                "Flight Hours: $flightHours h • about ${formatCountdown((mission.durationSeconds * hoursMult).toLong())} • " +
+                    "+${flightHours * TacticalCalculator.FLIGHT_SKILL_PER_HOUR + TacticalCalculator.airfieldFlightSkillBonus(TacticalCalculator.facilityLevel(uiState.facilities, FacilityType.AIRFIELD))} skill if passed",
+                style = MaterialTheme.typography.labelMedium,
+                color = extra.brassBright
+            )
+            Slider(
+                value = flightHours.toFloat(),
+                onValueChange = { onFlightHoursChange(it.roundToInt()) },
+                valueRange = TacticalCalculator.MIN_FLIGHT_HOURS.toFloat()..TacticalCalculator.MAX_FLIGHT_HOURS.toFloat(),
+                steps = TacticalCalculator.MAX_FLIGHT_HOURS - TacticalCalculator.MIN_FLIGHT_HOURS - 1,
+                modifier = Modifier.testTag("flight_hours_slider")
+            )
+            Text(
+                "A failed session still logs about half the hours.",
+                style = MaterialTheme.typography.labelSmall,
+                color = extra.textMuted
+            )
+        }
 
         mission.schoolRequirements?.let { schoolReq ->
             Text(

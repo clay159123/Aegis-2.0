@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 20
+        const val SAVE_FORMAT_VERSION = 21
     }
 
     private val commanderMutex = Mutex()
@@ -450,6 +450,7 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     pendingMarksmanshipQual = pendingMarksmanshipQualName?.let { n -> MarksmanshipBadgeTier.entries.find { it.name == n } },
     lastQualScore = lastQualScore,
     warrantGrade = warrantGrade,
+    flagGrade = flagGrade,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
     combatJumps = combatJumps,
@@ -529,6 +530,7 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     pendingMarksmanshipQualName = pendingMarksmanshipQual?.name,
     lastQualScore = lastQualScore,
     warrantGrade = warrantGrade,
+    flagGrade = flagGrade,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
     combatJumps = combatJumps,
@@ -768,7 +770,8 @@ private fun DeploymentEntity.toDomain(): ActiveDeployment = ActiveDeployment(
     insertion = InsertionMethod.entries.find { it.name == insertionName } ?: InsertionMethod.GROUND,
     pilotId = pilotId,
     platoonLeaderId = platoonLeaderId,
-    missionTitle = missionTitle
+    missionTitle = missionTitle,
+    flightHours = flightHours
 )
 
 private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
@@ -783,7 +786,8 @@ private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
     insertionName = insertion.name,
     pilotId = pilotId,
     platoonLeaderId = platoonLeaderId,
-    missionTitle = missionTitle
+    missionTitle = missionTitle,
+    flightHours = flightHours
 )
 
 /** Citations stored as "missionId|title|millis|member+member;..." */
