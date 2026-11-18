@@ -145,7 +145,9 @@ object SquadCohesionRules {
 
     fun evaluateActiveBonus(
         selectedOperators: List<Operator>,
-        squads: List<TacticalSquad>
+        squads: List<TacticalSquad>,
+        /** Two-squad missions bring a second squad on purpose: no mixed-squad cut. */
+        multiSquadMission: Boolean = false
     ): ActiveSquadCohesionBonus? {
         if (selectedOperators.size < 2 || squads.isEmpty()) return null
         val selectedById = selectedOperators.associateBy { it.id }
@@ -195,7 +197,7 @@ object SquadCohesionRules {
         if (effBonus <= 0 && survBonus <= 0 && oddsBonus <= 0 && !fullStrength) return null
 
         // Item 34: anyone on the team who belongs to a different squad mixes the squads for this mission
-        val mixed = selectedOperators.any { op ->
+        val mixed = !multiSquadMission && selectedOperators.any { op ->
             op.id !in squad.memberIds && squads.any { other -> other.id != squad.id && op.id in other.memberIds }
         }
         fun cut(v: Int): Int = if (mixed) (v * (1.0 - MIXED_SQUAD_COHESION_CUT)).roundToInt() else v

@@ -61,7 +61,7 @@ fun HqOpsScreen(
     onStartDeployment: (MissionTemplate, List<String>) -> Unit,
     onStartDeploymentWithSquad: ((MissionTemplate, List<String>, String?) -> Unit)? = null,
     /** Item 34: field missions launch from the prep screen with an insertion method and optional pilot. */
-    onLaunchPrepared: ((MissionTemplate, List<String>, String?, InsertionMethod, String?) -> Unit)? = null,
+    onLaunchPrepared: ((MissionTemplate, List<String>, String?, InsertionMethod, String?, String?) -> Unit)? = null,
     onAutoGear: () -> Unit = {},
     onClaimDeployment: (String) -> Unit,
     onTreatWounded: (String) -> Unit,
@@ -149,8 +149,10 @@ fun HqOpsScreen(
         }
     }
 
-    val orderedGroups = remember(activeRotatingSet) {
-        listOf(
+    // Item 36: SF missions and the UW campaign stay hidden until 3 soldiers are SF-qualified
+    val sfUnlocked = TacticalCalculator.sfMissionsUnlocked(uiState.operators)
+    val orderedGroups = remember(activeRotatingSet, sfUnlocked) {
+        listOfNotNull(
             OpsMissionGroup(
                 id = "combat",
                 title = "Field Combat Ops",
@@ -161,6 +163,12 @@ fun HqOpsScreen(
                         (it.isEvergreenStandalone || it.id in activeRotatingSet)
                 }
             ),
+            if (sfUnlocked) OpsMissionGroup(
+                id = "special_forces",
+                title = "Special Forces Ops",
+                scope = MissionScope.FIELD_COMBAT,
+                missions = GameCatalog.missions.filter { it.requiresSfTeam && it.campaignId == null }
+            ) else null,
             OpsMissionGroup(
                 id = "schools",
                 title = "Specialty Schools",
@@ -180,11 +188,12 @@ fun HqOpsScreen(
         )
     }
 
-    val visibleCampaigns = remember(readyOnly, qualifiedByMissionId, uiState.completedCampaignStageIds, uiState.completedCampaignIds) {
+    val visibleCampaigns = remember(readyOnly, qualifiedByMissionId, uiState.completedCampaignStageIds, uiState.completedCampaignIds, sfUnlocked) {
+        val shownCampaigns = GameCatalog.campaigns.filter { !it.isSpecialForces || sfUnlocked }
         if (!readyOnly) {
-            GameCatalog.campaigns
+            shownCampaigns
         } else {
-            GameCatalog.campaigns.filter { camp ->
+            shownCampaigns.filter { camp ->
                 camp.stageMissionIds.any { stageId ->
                     val mission = GameCatalog.campaignMissionsById[stageId] ?: return@any false
                     TacticalCalculator.isCampaignStageUnlocked(
@@ -825,8 +834,8 @@ fun HqOpsScreen(
             deployedOpIds = deployedOpIds,
             onAutoGear = onAutoGear,
             onFieldKit = { ids -> onSwitchOperatorsToKit(ids, WardrobeKit.FIELD) },
-            onLaunch = { ids, insertion, pilotId ->
-                launchPrepared(missionForPrep, ids, prepSquadId, insertion, pilotId)
+            onLaunch = { ids, insertion, pilotId, platoonLeaderId ->
+                launchPrepared(missionForPrep, ids, prepSquadId, insertion, pilotId, platoonLeaderId)
                 prepMission = null
                 prepTeamIds = emptyList()
                 prepSquadId = null
@@ -868,12 +877,19 @@ fun HqOpsScreen(
                             facilities = uiState.facilities
                         ).eligible
                     }.map { it.id }.toSet()
-                    selectedOperatorIds = SquadCohesionRules.orderedMembersForDeployment(
+                    val squadMembers = SquadCohesionRules.orderedMembersForDeployment(
                         squad = squad,
                         eligibleOperatorIds = readyIds,
                         maxCount = missionToStage.maxOperators
                     )
-                    selectedSquadId = squad.id
+                    val currentSquadId = selectedSquadId
+                    // Platoon missions: a second squad joins the first instead of replacing it
+                    selectedOperatorIds = if (missionToStage.requiredSquads > 1 && currentSquadId != null && currentSquadId != squad.id) {
+                        (selectedOperatorIds + squadMembers).distinct().take(missionToStage.maxOperators)
+                    } else {
+                        squadMembers
+                    }
+                    selectedSquadId = if (missionToStage.requiredSquads > 1 && currentSquadId != null) currentSquadId else squad.id
                 },
                 onToggleOperator = { opId ->
                     selectedSquadId = null

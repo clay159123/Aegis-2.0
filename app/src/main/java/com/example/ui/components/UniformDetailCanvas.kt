@@ -1810,6 +1810,23 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 }
             }
         }
+        InsigniaShape.MFF_WINGS -> {
+            // Wings with a parachute and an upright dagger through the middle
+            drawLine(col, Offset(cx - badgeW * 0.48f, cy + badgeH * 0.02f), Offset(cx + badgeW * 0.48f, cy + badgeH * 0.02f), strokeWidth = 2.2f, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx - badgeW * 0.38f, cy + badgeH * 0.16f), Offset(cx + badgeW * 0.38f, cy + badgeH * 0.16f), strokeWidth = 1.6f, cap = StrokeCap.Round)
+            drawArc(col, 180f, 180f, true, Offset(cx - badgeW * 0.15f, cy - badgeH * 0.28f), Size(badgeW * 0.30f, badgeH * 0.40f))
+            drawLine(darkBack, Offset(cx, cy - badgeH * 0.42f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = 2.0f)
+            drawLine(gold, Offset(cx, cy - badgeH * 0.42f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = 1.1f, cap = StrokeCap.Round)
+            drawLine(gold, Offset(cx - badgeW * 0.06f, cy + badgeH * 0.18f), Offset(cx + badgeW * 0.06f, cy + badgeH * 0.18f), strokeWidth = 1.2f)
+            val mffStars = combatJumps.coerceIn(0, 5)
+            if (mffStars > 0) {
+                val bronze = Color(0xFFC08A3E)
+                val r = (badgeH * 0.085f).coerceAtLeast(0.9f)
+                val step = badgeW * 0.15f
+                val startX = cx - step * (mffStars - 1) / 2f
+                repeat(mffStars) { i -> drawStar(Offset(startX + step * i, cy - badgeH * 0.10f), r, r * 0.45f, bronze) }
+            }
+        }
         InsigniaShape.DIVER_BADGE -> {
             // Dive helmet with a faceplate, over a pair of crossed tridents
             drawLine(col, Offset(cx - badgeW * 0.34f, cy + badgeH * 0.34f), Offset(cx + badgeW * 0.34f, cy - badgeH * 0.30f), strokeWidth = 1.3f, cap = StrokeCap.Round)

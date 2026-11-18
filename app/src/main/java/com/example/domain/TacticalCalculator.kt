@@ -106,9 +106,10 @@ object TacticalCalculator {
         else -> "insig_cab"
     }
 
+    /** The four theater campaigns; the SF Unconventional Warfare campaign is endgame and doesn't count. */
     fun isAllCampaignsCleared(completedCampaignIds: Set<String>): Boolean =
-        GameCatalog.campaigns.isNotEmpty() &&
-            GameCatalog.campaigns.all { it.id in completedCampaignIds }
+        GameCatalog.campaigns.any { !it.isSpecialForces } &&
+            GameCatalog.campaigns.filter { !it.isSpecialForces }.all { it.id in completedCampaignIds }
 
     fun isCampaignUnlocked(
         campaign: TheaterCampaign,
@@ -569,8 +570,59 @@ object TacticalCalculator {
     fun isStealthWeighted(mission: MissionTemplate): Boolean =
         stealthFocusWords.any { mission.primaryFocus.contains(it, ignoreCase = true) }
 
+    // ---- Session 11: platoon missions (item 35) and Special Forces (item 36) ----
+    const val PLATOON_MAX_SQUADS = 2
+    const val PLATOON_LEADER_PASS_BONUS = 5
+    const val PLATOON_LEADER_SURVIVAL_BONUS = 2
+    /** Two-squad missions pay about this much more credit and prestige than a comparable one-squad mission. */
+    const val PLATOON_REWARD_MULT = 1.6
+    const val SF_TEAM_SIZE = 4
+    const val SF_MIN_QUALIFIED = 3
+    /** SF missions stay hidden until this many soldiers are SF-qualified. */
+    const val SF_UNLOCK_QUALIFIED = 3
+    const val SF_SCHOOL_ID = "msn_sf_school"
+    const val MFF_BADGE_ID = "insig_mff_wings"
+    const val UW_CAMPAIGN_ID = "camp_uw"
+
+    /** True once the command has enough SF-qualified soldiers to show SF missions. */
+    fun sfMissionsUnlocked(operators: List<Operator>): Boolean =
+        operators.count { it.unlocked && !it.status.isOutOfActiveService && isSfQualified(it) } >= SF_UNLOCK_QUALIFIED
+
+    /** The platoon leader on a two-squad mission: the chosen officer, or the senior commissioned officer on the team. */
+    fun platoonLeaderFor(mission: MissionTemplate, team: List<Operator>, chosenId: String? = null): Operator? {
+        if (mission.requiredSquads < 2) return null
+        val officers = team.filter { it.rank.isCommissioned }
+        return officers.find { it.id == chosenId } ?: officers.maxByOrNull { it.rank.seniorityIndex }
+    }
+
+    /**
+     * Why this team can't take the mission as a whole, or null. Covers SF team makeup and platoon missions
+     * (two squads plus a commissioned platoon leader). Per-soldier checks stay in canOperatorDeployOnMission.
+     */
+    fun teamBlocker(mission: MissionTemplate, team: List<Operator>, squads: List<TacticalSquad>, platoonLeaderId: String? = null): String? {
+        if (mission.requiresSfTeam) {
+            if (team.size != SF_TEAM_SIZE) return "SF teams are exactly $SF_TEAM_SIZE soldiers (${team.size} selected)"
+            val sf = team.count { isSfQualified(it) }
+            if (sf < SF_MIN_QUALIFIED) return "Needs $SF_MIN_QUALIFIED+ SF-qualified soldiers ($sf/$SF_MIN_QUALIFIED)"
+        }
+        if (mission.requiredSquads >= 2) {
+            val squadsOnTeam = squads.count { sq -> team.count { it.id in sq.memberIds } >= 2 }
+            if (squadsOnTeam < 2) return "Needs two squads (2+ soldiers from each)"
+            if (platoonLeaderFor(mission, team, platoonLeaderId) == null) return "Needs an officer (2LT+) as platoon leader"
+            if (platoonLeaderId != null && team.none { it.id == platoonLeaderId && it.rank.isCommissioned }) {
+                return "Platoon leader must be a commissioned officer on the team"
+            }
+        }
+        return null
+    }
+
     /** Recommended MOS the team covers, and the pass bonus (+3% each, up to +12%). Untagged missions: none. */
     fun mosCoverage(mission: MissionTemplate, team: List<Operator>): Pair<Set<OperatorSpecialty>, Int> {
+        // SF teams: every different MOS on the team counts (a medic and an engineer beat four riflemen)
+        if (mission.requiresSfTeam) {
+            val distinct = team.map { it.specialty }.toSet()
+            return distinct to (distinct.size * MOS_COVERAGE_BONUS_PCT).coerceAtMost(MOS_COVERAGE_BONUS_CAP_PCT)
+        }
         if (mission.recommendedSpecialties.isEmpty()) return emptySet<OperatorSpecialty>() to 0
         val covered = mission.recommendedSpecialties.filter { mos -> team.any { it.specialty == mos } }.toSet()
         return covered to (covered.size * MOS_COVERAGE_BONUS_PCT).coerceAtMost(MOS_COVERAGE_BONUS_CAP_PCT)
@@ -599,9 +651,10 @@ object TacticalCalculator {
             }
             InsertionMethod.AIRBORNE -> team.firstOrNull { !isAirborneQualified(it) }
                 ?.let { "${it.callsign} isn't Airborne-qualified" }
-            InsertionMethod.HALO -> team.firstOrNull { !isFreeFallQualified(it) }
-                ?.let { "${it.callsign} isn't Military Free Fall qualified" }
+            InsertionMethod.HALO -> if (!mission.requiresSfTeam) "SF missions only"
+                else team.firstOrNull { !isFreeFallQualified(it) }?.let { "${it.callsign} isn't Military Free Fall qualified" }
             InsertionMethod.MARITIME -> when {
+                !mission.requiresSfTeam -> "SF missions only"
                 !mission.coastal -> "Coastal missions only"
                 else -> team.firstOrNull { !isCombatDiver(it) }?.let { "${it.callsign} isn't a Combat Diver" }
             }
@@ -662,6 +715,9 @@ object TacticalCalculator {
         val durationSeconds: Int,
         val supplyCost: Int,
         val insertionBlocker: String?,
+        /** Team makeup problem (SF team, two squads, platoon leader), or null. */
+        val teamBlocker: String?,
+        val platoonLeader: Operator?,
         val coveredMos: Set<OperatorSpecialty>,
         val mosBonusPct: Int,
         val scatterChancePct: Int,
@@ -683,10 +739,12 @@ object TacticalCalculator {
         hqStaffSummary: HqStaffSummary?,
         squads: List<TacticalSquad>,
         smartWardrobeEnabled: Boolean,
-        completedCampaignIds: Set<String> = emptySet()
+        completedCampaignIds: Set<String> = emptySet(),
+        platoonLeaderId: String? = null
     ): MissionPlanPreview {
         val airOps = airOpsBonusPct(allOperators)
         val blocker = insertionBlocker(mission, insertion, team, pilot, facilities)
+        val teamProblem = teamBlocker(mission, team, squads, platoonLeaderId)
         val pass = missionSuccessOddsPct(
             mission, team, gearItems, citations, facilities, hqStaffCount, hqStaffSummary, squads, smartWardrobeEnabled,
             insertion = insertion
@@ -698,11 +756,17 @@ object TacticalCalculator {
         val supply = dispatchSupplyCost(mission, team.size, supplyCostMultiplier(facilities, hqStaffSummary, completedCampaignIds)) +
             insertionSupplyCost(insertion, facilities, airOps)
         val (covered, mosBonus) = mosCoverage(mission, team)
-        val cohesion = SquadCohesionRules.evaluateActiveBonus(team, squads)
+        val cohesion = SquadCohesionRules.evaluateActiveBonus(team, squads, mission.requiredSquads > 1)
         val scatter = scatterChancePct(insertion)
         val breakdown = buildList {
-            if (mission.recommendedSpecialties.isNotEmpty()) {
+            if (mission.requiresSfTeam) {
+                add("SF team" to "${team.count { isSfQualified(it) }}/${team.size} SF-qualified")
+                add("MOS coverage" to "+$mosBonus% (${covered.size} different MOS)")
+            } else if (mission.recommendedSpecialties.isNotEmpty()) {
                 add("MOS coverage" to "+$mosBonus% (${covered.size}/${mission.recommendedSpecialties.size})")
+            }
+            platoonLeaderFor(mission, team, platoonLeaderId)?.let {
+                add("Platoon leader" to "${it.rank.code} ${it.callsign} • +$PLATOON_LEADER_PASS_BONUS% pass")
             }
             add("Insertion" to buildString {
                 append(insertion.shortLabel)
@@ -720,7 +784,7 @@ object TacticalCalculator {
             val wo = technicalWarrantOddsBonus(mission, team)
             if (wo > 0) add("Warrant officer" to "+$wo%")
             val officer = team.filter { it.rank.isCommissioned }.maxByOrNull { it.rank.seniorityIndex }
-            if (officer != null) add("Officer" to "${officer.rank.code} ${officer.callsign} leading")
+            if (officer != null && mission.requiredSquads < 2) add("Officer" to "${officer.rank.code} ${officer.callsign} leading")
         }
         return MissionPlanPreview(
             passPct = pass,
@@ -728,6 +792,8 @@ object TacticalCalculator {
             durationSeconds = duration,
             supplyCost = supply,
             insertionBlocker = blocker,
+            teamBlocker = teamProblem,
+            platoonLeader = platoonLeaderFor(mission, team, platoonLeaderId),
             coveredMos = covered,
             mosBonusPct = mosBonus,
             scatterChancePct = scatter,
@@ -1525,7 +1591,7 @@ object TacticalCalculator {
             ((efficiency - 100) * 0.20).roundToInt()
         }
         val staffBonus = (hqStaffSummary?.survivalBonusPct ?: 0) / 3
-        val squadBonus = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads)
+        val squadBonus = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads, mission.requiredSquads > 1)
         val cohesionOddsBonus = squadBonus?.successOddsBonusPct ?: 0
         val kitOddsBonus = evaluateMissionKitBonus(mission, selectedOperators, smartWardrobeEnabled).successOddsBonusPct
         val (minOdds, maxOdds) = when (mission.risk) {
@@ -1538,7 +1604,8 @@ object TacticalCalculator {
         val warrantBonus = if (mission.scope == MissionScope.TRAINING) 0 else technicalWarrantOddsBonus(mission, selectedOperators)
         val mosBonus = mosCoverage(mission, selectedOperators).second
         val insertionDelta = insertionPassDelta(mission, insertion, scatteredDrop)
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta)
+        val platoonBonus = if (platoonLeaderFor(mission, selectedOperators) != null) PLATOON_LEADER_PASS_BONUS else 0
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus)
             .coerceIn(minOdds, maxOdds)
     }
 
@@ -1831,8 +1898,9 @@ object TacticalCalculator {
             operatorSurvivalPct(mission, it, gearItems, citations, facilities, hqStaffCount, hqStaffSummary)
         }.average()
         if (mission.risk.isTraining) return baseAvg.roundToInt()
-        val cohesionSurv = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads)?.survivalBonusPct ?: 0
-        return (baseAvg + cohesionSurv).roundToInt().coerceIn(42, 98)
+        val cohesionSurv = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads, mission.requiredSquads > 1)?.survivalBonusPct ?: 0
+        val platoonSurv = if (platoonLeaderFor(mission, selectedOperators) != null) PLATOON_LEADER_SURVIVAL_BONUS else 0
+        return (baseAvg + cohesionSurv + platoonSurv).roundToInt().coerceIn(42, 98)
     }
 
     fun isRepeatableAward(medal: MedalDefinition): Boolean =
@@ -1858,7 +1926,7 @@ object TacticalCalculator {
             operatorStats(it, gearItems, citations, facilities).totalPower
         }.average()
         val staffBonus = ((hqStaffSummary?.efficiencyBonusPct ?: (hqStaffCount.coerceAtLeast(0) * 4)) / 2).coerceAtMost(14)
-        val cohesionEff = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads)?.efficiencyBonusPct ?: 0
+        val cohesionEff = SquadCohesionRules.evaluateActiveBonus(selectedOperators, squads, mission.requiredSquads > 1)?.efficiencyBonusPct ?: 0
         val inspectionBonus = if (inspectionBuffActive) 8 else 0
         val kitEffBonus = evaluateMissionKitBonus(mission, selectedOperators, smartWardrobeEnabled).efficiencyBonusPct
         val baseRatio = (averagePower / mission.recommendedPower.coerceAtLeast(1)) * 100.0
@@ -2245,6 +2313,9 @@ object TacticalCalculator {
                     missing += "Complete 3+ Ops (${operator.missionsCompleted}/3)"
                 }
             }
+            MFF_BADGE_ID -> {
+                if (MFF_SCHOOL_ID !in operator.completedMissionIds) missing += "Graduate Military Free Fall School"
+            }
             COMBAT_DIVER_BADGE_ID -> {
                 if (COMBAT_DIVER_SCHOOL_ID !in operator.completedMissionIds) {
                     missing += "Graduate Combat Diver Qualification"
@@ -2555,6 +2626,10 @@ object TacticalCalculator {
                                 // Ranger awards the Ranger Tab only, for every MOS
                                 val medalId = firstEligibleUnowned(listOf("insig_ranger_tab"), includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} in small-unit tactics, mountaineering & patrol leadership — Tan Beret authorized."
+                            }
+                            MFF_SCHOOL_ID -> {
+                                val medalId = firstEligibleUnowned(listOf(MFF_BADGE_ID), includeGeneralFallback = false)
+                                medalId to "Graduated ${mission.title}: night oxygen jumps with full combat equipment."
                             }
                             COMBAT_DIVER_SCHOOL_ID -> {
                                 val medalId = firstEligibleUnowned(listOf(COMBAT_DIVER_BADGE_ID), includeGeneralFallback = false)

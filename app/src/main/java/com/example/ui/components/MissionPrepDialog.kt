@@ -30,7 +30,7 @@ fun MissionPrepDialog(
     deployedOpIds: Set<String>,
     onAutoGear: () -> Unit,
     onFieldKit: (List<String>) -> Unit,
-    onLaunch: (teamIds: List<String>, insertion: InsertionMethod, pilotId: String?) -> Unit,
+    onLaunch: (teamIds: List<String>, insertion: InsertionMethod, pilotId: String?, platoonLeaderId: String?) -> Unit,
     onBack: () -> Unit
 ) {
     val extra = LocalAegisColors.current
@@ -39,6 +39,7 @@ fun MissionPrepDialog(
     var insertion by remember(mission.id) { mutableStateOf(InsertionMethod.GROUND) }
     var pilotId by remember(mission.id) { mutableStateOf<String?>(null) }
     var swappingId by remember(mission.id) { mutableStateOf<String?>(null) }
+    var platoonLeaderId by remember(mission.id) { mutableStateOf<String?>(null) }
 
     val opsById = uiState.operators.associateBy { it.id }
     val team = teamIds.mapNotNull { opsById[it] }
@@ -66,7 +67,8 @@ fun MissionPrepDialog(
         hqStaffSummary = uiState.hqStaffSummary,
         squads = uiState.squads,
         smartWardrobeEnabled = uiState.smartWardrobeEnabled,
-        completedCampaignIds = uiState.completedCampaignIds
+        completedCampaignIds = uiState.completedCampaignIds,
+        platoonLeaderId = platoonLeaderId
     )
     val canAfford = uiState.resources.supplies >= preview.supplyCost
 
@@ -108,8 +110,43 @@ fun MissionPrepDialog(
                     }
                 }
 
+                // Items 35/36: team makeup problems (SF team, two squads, platoon leader)
+                preview.teamBlocker?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = extra.amberTelemetry, modifier = Modifier.testTag("prep_team_blocker"))
+                }
+                if (mission.requiresSfTeam) {
+                    Text(
+                        "${mission.sfMissionType ?: "Special Forces"} • exactly ${TacticalCalculator.SF_TEAM_SIZE} soldiers, ${TacticalCalculator.SF_MIN_QUALIFIED}+ SF-qualified. Each different MOS adds +${TacticalCalculator.MOS_COVERAGE_BONUS_PCT}%.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = extra.textMuted
+                    )
+                }
+                if (mission.requiredSquads > 1) {
+                    val squadsOnTeam = uiState.squads.filter { sq -> team.count { it.id in sq.memberIds } >= 2 }
+                    Text(
+                        "Squads: " + (squadsOnTeam.joinToString(" + ") { it.name }.ifBlank { "none yet" }),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = extra.brassBright
+                    )
+                    Text("Platoon Leader", style = MaterialTheme.typography.labelMedium, color = extra.brassBright)
+                    val officers = team.filter { it.rank.isCommissioned }
+                    if (officers.isEmpty()) {
+                        Text("Swap in a 2LT or above to lead the platoon.", style = MaterialTheme.typography.labelSmall, color = extra.amberTelemetry)
+                    }
+                    officers.forEach { o ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).testTag("prep_pl_${o.id}")
+                        ) {
+                            RadioButton(selected = preview.platoonLeader?.id == o.id, onClick = { platoonLeaderId = o.id })
+                            Text("${o.rank.code} ${o.callsign}", modifier = Modifier.weight(1f))
+                            Text("+${TacticalCalculator.PLATOON_LEADER_PASS_BONUS}% pass", style = MaterialTheme.typography.labelSmall, color = extra.textMuted)
+                        }
+                    }
+                }
+
                 // MOS coverage, only on missions where a specialty matters
-                if (mission.recommendedSpecialties.isNotEmpty()) {
+                if (mission.recommendedSpecialties.isNotEmpty() && !mission.requiresSfTeam) {
                     Text("Recommended MOS", style = MaterialTheme.typography.labelMedium, color = extra.brassBright)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("prep_mos_row")) {
                         mission.recommendedSpecialties.forEach { mos ->
@@ -250,8 +287,8 @@ fun MissionPrepDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onLaunch(teamIds, insertion, pilotId.takeIf { insertion == InsertionMethod.HELICOPTER }) },
-                enabled = preview.insertionBlocker == null && canAfford && team.size >= mission.minOperators,
+                onClick = { onLaunch(teamIds, insertion, pilotId.takeIf { insertion == InsertionMethod.HELICOPTER }, preview.platoonLeader?.id) },
+                enabled = preview.insertionBlocker == null && preview.teamBlocker == null && canAfford && team.size >= mission.minOperators,
                 modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("prep_launch")
             ) { Text("Launch") }
         },
