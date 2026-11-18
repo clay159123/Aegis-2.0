@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PendingDeedEntity::class,
         SquadEntity::class
     ],
-    version = 31,
+    version = 32,
     exportSchema = false
 )
 abstract class AegisDatabase : RoomDatabase() {

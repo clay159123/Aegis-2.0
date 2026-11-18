@@ -1,5 +1,6 @@
 package com.example.domain
 
+import com.example.data.catalog.GameCatalog
 import com.example.domain.model.*
 import kotlin.math.roundToInt
 
@@ -111,16 +112,39 @@ object SquadCohesionRules {
         nowMillis: Long
     ): UnitCitation? {
         if (!missionSucceeded || mission.risk.isTraining || mission.scope == MissionScope.STAFF_DIPLOMATIC) return null
-        if (mission.risk != MissionRisk.HIGH && mission.risk != MissionRisk.EXTREME) return null
         val squadDeployed = deployedAfterMission.filter { it.id in squad.memberIds }
         if (squadDeployed.size < MIN_SQUAD_SIZE) return null
         if (squadDeployed.any { it.status == OperatorStatus.FALLEN }) return null
+        val type = unitAwardTypeFor(squad, squadDeployed, mission) ?: return null
         return UnitCitation(
             missionId = mission.id,
             missionTitle = mission.title,
             earnedAtMillis = nowMillis,
-            memberIds = squad.memberIds
+            memberIds = squad.memberIds,
+            type = type
         )
+    }
+
+    /** Every this-many squad missions, a clean success earns the Superior Unit Award. */
+    const val SUPERIOR_UNIT_AWARD_INTERVAL = 6
+
+    /**
+     * Item 55: which unit award a successful squad mission earns, if any.
+     * Presidential Unit Citation: an Extreme campaign finale, or an Extreme mission with nobody wounded.
+     * Valorous Unit Award: any other Extreme mission. Meritorious Unit Commendation: a High mission.
+     * Superior Unit Award: every [SUPERIOR_UNIT_AWARD_INTERVAL]th squad mission with nobody wounded.
+     */
+    fun unitAwardTypeFor(squad: TacticalSquad, squadDeployed: List<Operator>, mission: MissionTemplate): UnitAwardType? {
+        val anyWounded = squadDeployed.any { it.status == OperatorStatus.RECOVERING }
+        val isCampaignFinale = mission.campaignId != null &&
+            GameCatalog.campaigns.find { it.id == mission.campaignId }?.stageMissionIds?.lastOrNull() == mission.id
+        return when {
+            mission.risk == MissionRisk.EXTREME && (isCampaignFinale || !anyWounded) -> UnitAwardType.PRESIDENTIAL_UNIT_CITATION
+            mission.risk == MissionRisk.EXTREME -> UnitAwardType.VALOROUS_UNIT_AWARD
+            mission.risk == MissionRisk.HIGH -> UnitAwardType.MERITORIOUS_UNIT_COMMENDATION
+            !anyWounded && (squad.missionsTogether + 1) % SUPERIOR_UNIT_AWARD_INTERVAL == 0 -> UnitAwardType.SUPERIOR_UNIT_AWARD
+            else -> null
+        }
     }
 
     fun isOperatorEligibleForFieldSquad(operator: Operator): Boolean =

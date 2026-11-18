@@ -75,7 +75,9 @@ object TacticalCalculator {
     val ONE_TIME_RIBBON_IDS: Set<String> = setOf(
         "medal_basic_training", // Army Service Ribbon
         "medal_national_defense", // National Defense Service (on joining)
-        "medal_night_owl"       // Night Ops Qualification Ribbon
+        "medal_night_owl",      // Night Ops Qualification Ribbon
+        "medal_armed_forces_service", // Armed Forces Service Medal (item 55)
+        "medal_overseas_service" // Overseas Service Ribbon (item 55)
     )
 
     /**
@@ -228,7 +230,8 @@ object TacticalCalculator {
         "medal_purple_shield",
         "medal_bronze_valor",
         "medal_army_commendation",
-        "medal_expeditionary"
+        "medal_expeditionary",
+        "medal_flying_cross"
     )
 
     const val MIN_TRANSFER_OPS = 10
@@ -2251,21 +2254,18 @@ object TacticalCalculator {
                     missing += "Needs a heroism citation from a combat op"
                 }
             }
-            "medal_distinguished_cross" -> {
-                if (!isFallen) {
-                    if (maxHazard < MissionRisk.HIGH.baseDangerPenalty) {
-                        missing += "Survive High or Extreme Combat Op"
-                    }
-                    if (combatOps < 6) {
-                        missing += "Complete 6+ Combat Ops ($combatOps/6)"
-                    }
-                    val hasPriorValorOrWound = "medal_bronze_valor" in ownedMedalIds ||
-                        "medal_silver_vanguard" in ownedMedalIds ||
-                        operator.timesWounded > 0
-                    if (!hasPriorValorOrWound) {
-                        missing += "Hold Bronze/Silver Valor or Combat Wound"
-                    }
+            // Item 89: valor awards come only from a valor roll on a High or Extreme mission
+            "medal_distinguished_cross", "medal_silver_vanguard", "medal_bronze_valor" -> {
+                if (!heroismCited) {
+                    missing += "Needs a valor citation from a High or Extreme combat op"
                 }
+            }
+            in AwardRules.NEW_AWARD_IDS -> {
+                missing += AwardRules.eligibilityGaps(
+                    medal.id, operator, heroismCited,
+                    heldCount = allCitations.count { it.medalId == medal.id && it.operatorId == operator.id }
+                        .coerceAtLeast(if (medal.id in ownedMedalIds) 1 else 0)
+                )
             }
             "medal_defense_superior" -> {
                 val staffMet = isHqStaff && operator.staffOpsSupported >= 5
@@ -2274,27 +2274,9 @@ object TacticalCalculator {
                     missing += "HQ Staff (5+ Ops Supported) or 2+ Diplomatic Ops"
                 }
             }
-            "medal_silver_vanguard" -> {
-                if (maxHazard < MissionRisk.HIGH.baseDangerPenalty) {
-                    missing += "Survive High+ Combat Op"
-                }
-                if (combatOps < 4) {
-                    missing += "Complete 4+ Combat Ops ($combatOps/4)"
-                }
-            }
             "medal_purple_shield" -> {
                 if (operator.timesWounded <= 0 && !isFallen) {
                     missing += "Must be Wounded/Medevaced in combat (or Fallen)"
-                }
-            }
-            "medal_bronze_valor" -> {
-                if (!isFallen) {
-                    if (maxHazard < MissionRisk.MODERATE.baseDangerPenalty) {
-                        missing += "Survive Moderate+ Combat Op"
-                    }
-                    if (combatOps < 2) {
-                        missing += "Complete 2+ Combat Ops ($combatOps/2)"
-                    }
                 }
             }
             "medal_meritorious" -> {
@@ -2343,14 +2325,9 @@ object TacticalCalculator {
                 }
             }
             "cord_valor_fourragere" -> {
-                if (maxHazard < MissionRisk.MODERATE.baseDangerPenalty) {
-                    missing += "Survive Moderate+ Combat Op"
-                }
-                if (combatOps < 5) {
-                    missing += "Complete 5+ Combat Ops ($combatOps/5)"
-                }
-                if (distinctCombatMissions < 3) {
-                    missing += "Complete 3+ Distinct Combat Missions ($distinctCombatMissions/3)"
+                // Item 89: the valor cord follows the soldier's valor awards
+                if (ownedMedalIds.none { it in AwardRules.VALOR_AWARD_IDS }) {
+                    missing += "Hold a valor award"
                 }
             }
             "cord_sf_emerald" -> {
@@ -2612,7 +2589,7 @@ object TacticalCalculator {
             if (primary != null) return primary
 
             if (includeGeneralFallback) {
-                val generalFallback = listOf("medal_army_commendation", "medal_good_conduct")
+                val generalFallback = listOf("medal_meritorious")
                 val secondary = generalFallback.firstOrNull { id ->
                     if (id in existingCitationMedalIds) return@firstOrNull false
                     val def = GameCatalog.medals.find { it.id == id } ?: return@firstOrNull false
@@ -2626,7 +2603,7 @@ object TacticalCalculator {
         return when (outcome) {
             OperatorOutcomeType.FALLEN -> {
                 val medalId = firstEligibleUnowned(
-                    listOf("medal_distinguished_cross", "medal_purple_shield")
+                    listOf("medal_purple_shield"), includeGeneralFallback = false
                 )
                 medalId to "Gave the last full measure of devotion holding the objective during ${mission.title}."
             }
@@ -2634,9 +2611,6 @@ object TacticalCalculator {
                 val candidates = buildList {
                     add("medal_purple_shield")
                     if (isCombatMission) add(combatBadgeIdFor(operator))
-                    if (missionSucceeded && isCombatMission) {
-                        add("medal_bronze_valor")
-                    }
                 }
                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
                 val suffix = if (!missionSucceeded && medalId == null) {
@@ -2785,11 +2759,11 @@ object TacticalCalculator {
                     }
                     MissionRisk.LOW -> {
                         val medalId = if (mission.scope == MissionScope.STAFF_DIPLOMATIC) {
-                            val priorityCandidates = listOf("medal_defense_superior", "cord_general_aiguillette")
+                            val priorityCandidates = listOf("medal_defense_superior")
                             firstEligibleUnowned(priorityCandidates, includeGeneralFallback = false)
                                 ?: if (rollSeedPct < 35) {
                                     firstEligibleUnowned(
-                                        listOf("insig_staff_crest", "medal_meritorious", "medal_army_commendation", "medal_good_conduct"),
+                                        listOf("insig_staff_crest", "medal_meritorious"),
                                         includeGeneralFallback = false
                                     )
                                 } else null
@@ -2801,7 +2775,7 @@ object TacticalCalculator {
                             } else null
                             firstCombatRibbon ?: if (rollSeedPct < 25) {
                                 firstEligibleUnowned(
-                                    listOf("medal_expeditionary", "medal_army_commendation", "medal_good_conduct", "medal_nco_dev"),
+                                    listOf("medal_expeditionary", "medal_nco_dev"),
                                     includeGeneralFallback = false
                                 )
                             } else null
@@ -2818,25 +2792,23 @@ object TacticalCalculator {
                     MissionRisk.MODERATE -> {
                         val hasNvg = equippedGear.any { it.id.contains("nvg") || it.id.contains("thermal") }
                         val medalId = if (mission.scope == MissionScope.STAFF_DIPLOMATIC) {
-                            val priorityCandidates = listOf("medal_defense_superior", "cord_general_aiguillette")
+                            val priorityCandidates = listOf("medal_defense_superior")
                             firstEligibleUnowned(priorityCandidates, includeGeneralFallback = false)
                                 ?: if (rollSeedPct < 40) {
                                     firstEligibleUnowned(
-                                        listOf("insig_staff_crest", "medal_meritorious", "medal_army_commendation"),
+                                        listOf("insig_staff_crest", "medal_meritorious"),
                                         includeGeneralFallback = false
                                     )
                                 } else null
                         } else {
                             val milestoneCandidates = buildList {
                                 if (mission.isNightOp && hasNvg) add("medal_night_owl")
-                                add("medal_bronze_valor")
                                 add("medal_expeditionary")
-                                add("cord_valor_fourragere")
                             }
                             firstEligibleUnowned(milestoneCandidates, includeGeneralFallback = false)
                                 ?: if (rollSeedPct < 30) {
                                     firstEligibleUnowned(
-                                        listOf("medal_meritorious", "medal_army_commendation", "medal_good_conduct"),
+                                        listOf("medal_meritorious"),
                                         includeGeneralFallback = false
                                     )
                                 } else null
@@ -2851,17 +2823,12 @@ object TacticalCalculator {
                         medalId to deed
                     }
                     MissionRisk.HIGH -> {
-                        val milestoneCandidates = listOf(
-                            "medal_distinguished_cross",
-                            "medal_silver_vanguard",
-                            "cord_valor_fourragere",
-                            "medal_bronze_valor",
-                            "insig_master_para"
-                        )
+                        // Valor comes from the valor roll (item 89); this is the routine citation
+                        val milestoneCandidates = listOf("insig_master_para")
                         val medalId = firstEligibleUnowned(milestoneCandidates, includeGeneralFallback = false)
                             ?: if (rollSeedPct < 35) {
                                 firstEligibleUnowned(
-                                    listOf("medal_meritorious", "medal_army_commendation"),
+                                    listOf("medal_meritorious"),
                                     includeGeneralFallback = false
                                 )
                             } else null
@@ -2873,22 +2840,16 @@ object TacticalCalculator {
                         medalId to deed
                     }
                     MissionRisk.EXTREME -> {
-                        val milestoneCandidates = listOf(
-                            "medal_distinguished_cross",
-                            "medal_silver_vanguard",
-                            "cord_valor_fourragere"
-                        )
-                        val medalId = firstEligibleUnowned(milestoneCandidates, includeGeneralFallback = false)
-                            ?: if (rollSeedPct < 45) {
+                        val medalId = if (rollSeedPct < 45) {
                                 firstEligibleUnowned(
-                                    listOf("medal_bronze_valor", "medal_meritorious"),
+                                    listOf("medal_meritorious"),
                                     includeGeneralFallback = false
                                 )
                             } else null
                         val deed = if (medalId == null) {
                             "Survived extreme-hazard strike on ${mission.title} (+XP & Op count)."
                         } else {
-                            "Displayed extraordinary valor under extreme hazard on ${mission.title}."
+                            "Served with distinction under extreme hazard on ${mission.title}."
                         }
                         medalId to deed
                     }
@@ -2911,7 +2872,6 @@ object TacticalCalculator {
             when (operator.hqRole) {
                 HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.XO_CHIEF_OF_STAFF, HqStaffRole.DEPUTY_COMMANDER -> {
                     add("insig_staff_crest")
-                    add("cord_general_aiguillette")
                     add("medal_defense_superior")
                 }
                 HqStaffRole.S2_INTEL_OVERWATCH -> {
@@ -2925,30 +2885,24 @@ object TacticalCalculator {
                 }
                 HqStaffRole.S1_PERSONNEL_HONORS, HqStaffRole.S3_OPS_DIRECTOR -> {
                     add("medal_meritorious")
-                    add("medal_army_commendation")
                     if (effectiveStaffOp.rank.tier.isOfficer) add("insig_staff_crest")
                 }
                 HqStaffRole.AIR_OPS_OFFICER, HqStaffRole.CCWO_COMMAND_CHIEF_WARRANT -> {
                     add("medal_meritorious")
-                    add("medal_army_commendation")
                     add("insig_staff_crest")
                 }
                 null -> {
                     if (effectiveStaffOp.rank.tier.isOfficer) {
                         add("insig_staff_crest")
-                        add("cord_general_aiguillette")
                         add("medal_defense_superior")
                     }
                 }
             }
             if (effectiveStaffOp.rank.tier.order >= RankTier.NCO.order) {
-                add("cord_general_aiguillette")
                 add("medal_nco_dev")
             }
             add("medal_meritorious")
-            add("medal_army_commendation")
             add("insig_logistics_crest")
-            add("medal_good_conduct")
         }
         val medalId = candidates.firstOrNull { id ->
             if (id in existingCitationMedalIds) return@firstOrNull false

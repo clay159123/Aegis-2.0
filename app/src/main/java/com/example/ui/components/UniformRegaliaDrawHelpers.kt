@@ -24,6 +24,7 @@ import com.example.domain.model.MarksmanshipBadgeTier
 import com.example.domain.model.MedalDefinition
 import com.example.domain.model.OperatorSpecialty
 import com.example.domain.model.UnitPatchStyle
+import com.example.domain.model.UnitAwardType
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -48,25 +49,31 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     h: Float,
     trimCol: Color,
     callsign: String,
-    hasUnitCitation: Boolean,
+    unitAwards: List<Pair<UnitAwardType, Int>>,
     leaderRole: LeaderRole,
     textMeasurer: TextMeasurer
 ) {
     val showLeaderPin = leaderRole != LeaderRole.NONE
-    // 1. Unit Citation Bar shifted cleanly higher if Leader Pin is present so all 3 items breathe
-    if (hasUnitCitation) {
-        val citTop = if (showLeaderPin) h * (0.514f - CHEST_LIFT) else h * (0.526f - CHEST_LIFT)
-        drawRect(
-            color = Color(0xFF1E4C8E),
-            topLeft = Offset(rightChestCenterX - w * 0.042f, citTop),
-            size = Size(w * 0.084f, h * 0.020f)
-        )
-        drawRect(
-            color = trimCol,
-            topLeft = Offset(rightChestCenterX - w * 0.042f, citTop),
-            size = Size(w * 0.084f, h * 0.020f),
-            style = Stroke(1.3f)
-        )
+    // 1. Unit award emblems in precedence order, side by side, shifted higher if the Leader Pin is present.
+    //    Up to 3 per row (a second row sits above the first), each with gold frame and oak leaf clusters.
+    if (unitAwards.isNotEmpty()) {
+        val baseTop = if (showLeaderPin) h * (0.514f - CHEST_LIFT) else h * (0.526f - CHEST_LIFT)
+        val emblemW = w * 0.050f
+        val emblemH = h * 0.018f
+        val gap = w * 0.004f
+        unitAwards.take(6).chunked(3).forEachIndexed { row, rowAwards ->
+            val rowW = rowAwards.size * emblemW + (rowAwards.size - 1) * gap
+            val top = baseTop - row * (emblemH + gap)
+            rowAwards.forEachIndexed { i, (type, count) ->
+                val left = rightChestCenterX - rowW / 2f + i * (emblemW + gap)
+                val stripeW = emblemW / type.stripes.size
+                type.stripes.forEachIndexed { s, hex ->
+                    drawRect(Color(hex), Offset(left + s * stripeW, top), Size(stripeW + 0.5f, emblemH))
+                }
+                drawRect(Color(type.frameHex), Offset(left, top), Size(emblemW, emblemH), style = Stroke(1.3f))
+                drawRibbonDeviceOverlay(Offset(left, top), Size(emblemW, emblemH), UniformRegaliaRules.unitAwardDevices(count))
+            }
+        }
     }
 
     // 2. Leader pin directly above the nameplate: Squad Leader crimson with a gold star,
@@ -294,6 +301,8 @@ internal fun DrawScope.drawRibbonDeviceOverlay(
         if (deviceInfo.hasValorV) add(0) // 0 = Brass V device
         repeat(deviceInfo.silverOakLeaves.coerceAtMost(2)) { add(1) } // 1 = Silver OLC
         repeat(deviceInfo.bronzeOakLeaves.coerceAtMost(3)) { add(2) } // 2 = Bronze OLC
+        repeat(deviceInfo.silverServiceStars.coerceAtMost(2)) { add(3) } // 3 = Silver service star
+        repeat(deviceInfo.bronzeServiceStars.coerceAtMost(4)) { add(4) } // 4 = Bronze service star
     }.take(4)
 
     val spacing = (rectSize.width / (devTokens.size + 1)).coerceAtLeast(2.2f)
@@ -324,6 +333,22 @@ internal fun DrawScope.drawRibbonDeviceOverlay(
                 }
                 drawPath(diamond, color = fill)
                 drawPath(diamond, color = Color(0xFF10141B), style = Stroke(width = 0.65f))
+            }
+            3, 4 -> {
+                // Five-point service star
+                val fill = if (kind == 3) Color(0xFFF0F4FA) else Color(0xFFD2873E)
+                val star = Path().apply {
+                    for (p in 0 until 10) {
+                        val rad = if (p % 2 == 0) r * 1.05f else r * 0.45f
+                        val a = Math.toRadians(-90.0 + p * 36.0)
+                        val px = x + (rad * kotlin.math.cos(a)).toFloat()
+                        val py = cy + (rad * kotlin.math.sin(a)).toFloat()
+                        if (p == 0) moveTo(px, py) else lineTo(px, py)
+                    }
+                    close()
+                }
+                drawPath(star, color = fill)
+                drawPath(star, color = Color(0xFF10141B), style = Stroke(width = 0.55f))
             }
         }
     }

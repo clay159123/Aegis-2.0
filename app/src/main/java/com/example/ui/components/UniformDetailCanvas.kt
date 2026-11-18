@@ -91,8 +91,11 @@ fun OperatorUniformPreview(
     val rightCordDef = wornRegalia.rightCord
     val neckMedalDef = wornRegalia.neckMedal
     // The gold-framed unit citation is a squad award: worn by everyone who was in the squad when it was earned
-    val hasUnitCitation = renderOperator.tailorOverrides.showUnitCitation &&
-        UniformRegaliaRules.hasUnitCitation(renderOperator, squads)
+    val unitAwards = if (renderOperator.tailorOverrides.showUnitCitation) {
+        UniformRegaliaRules.unitAwardsFor(renderOperator, squads)
+    } else {
+        emptyList()
+    }
     val combatPatch = UniformRegaliaRules.resolveCombatPatch(renderOperator)
     val marksmanshipTier = UniformRegaliaRules.resolveMarksmanshipTier(renderOperator, equippedGear)
     val overseasBars = UniformRegaliaRules.resolveOverseasBars(renderOperator)
@@ -187,7 +190,7 @@ fun OperatorUniformPreview(
                     wornRegalia = wornRegalia,
                     leftCordDef = leftCordDef,
                     rightCordDef = rightCordDef,
-                    hasUnitCitation = hasUnitCitation,
+                    unitAwards = unitAwards,
                     marksmanshipTier = marksmanshipTier,
                     leaderRole = leaderRole,
                     awardDevices = awardDevices,
@@ -207,7 +210,7 @@ fun OperatorUniformPreview(
                     leftCordDef = if (inferredKit == WardrobeKit.MESS) null else leftCordDef,
                     rightCordDef = if (inferredKit == WardrobeKit.MESS) null else rightCordDef,
                     neckMedalDef = neckMedalDef,
-                    hasUnitCitation = hasUnitCitation,
+                    unitAwards = unitAwards,
                     combatPatch = combatPatch,
                     marksmanshipTier = marksmanshipTier,
                     overseasBars = overseasBars,
@@ -243,7 +246,7 @@ private fun DrawScope.drawDressUniformFigure(
     leftCordDef: MedalDefinition?,
     rightCordDef: MedalDefinition?,
     neckMedalDef: MedalDefinition?,
-    hasUnitCitation: Boolean,
+    unitAwards: List<Pair<UnitAwardType, Int>>,
     combatPatch: UnitPatchStyle,
     marksmanshipTier: MarksmanshipBadgeTier,
     overseasBars: Int,
@@ -707,7 +710,7 @@ private fun DrawScope.drawDressUniformFigure(
         h = h,
         trimCol = trimCol,
         callsign = operator.callsign,
-        hasUnitCitation = hasUnitCitation,
+        unitAwards = unitAwards,
         leaderRole = leaderRole,
         textMeasurer = textMeasurer
     )

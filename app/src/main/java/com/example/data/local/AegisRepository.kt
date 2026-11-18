@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 18
+        const val SAVE_FORMAT_VERSION = 19
     }
 
     private val commanderMutex = Mutex()
@@ -457,8 +457,12 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     expPointsStealth = expPointsStealth,
     expPointsTech = expPointsTech,
     expPointsResilience = expPointsResilience,
-    retainedUnitCitations = retainedUnitCitations,
+    retainedUnitAwards = retainedUnitAwardsCsv.split(",").mapNotNull { UnitAwardType.fromName(it) },
     flightHoursLogged = flightHoursLogged,
+    goodConductStreak = goodConductStreak,
+    serviceActions = serviceActions,
+    lastArcomAtAction = lastArcomAtAction,
+    lastAamAtAction = lastAamAtAction,
     bodyBuildOverride = bodyBuildName?.let { n -> BodyBuild.entries.find { it.name == n } },
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
@@ -532,8 +536,12 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     expPointsStealth = expPointsStealth,
     expPointsTech = expPointsTech,
     expPointsResilience = expPointsResilience,
-    retainedUnitCitations = retainedUnitCitations,
+    retainedUnitAwardsCsv = retainedUnitAwards.joinToString(",") { it.name },
     flightHoursLogged = flightHoursLogged,
+    goodConductStreak = goodConductStreak,
+    serviceActions = serviceActions,
+    lastArcomAtAction = lastArcomAtAction,
+    lastAamAtAction = lastAamAtAction,
     bodyBuildName = bodyBuildOverride?.name,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
@@ -782,18 +790,19 @@ private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
 private fun encodeUnitCitationsCsv(citations: List<UnitCitation>): String =
     citations.joinToString(";") { c ->
         val title = c.missionTitle.replace(Regex("[|;+]"), " ")
-        "${c.missionId}|$title|${c.earnedAtMillis}|${c.memberIds.joinToString("+")}"
+        "${c.missionId}|$title|${c.earnedAtMillis}|${c.memberIds.joinToString("+")}|${c.type.name}"
     }
 
 private fun decodeUnitCitationsCsv(csv: String): List<UnitCitation> =
     csv.split(";").mapNotNull { entry ->
         val parts = entry.split("|")
-        if (parts.size != 4) return@mapNotNull null
+        if (parts.size < 4) return@mapNotNull null
         UnitCitation(
             missionId = parts[0],
             missionTitle = parts[1],
             earnedAtMillis = parts[2].toLongOrNull() ?: 0L,
-            memberIds = parts[3].split("+").filter { it.isNotBlank() }
+            memberIds = parts[3].split("+").filter { it.isNotBlank() },
+            type = parts.getOrNull(4)?.let { UnitAwardType.fromName(it) } ?: UnitAwardType.MERITORIOUS_UNIT_COMMENDATION
         )
     }
 

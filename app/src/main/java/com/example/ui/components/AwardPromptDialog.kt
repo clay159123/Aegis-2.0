@@ -26,7 +26,9 @@ fun AwardPromptDialog(
     /** For a repeat award, what the soldier will receive, e.g. "2nd award: 1 Bronze OLC" */
     repeatLabel: String? = null,
     onAward: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    /** Item 51: grants every remaining first-time award in the queue; null hides the button. */
+    onAwardAll: (() -> Unit)? = null
 ) {
     val extra = LocalAegisColors.current
     AlertDialog(
@@ -83,10 +85,18 @@ fun AwardPromptDialog(
             ) { Text(if (repeatLabel != null) "Award Again" else "Award") }
         },
         dismissButton = {
-            TextButton(
-                onClick = onSkip,
-                modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("award_prompt_skip")
-            ) { Text("Skip") }
+            Row {
+                TextButton(
+                    onClick = onSkip,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("award_prompt_skip")
+                ) { Text("Skip") }
+                if (onAwardAll != null) {
+                    TextButton(
+                        onClick = onAwardAll,
+                        modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("award_prompt_award_all")
+                    ) { Text("Award All") }
+                }
+            }
         }
     )
 }

@@ -1177,10 +1177,18 @@ data class Operator(
     val expPointsStealth: Int = 0,
     val expPointsTech: Int = 0,
     val expPointsResilience: Int = 0,
-    /** Unit citations earned with a squad that was later disbanded; the soldier keeps wearing them. */
-    val retainedUnitCitations: Int = 0,
+    /** Unit awards earned with a squad that was later disbanded or left; the soldier keeps wearing them. */
+    val retainedUnitAwards: List<UnitAwardType> = emptyList(),
     /** Item 83: flight hours logged in training and on combat sorties. */
-    val flightHoursLogged: Int = 0
+    val flightHoursLogged: Int = 0,
+    /** Item 52: missions and schools finished since the last Good Conduct award, wound or failed mission. */
+    val goodConductStreak: Int = 0,
+    /** Item 52: every mission, school and HQ support op this soldier finishes (drives award cooldowns). */
+    val serviceActions: Int = 0,
+    /** Item 52: [serviceActions] when the last Army Commendation came through the cooldown path. */
+    val lastArcomAtAction: Int = -100,
+    /** Item 52: [serviceActions] when the last Army Achievement Medal was recommended. */
+    val lastAamAtAction: Int = -100
 ) {
     fun expPoints(stat: StatType): Int = when (stat) {
         StatType.FIREPOWER -> expPointsFirepower
@@ -1460,8 +1468,25 @@ data class UnitCitation(
     val missionTitle: String,
     val earnedAtMillis: Long,
     /** Squad members at the time; they keep wearing it after transferring out. */
-    val memberIds: List<String>
+    val memberIds: List<String>,
+    /** Item 55: which unit award this is. */
+    val type: UnitAwardType = UnitAwardType.MERITORIOUS_UNIT_COMMENDATION
 )
+
+/**
+ * Item 55: unit awards a squad earns together. Worn on the right chest above the nameplate, one emblem per
+ * type in precedence order, with oak leaf clusters for repeats. Colors are the emblem's stripes, edge first.
+ */
+enum class UnitAwardType(val label: String, val shortLabel: String, val precedence: Int, val stripes: List<Long>, val frameHex: Long) {
+    PRESIDENTIAL_UNIT_CITATION("Presidential Unit Citation", "PUC", 1, listOf(0xFF1E4C8E), 0xFFD4AF37),
+    VALOROUS_UNIT_AWARD("Valorous Unit Award", "VUA", 2, listOf(0xFFB22234, 0xFFFFFFFF, 0xFF1E4C8E, 0xFFFFFFFF, 0xFFB22234), 0xFFD4AF37),
+    MERITORIOUS_UNIT_COMMENDATION("Meritorious Unit Commendation", "MUC", 3, listOf(0xFFC8102E), 0xFFD4AF37),
+    SUPERIOR_UNIT_AWARD("Superior Unit Award", "SUA", 4, listOf(0xFFC8102E, 0xFF2E7D32, 0xFFC8102E), 0xFFD4AF37);
+
+    companion object {
+        fun fromName(n: String): UnitAwardType? = entries.find { it.name == n }
+    }
+}
 
 /** A squad can name a Team Leader once it has this many members. */
 const val TEAM_LEADER_MIN_SQUAD_SIZE = 5

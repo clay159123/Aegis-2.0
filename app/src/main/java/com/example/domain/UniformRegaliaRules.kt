@@ -492,8 +492,24 @@ object UniformRegaliaRules {
 
     /** True when the soldier was a member of a squad when it earned a unit citation. */
     fun hasUnitCitation(operator: Operator, squads: List<TacticalSquad>): Boolean =
-        operator.retainedUnitCitations > 0 ||
-            squads.any { squad -> squad.unitCitations.any { operator.id in it.memberIds } }
+        unitAwardsFor(operator, squads).isNotEmpty()
+
+    /**
+     * Item 55: each unit award type this soldier wears, with how many times it was earned, in precedence
+     * order. Includes awards kept from squads they left or that disbanded.
+     */
+    fun unitAwardsFor(operator: Operator, squads: List<TacticalSquad>): List<Pair<UnitAwardType, Int>> {
+        val earned = operator.retainedUnitAwards + squads.flatMap { squad ->
+            squad.unitCitations.filter { operator.id in it.memberIds }.map { it.type }
+        }
+        return earned.groupingBy { it }.eachCount().toList().sortedBy { it.first.precedence }
+    }
+
+    /** Oak leaf clusters for a unit award earned [count] times. */
+    fun unitAwardDevices(count: Int): AwardDeviceInfo {
+        val additional = (count - 1).coerceAtLeast(0)
+        return AwardDeviceInfo(count.coerceAtLeast(1), additional % 5, additional / 5, false)
+    }
 
     fun isLeaderPinShown(operator: Operator, squads: List<TacticalSquad>): Boolean =
         resolveLeaderRole(operator, squads) != LeaderRole.NONE
@@ -502,18 +518,26 @@ object UniformRegaliaRules {
         val awardCount: Int,
         val bronzeOakLeaves: Int,
         val silverOakLeaves: Int,
-        val hasValorV: Boolean
+        val hasValorV: Boolean,
+        /** Item 55: campaign-style awards (Humanitarian, NATO, UN) repeat with service stars instead of oak leaves. */
+        val bronzeServiceStars: Int = 0,
+        val silverServiceStars: Int = 0
     ) {
         val hasAnyDevice: Boolean
-            get() = bronzeOakLeaves > 0 || silverOakLeaves > 0 || hasValorV
+            get() = bronzeOakLeaves > 0 || silverOakLeaves > 0 || hasValorV || bronzeServiceStars > 0 || silverServiceStars > 0
 
         val summaryLabel: String?
             get() = buildList {
                 if (hasValorV) add("\"V\" Valor")
                 if (silverOakLeaves > 0) add("$silverOakLeaves Silver OLC")
                 if (bronzeOakLeaves > 0) add("$bronzeOakLeaves Bronze OLC")
+                if (silverServiceStars > 0) add("$silverServiceStars Silver Service Star")
+                if (bronzeServiceStars > 0) add("$bronzeServiceStars Bronze Service Star")
             }.joinToString(" + ").ifEmpty { null }
     }
+
+    /** Awards that repeat with bronze service stars (5 bronze become 1 silver) instead of oak leaf clusters. */
+    val SERVICE_STAR_AWARD_IDS: Set<String> = setOf("medal_humanitarian", "medal_nato", "medal_un", "medal_pow")
 
     fun resolveAwardDevices(
         operator: Operator,
@@ -523,6 +547,9 @@ object UniformRegaliaRules {
         val matching = allCitations.filter { it.operatorId == operator.id && it.medalId == medalId }
         val count = matching.size.coerceAtLeast(1)
         val additional = (count - 1).coerceAtLeast(0)
+        if (medalId in SERVICE_STAR_AWARD_IDS) {
+            return AwardDeviceInfo(count, 0, 0, false, bronzeServiceStars = additional % 5, silverServiceStars = additional / 5)
+        }
         val silverLeaves = additional / 5
         val bronzeLeaves = additional % 5
         val valorEligibleIds = setOf(
