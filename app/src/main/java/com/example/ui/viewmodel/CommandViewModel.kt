@@ -880,7 +880,11 @@ class CommandViewModel(
                         graduatedOp, state.citations, state.facilities, Random.nextInt(TacticalCalculator.QUAL_ROLL_MAX + 1)
                     )
                     val attemptsLeft = if (isRifleQual) (TacticalCalculator.MAX_REQUAL_ATTEMPTS - nextAttempts).coerceAtLeast(0) else null
-                    val (qualified, result) = TacticalCalculator.applyRifleQualification(graduatedOp, score, attemptsLeft)
+                    val (qualifiedRaw, result) = TacticalCalculator.applyRifleQualification(graduatedOp, score, attemptsLeft)
+                    // Range time counts as Firepower experience (Rifle Qualification attempts only)
+                    val qualified = if (isRifleQual) TacticalCalculator.applyExperience(
+                        qualifiedRaw, setOf(StatType.FIREPOWER), TacticalCalculator.EXP_POINTS_RIFLE_QUAL_FIREPOWER
+                    ).first else qualifiedRaw
                     rifleQualResults.add(result)
                     val note = if (result.improved) {
                         " Qualified ${result.achieved.shortLabel} (score $score) • award pending."
@@ -1113,7 +1117,10 @@ class CommandViewModel(
                     op.retirementRequested
                 }
 
-                val updatedOp = op.copy(
+                val jumped = isCombatOp && op.id != pilotId && outcome != OperatorOutcomeType.FALLEN &&
+                    (deployment.insertion == InsertionMethod.AIRBORNE || deployment.insertion == InsertionMethod.HALO)
+                val (updatedOp, expNote) = TacticalCalculator.applyExperience(op.copy(
+                    combatJumps = op.combatJumps + if (jumped) 1 else 0,
                     xp = newXp,
                     missionsCompleted = newOpsCount,
                     combatMissionsCompleted = newCombatOpsCount,
@@ -1128,6 +1135,10 @@ class CommandViewModel(
                     retirementRequested = if (outcome == OperatorOutcomeType.FALLEN) false else askRetirement,
                     // The pilot logs a combat sortie (Air Medal progress)
                     combatSortiesFlown = op.combatSortiesFlown + if (op.id == pilotId && isCombatOp) 1 else 0
+                ),
+                    // Item 40: the ground team trains the mission's stats; pilots log sorties instead
+                    stats = if (op.id == pilotId) emptySet() else mission.trainsStats,
+                    points = TacticalCalculator.missionExperiencePoints(mission, outcome, missionSucceeded)
                 )
                 updatedOperators.add(updatedOp)
                 if (op.id == pilotId && isCombatOp && outcome != OperatorOutcomeType.FALLEN) {
@@ -1195,7 +1206,7 @@ class CommandViewModel(
                         callsign = op.callsign,
                         rankCode = newRank.code,
                         outcome = outcome,
-                        deedText = deedText,
+                        deedText = deedText + expNote + if (jumped) " Combat jump #${updatedOp.combatJumps}." else "",
                         recommendedMedalId = recMedalId,
                         xpEarned = opXp,
                         promotedToRankCode = if (outcome != OperatorOutcomeType.FALLEN && newRank != prevRank) newRank.code else null,
@@ -1280,7 +1291,11 @@ class CommandViewModel(
             } else {
                 staff.retirementRequested
             }
-            val updatedStaff = candidateStaff.copy(retirementRequested = staffAskRetirement)
+            val updatedStaff = TacticalCalculator.applyExperience(
+                candidateStaff.copy(retirementRequested = staffAskRetirement),
+                setOf(StatType.TECH),
+                TacticalCalculator.EXP_POINTS_HQ_STAFF_TECH
+            ).first
             updatedOperators.add(updatedStaff)
             val earnsStaffAward = missionSucceeded &&
                 !mission.risk.isTraining &&

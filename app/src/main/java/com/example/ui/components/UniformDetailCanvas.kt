@@ -1100,7 +1100,8 @@ private fun DrawScope.drawDressUniformFigure(
             center = Offset(leftChestCenterX, aboveY),
             badgeW = w * 0.088f,
             badgeH = h * 0.044f,
-            col = Color(insig.insigniaColorHex)
+            col = Color(insig.insigniaColorHex),
+            combatJumps = operator.combatJumps
         )
     }
     val showMarksmanshipOnPocket = !style.isCutawayMess && marksmanshipTier != MarksmanshipBadgeTier.NONE
@@ -1112,7 +1113,8 @@ private fun DrawScope.drawDressUniformFigure(
             center = Offset(leftChestCenterX - w * 0.029f, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.054f,
             badgeH = h * 0.036f,
-            col = Color(leftPocketSchoolPin.insigniaColorHex)
+            col = Color(leftPocketSchoolPin.insigniaColorHex),
+            combatJumps = operator.combatJumps
         )
         drawMarksmanshipBadge(
             tier = marksmanshipTier,
@@ -1127,7 +1129,8 @@ private fun DrawScope.drawDressUniformFigure(
                 center = Offset(leftChestCenterX, h * (0.638f - CHEST_LIFT)),
                 badgeW = w * 0.088f,
                 badgeH = h * 0.044f,
-                col = Color(insig.insigniaColorHex)
+                col = Color(insig.insigniaColorHex),
+                combatJumps = operator.combatJumps
             )
         }
         if (showMarksmanshipOnPocket) {
@@ -1145,7 +1148,8 @@ private fun DrawScope.drawDressUniformFigure(
             center = Offset(rightChestCenterX, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.088f,
             badgeH = h * 0.044f,
-            col = Color(insig.insigniaColorHex)
+            col = Color(insig.insigniaColorHex),
+            combatJumps = operator.combatJumps
         )
     }
 
@@ -1712,7 +1716,9 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
     center: Offset,
     badgeW: Float,
     badgeH: Float,
-    col: Color
+    col: Color,
+    /** Item 39: combat jump stars on jump wings (0..5). */
+    combatJumps: Int = 0
 ) {
     val cx = center.x
     val cy = center.y
@@ -1791,6 +1797,17 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
             if (shape == InsigniaShape.STAR_WINGS) {
                 drawLaurelWreathArcs(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.22f, gold, 1.3f)
                 drawStar(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.18f, badgeH * 0.08f, gold)
+            }
+            // Combat jump device: small bronze stars along the top of the wings, centered
+            val jumpStars = combatJumps.coerceIn(0, 5)
+            if (jumpStars > 0) {
+                val bronze = Color(0xFFC08A3E)
+                val r = (badgeH * 0.085f).coerceAtLeast(0.9f)
+                val step = badgeW * 0.15f
+                val startX = cx - step * (jumpStars - 1) / 2f
+                repeat(jumpStars) { i ->
+                    drawStar(Offset(startX + step * i, cy - badgeH * 0.14f), r, r * 0.45f, bronze)
+                }
             }
         }
         InsigniaShape.DIVER_BADGE -> {
@@ -2200,7 +2217,8 @@ private fun DrawScope.drawFieldTacticalFigure(
                 center = Offset(branchCx, centerY),
                 badgeW = badgeW,
                 badgeH = badgeH,
-                col = Color(badge.insigniaColorHex)
+                col = Color(badge.insigniaColorHex),
+                combatJumps = operator.combatJumps
             )
         }
     }

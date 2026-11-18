@@ -473,7 +473,8 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
             center = Offset(leftChestCenterX, aboveY),
             badgeW = w * 0.088f,
             badgeH = h * 0.044f,
-            col = Color(insig.insigniaColorHex)
+            col = Color(insig.insigniaColorHex),
+            combatJumps = operator.combatJumps
         )
     }
     val showMarksmanshipOnPocket = marksmanshipTier != MarksmanshipBadgeTier.NONE
@@ -484,7 +485,8 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
             center = Offset(leftChestCenterX - w * 0.029f, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.054f,
             badgeH = h * 0.036f,
-            col = Color(leftPocketSchoolPin.insigniaColorHex)
+            col = Color(leftPocketSchoolPin.insigniaColorHex),
+            combatJumps = operator.combatJumps
         )
         drawMarksmanshipBadge(
             tier = marksmanshipTier,
@@ -499,7 +501,8 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
                 center = Offset(leftChestCenterX, h * (0.638f - CHEST_LIFT)),
                 badgeW = w * 0.088f,
                 badgeH = h * 0.044f,
-                col = Color(insig.insigniaColorHex)
+                col = Color(insig.insigniaColorHex),
+                combatJumps = operator.combatJumps
             )
         }
         if (showMarksmanshipOnPocket) {
@@ -517,7 +520,8 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
             center = Offset(rightChestCenterX, h * (0.638f - CHEST_LIFT)),
             badgeW = w * 0.088f,
             badgeH = h * 0.044f,
-            col = Color(insig.insigniaColorHex)
+            col = Color(insig.insigniaColorHex),
+            combatJumps = operator.combatJumps
         )
     }
 
@@ -549,7 +553,8 @@ private fun DrawScope.drawBravosContrastSchoolBadge(
     center: Offset,
     badgeW: Float,
     badgeH: Float,
-    col: Color
+    col: Color,
+    combatJumps: Int = 0
 ) {
     val shadow = Color(0xFF1B1F26).copy(alpha = 0.55f)
     drawDetailedChestSchoolBadge(
@@ -565,6 +570,7 @@ private fun DrawScope.drawBravosContrastSchoolBadge(
         center = center,
         badgeW = badgeW,
         badgeH = badgeH,
-        col = bodyCol
+        col = bodyCol,
+        combatJumps = combatJumps
     )
 }

@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 11
+        const val SAVE_FORMAT_VERSION = 12
     }
 
     private val commanderMutex = Mutex()
@@ -436,6 +436,11 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     warrantGrade = warrantGrade,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
+    combatJumps = combatJumps,
+    expPointsFirepower = expPointsFirepower,
+    expPointsStealth = expPointsStealth,
+    expPointsTech = expPointsTech,
+    expPointsResilience = expPointsResilience,
     bodyBuildOverride = bodyBuildName?.let { n -> BodyBuild.entries.find { it.name == n } },
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
@@ -504,6 +509,11 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     warrantGrade = warrantGrade,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
+    combatJumps = combatJumps,
+    expPointsFirepower = expPointsFirepower,
+    expPointsStealth = expPointsStealth,
+    expPointsTech = expPointsTech,
+    expPointsResilience = expPointsResilience,
     bodyBuildName = bodyBuildOverride?.name,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
