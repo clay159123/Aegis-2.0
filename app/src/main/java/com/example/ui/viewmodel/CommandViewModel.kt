@@ -9,6 +9,9 @@ import com.example.data.local.CommanderStateEntity
 import com.example.domain.PromotionEndorsementFocus
 import com.example.domain.SquadCohesionRules
 import com.example.domain.GameTiming
+import com.example.domain.MissionNameGenerator
+import com.example.domain.MissionNames
+import com.example.domain.displayTitle
 import com.example.domain.TacticalCalculator
 import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
@@ -159,6 +162,12 @@ class CommandViewModel(
             val rotatingIds = data.commander.rotatingMissionIdsCsv
                 .split(",")
                 .filter { id -> id.isNotBlank() && GameCatalog.rotatingStandalonePool.any { it.id == id } }
+            TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.operators)
+            // Item 50: generated names for the current board, from the rotation time
+            MissionNames.current = MissionNameGenerator.namesFor(
+                rotatingIds.mapNotNull { id -> GameCatalog.rotatingStandalonePool.find { it.id == id } },
+                data.commander.rotationUpdatedAtMillis
+            )
             CommandUiState(
                 isLoading = false,
                 resources = ResourceBundle(
@@ -788,7 +797,8 @@ class CommandViewModel(
             squadId = resolvedSquadId,
             insertion = insertion,
             pilotId = pilot?.id,
-            platoonLeaderId = platoonLeader?.id
+            platoonLeaderId = platoonLeader?.id,
+            missionTitle = mission.displayTitle
         )
 
         viewModelScope.launch {
@@ -802,14 +812,16 @@ class CommandViewModel(
             val label = if (mission.risk.isTraining) "est. pass" else "est. survival"
             val squadTag = resolvedSquadId?.let { id -> state.squads.find { it.id == id }?.name }
             val prefix = if (squadTag != null) "Dispatched $squadTag: " else "Dispatched: "
-            showBanner("$prefix${mission.title} (${previewOddsPct}% $label)")
+            showBanner("$prefix${mission.displayTitle} (${previewOddsPct}% $label)")
         }
     }
 
     fun claimDeployment(deploymentId: String) {
         val state = uiState.value
         val deployment = state.deployments.find { it.id == deploymentId } ?: return
-        val mission = GameCatalog.missions.find { it.id == deployment.templateId } ?: return
+        // The name it launched under, even if the board has rotated since
+        val mission = GameCatalog.missions.find { it.id == deployment.templateId }
+            ?.let { it.copy(title = deployment.missionTitle ?: it.displayTitle) } ?: return
         val now = System.currentTimeMillis()
         if (!deployment.isComplete(now)) return
 

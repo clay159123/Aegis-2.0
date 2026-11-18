@@ -1584,7 +1584,9 @@ data class ActiveDeployment(
     /** Helicopter pilot riding this mission; also listed in [operatorIds] so they're marked deployed. */
     val pilotId: String? = null,
     /** Item 35: the officer leading a two-squad mission (one of the team). */
-    val platoonLeaderId: String? = null
+    val platoonLeaderId: String? = null,
+    /** Item 50: the mission's name when it launched, kept until it's claimed even if the board rotates. */
+    val missionTitle: String? = null
 ) {
     /** The soldiers on the ground (everyone but the pilot). */
     val groundOperatorIds: List<String> get() = operatorIds.filter { it != pilotId }

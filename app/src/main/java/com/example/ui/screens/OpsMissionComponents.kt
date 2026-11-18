@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.catalog.GameCatalog
+import com.example.domain.displayTitle
 import com.example.domain.SquadCohesionRules
 import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
@@ -77,7 +78,7 @@ internal fun ActiveHqDeploymentCard(
                     color = if (complete) extra.brassBright else extra.signalsCyan
                 )
                 Text(
-                    text = mission.title,
+                    text = deployment.missionTitle ?: mission.displayTitle,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -265,7 +266,7 @@ internal fun CompactHqMissionCard(
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = mission.title,
+                        text = mission.displayTitle,
                         style = MaterialTheme.typography.titleMedium,
                         color = if (isStageLocked) extra.textMuted else MaterialTheme.colorScheme.onSurface,
                         maxLines = if (expanded) 2 else 1,
@@ -522,7 +523,7 @@ internal fun HqStagingSheet(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = mission.title.uppercase(),
+                text = mission.displayTitle.uppercase(),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)

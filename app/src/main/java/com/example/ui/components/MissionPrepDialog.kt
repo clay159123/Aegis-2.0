@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.domain.displayTitle
 import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.theme.LocalAegisColors
@@ -78,7 +79,7 @@ fun MissionPrepDialog(
         title = {
             Column {
                 Text("Mission Prep", style = MaterialTheme.typography.labelMedium, color = extra.textMuted)
-                Text(mission.title, style = MaterialTheme.typography.titleMedium, color = extra.brassBright, maxLines = 2)
+                Text(mission.displayTitle, style = MaterialTheme.typography.titleMedium, color = extra.brassBright, maxLines = 2)
             }
         },
         text = {
