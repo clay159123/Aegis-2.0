@@ -163,6 +163,7 @@ class CommandViewModel(
                 .split(",")
                 .filter { id -> id.isNotBlank() && GameCatalog.rotatingStandalonePool.any { it.id == id } }
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.operators)
+            TacticalCalculator.clearedCampaignIds = completedCampaigns
             // Item 50: generated names for the current board, from the rotation time
             MissionNames.current = MissionNameGenerator.namesFor(
                 rotatingIds.mapNotNull { id -> GameCatalog.rotatingStandalonePool.find { it.id == id } },
@@ -1283,7 +1284,7 @@ class CommandViewModel(
             (mission.rewardCredits * mult * 0.25).roundToInt().toDouble()
         }
         val suppliesEarned = if (missionSucceeded) {
-            (mission.rewardSupplies * mult).roundToInt().toDouble()
+            (mission.rewardSupplies * mult * TacticalCalculator.campaignSupplyYieldMultiplier(state.completedCampaignIds)).roundToInt().toDouble()
         } else if (mission.risk.isTraining) {
             0.0
         } else {
@@ -1499,12 +1500,12 @@ class CommandViewModel(
                     bonusIntel = campaign.completionBonusIntel
                     bonusPrestige = campaign.completionBonusPrestige
                     val allDone = TacticalCalculator.isAllCampaignsCleared(nextCompletedCampaignIds)
-                    val nextCamp = GameCatalog.campaigns.find { it.order == campaign.order + 1 }
+                    val nextCamp = GameCatalog.campaigns.find { it.order == campaign.order + 1 && !it.isSpecialForces }
                     val bonusStr = "+${bonusCredits.toInt()} CR, +${bonusSupplies.toInt()} SUP, +${bonusIntel.toInt()} INT, +${bonusPrestige.toInt()} PRS • Perk: ${campaign.theaterBuffLabel}"
                     campaignProgressNote = if (allDone) {
-                        "CAMPAIGN CLEARED: ${campaign.title} ($bonusStr) — ALL 4 CAMPAIGNS CLEARED! FULL REPLAY UNLOCKED!"
+                        "CAMPAIGN CLEARED: ${campaign.title} ($bonusStr). ALL 10 CAMPAIGNS CLEARED! FULL REPLAY UNLOCKED!"
                     } else if (nextCamp != null) {
-                        "CAMPAIGN CLEARED: ${campaign.title} ($bonusStr) — Unlocked ${nextCamp.title}!"
+                        "CAMPAIGN CLEARED: ${campaign.title} ($bonusStr). Unlocked ${nextCamp.title}!"
                     } else {
                         "CAMPAIGN CLEARED: ${campaign.title} ($bonusStr)"
                     }
@@ -1512,7 +1513,7 @@ class CommandViewModel(
                     val stageNum = mission.campaignStageOrder ?: 1
                     val totalStages = campaign.stageMissionIds.size
                     if (stageNum < totalStages) {
-                        campaignProgressNote = "${campaign.title}: Stage $stageNum/$totalStages Cleared — Stage ${stageNum + 1} Unlocked!"
+                        campaignProgressNote = "${campaign.title}: Stage $stageNum/$totalStages Cleared. Stage ${stageNum + 1} Unlocked!"
                     }
                 }
             }

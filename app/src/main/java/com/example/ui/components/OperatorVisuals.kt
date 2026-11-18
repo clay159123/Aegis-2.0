@@ -329,3 +329,46 @@ internal fun DrawScope.drawOfficerRankDevice(
         }
     }
 }
+
+/**
+ * Item 68 (early): a small "SF" chip on SF-qualified soldiers' cards, in Green Beret green with gold
+ * letters, so they're easy to spot in rosters and pickers.
+ */
+@Composable
+fun SfMarker(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(Color(0xFF254B34))
+            .border(1.dp, Color(0xFFD4B24C), RoundedCornerShape(3.dp))
+            .padding(horizontal = 4.dp, vertical = 1.dp)
+    ) {
+        Text("SF", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF0D77A))
+    }
+}
+
+/** A name line followed by the SF chip when the soldier is SF-qualified. */
+@Composable
+fun NameWithSfMarker(
+    text: String,
+    sfQualified: Boolean,
+    style: androidx.compose.ui.text.TextStyle,
+    color: Color = Color.Unspecified,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Text(
+            text,
+            style = style,
+            color = color,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        if (sfQualified) SfMarker()
+    }
+}

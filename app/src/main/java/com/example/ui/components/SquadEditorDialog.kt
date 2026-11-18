@@ -329,8 +329,9 @@ private fun RosterTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
+                    NameWithSfMarker(
                         text = "${member.rank.code} ${member.callsign}",
+                        sfQualified = TacticalCalculator.isSfQualified(member),
                         style = MaterialTheme.typography.titleSmall,
                         color = if (isLeader) extra.brassBright else MaterialTheme.colorScheme.onSurface
                     )
@@ -412,8 +413,9 @@ private fun RosterTab(
             ) {
                 Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
+                        NameWithSfMarker(
                             text = "${candidate.rank.code} ${candidate.callsign} • ${candidate.specialty.roleTag}",
+                            sfQualified = TacticalCalculator.isSfQualified(candidate),
                             style = MaterialTheme.typography.labelLarge,
                             color = if (!full) MaterialTheme.colorScheme.onSurface else extra.textMuted
                         )

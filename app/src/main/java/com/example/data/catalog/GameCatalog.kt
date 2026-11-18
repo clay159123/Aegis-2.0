@@ -2121,7 +2121,7 @@ object GameCatalog {
     /** Missions with Session 10 MOS and insertion tags applied (see [tagMission]). */
     val missions: List<MissionTemplate> by lazy {
         // Item 47: every mission and school length follows the global time scale
-        baseMissions.map { tagMission(it).let { m -> m.copy(durationSeconds = GameTiming.seconds(m.durationSeconds)) } }
+        (baseMissions + TheaterExpansion.campaignMissions + TheaterExpansion.singleMissions).map { tagMission(it).let { m -> m.copy(durationSeconds = GameTiming.seconds(m.durationSeconds)) } }
     }
 
     /**
@@ -2165,7 +2165,7 @@ object GameCatalog {
             "camp_kestrel_1" to (listOf(A) to listOf(G, H)),
             "camp_kestrel_3" to (listOf(A, B) to listOf(G, H, AB)),
             "camp_kestrel_4" to (listOf(A, M, S) to listOf(G, H, AB))
-        )
+        ) + TheaterExpansion.tags
         if (m.requiresSfTeam) {
             // SF teams can go any way they're qualified for; Maritime only on the coast
             val sfWays = listOf(G, H, AB, InsertionMethod.HALO) + if (m.coastal) listOf(InsertionMethod.MARITIME) else emptyList()
@@ -3843,7 +3843,7 @@ object GameCatalog {
             commsFeed = listOf(
                 "Full task-force amphibious landing across Kestrel Citadel.",
                 "Breaching command bunker under maximum enemy pressure.",
-                "Citadel jamming network destroyed — All 4 Campaigns Secured!"
+                "Citadel jamming network destroyed. Kestrel Strait secured!"
             ),
             campaignId = "camp_kestrel",
             campaignStageOrder = 4
@@ -4190,17 +4190,18 @@ object GameCatalog {
             theater = TheaterRegion.KESTREL_STRAIT,
             difficultyLabel = "Flagship • Moderate → Extreme",
             summary = "Force the Kestrel causeway, secure Coalition Staff mandate, crush coastal batteries, and storm the Extreme Citadel.",
-            rewardSummary = "+750 CR • +220 SUP • +130 INT • +75 PRS • Unlocks Full Replay & +10% Op XP/PRS",
+            rewardSummary = "+750 CR • +220 SUP • +130 INT • +75 PRS • Theater Perk: +10% Op XP & Prestige",
             completionBonusCredits = 750.0,
             completionBonusSupplies = 220.0,
             completionBonusIntel = 130.0,
             completionBonusPrestige = 75.0,
             theaterBuffLabel = "+10% Op XP & Prestige",
             stageMissionIds = listOf("camp_kestrel_1", "camp_kestrel_2", "camp_kestrel_3", "camp_kestrel_4")
-        ),
+        )
+    ) + TheaterExpansion.campaigns + listOf(
         TheaterCampaign(
             id = "camp_uw",
-            order = 5,
+            order = 11,
             title = "SF Campaign: Op Free Strait",
             theater = TheaterRegion.KESTREL_STRAIT,
             difficultyLabel = "Endgame • High → Extreme • SF teams only",
