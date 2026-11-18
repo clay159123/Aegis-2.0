@@ -55,7 +55,7 @@ fun DressAwardsScreen(
 ) {
     val extra = LocalAegisColors.current
     val unlockedOps = remember(uiState.operators) {
-        uiState.operators.filter { it.unlocked && it.status != OperatorStatus.RETIRED }
+        uiState.operators.filter { it.unlocked && it.status != OperatorStatus.RETIRED && it.status != OperatorStatus.TRANSFERRED }
     }
     var selectedOpId by rememberSaveable {
         mutableStateOf(
@@ -262,6 +262,20 @@ fun DressAwardsScreen(
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = extra.brassBright
                             )
+                            // Item 41: MOS front and center next to the portrait
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = extra.signalsCyan.copy(alpha = 0.16f),
+                                border = BorderStroke(1.dp, extra.signalsCyan.copy(alpha = 0.7f)),
+                                modifier = Modifier.testTag("uniform_tab_mos")
+                            ) {
+                                Text(
+                                    text = "${selectedOp.specialty.roleTag} • ${selectedOp.specialty.label}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = extra.signalsCyan,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
                             Text(
                                 text = "${selectedOp.rank.title} ${selectedOp.name}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -383,6 +397,20 @@ fun DressAwardsScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = extra.signalsCyan,
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                )
+                            }
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = Color(0xCC11161F),
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    text = selectedOp.specialty.roleTag,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = extra.brassBright,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp).testTag("uniform_portrait_mos")
                                 )
                             }
                             Surface(

@@ -1,6 +1,7 @@
 package com.example.data.catalog
 
 import com.example.domain.model.*
+import com.example.domain.GameTiming
 import com.example.domain.TacticalCalculator
 
 object GameCatalog {
@@ -165,6 +166,48 @@ object GameCatalog {
             recruitIntelCost = 0.0,
             bio = "Fresh post-Basic signals soldier awaiting specialty Cyber/Signals school and first field deployment."
         ),
+        // Item 44: the fourth starter, an 11B rifleman
+        Operator(
+            id = "op_warden",
+            name = "Luis Moreno",
+            callsign = "WARDEN",
+            branch = ServiceBranch.ARMY,
+            xp = 140, // PFC (E-3)
+            specialty = OperatorSpecialty.ASSAULT,
+            status = OperatorStatus.READY,
+            baseFirepower = 15,
+            baseStealth = 10,
+            baseTech = 8,
+            baseResilience = 13,
+            uniformMode = UniformMode.DRESS_UNIFORM,
+            dressDisplayMode = DressDisplayMode.RIBBONS,
+            camoPattern = CamoPattern.RANGER_GREEN,
+            dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN,
+            headgearStyle = HeadgearStyle.OBSIDIAN_BERET,
+            equippedLeftCordId = null,
+            equippedRightCordId = null,
+            hasWhiteGloves = false,
+            hasDressSash = false,
+            activeWardrobeKit = WardrobeKit.BRAVOS,
+            wardrobe = OperatorWardrobe(
+                field = WardrobeKitSettings(
+                    dressDisplayMode = DressDisplayMode.CLEAN,
+                    headgearStyle = HeadgearStyle.OBSIDIAN_BERET
+                ),
+                bravos = WardrobeKitSettings(dressDisplayMode = DressDisplayMode.RIBBONS),
+                alphas = WardrobeKitSettings(dressDisplayMode = DressDisplayMode.FULL_MEDALS),
+                mess = WardrobeKitSettings(dressDisplayMode = DressDisplayMode.FULL_MEDALS)
+            ),
+            missionsCompleted = 0,
+            combatMissionsCompleted = 0,
+            completedMissionIds = setOf("msn_basic_qual"),
+            highestRiskSurvived = null,
+            timesWounded = 0,
+            unlocked = true,
+            recruitCreditCost = 0.0,
+            recruitIntelCost = 0.0,
+            bio = "11B rifleman fresh from Marksmanship & Tactical Basics, eager for a first field deployment."
+        ),
         Operator(
             id = "op_bastion",
             name = "Nadia Kael",
@@ -308,21 +351,94 @@ object GameCatalog {
         )
     )
 
-    private val recruitNames = listOf(
-        "Jordan Mercer", "Devon Hale", "Clara Cho", "Marcus Vance",
-        "Hana Sato", "Eliot Novak", "Tessa Ward", "Caleb Stone",
-        "Nora Patel", "Liam Brooks", "Soren Lindqvist", "Maya Torres"
+    // Item 42: big name and callsign pools. A recruit gets a first+last name and a callsign that nobody on
+    // the roster (or anyone who has served and left) has used, until a pool runs out.
+    private val recruitFirstNames: List<String> = listOf(
+            "James", "Maria", "Andre", "Sofia", "Tyler", "Grace", "Malik", "Elena",
+            "Ryan", "Aisha", "Diego", "Hannah", "Owen", "Priya", "Isaac", "Lena",
+            "Marcus", "Chloe", "Darius", "Naomi", "Ethan", "Rosa", "Kenji", "Talia",
+            "Victor", "Brooke", "Samuel", "Ivy", "Rafael", "Jade", "Logan", "Amara",
+            "Cole", "Mei", "Gabriel", "Zoe", "Wyatt", "Lucia", "Jamal", "Nina",
+            "Connor", "Yara", "Mateo", "Paige", "Elijah", "Sienna", "Trent", "Leah",
+            "Hector", "Morgan", "Ruben", "Alana", "Bryce", "Kara", "Dmitri", "Faith",
+            "Silas", "Imani", "Adrian", "Willa", "Jordan", "Devon", "Tessa", "Caleb"
+    )
+
+    private val recruitLastNames: List<String> = listOf(
+            "Mercer", "Hale", "Cho", "Vance", "Sato", "Novak", "Ward", "Stone",
+            "Patel", "Brooks", "Lindqvist", "Torres", "Ramirez", "Okafor", "Kowalski", "Nguyen",
+            "Brennan", "Delgado", "Fischer", "Hayes", "Ibarra", "Jensen", "Kaur", "Lowe",
+            "Mendez", "Nakamura", "O'Neal", "Park", "Quinn", "Reyes", "Sullivan", "Tran",
+            "Usman", "Vargas", "Whitaker", "Xu", "Yates", "Zamora", "Abbott", "Bishop",
+            "Castillo", "Dawson", "Ellis", "Flores", "Garrison", "Holt", "Iverson", "Jacobs",
+            "Kline", "Larsen", "Maddox", "Nash", "Ortega", "Pruitt", "Rhodes", "Salazar",
+            "Thatcher", "Underwood", "Valdez", "Wolfe", "Archer", "Barlow", "Crane", "Drummond",
+            "Easton", "Ferris", "Gaines", "Hargrove", "Keller", "Lockhart", "Monroe", "Pierce"
     )
 
     private val callsignsBySpecialty: Map<OperatorSpecialty, List<String>> = mapOf(
-        OperatorSpecialty.ASSAULT to listOf("SABER", "ANVIL", "TALON", "IRON", "PIKE"),
-        OperatorSpecialty.RECON to listOf("HAWK", "FALCON", "STALKER", "GHOST", "LYNX"),
-        OperatorSpecialty.SIGNALS to listOf("RELAY", "PULSE", "VECTOR", "BEACON", "PRISM"),
-        OperatorSpecialty.BREACHER to listOf("HAMMER", "BREACH", "FORGE", "SLEDGE", "MASON"),
-        OperatorSpecialty.MEDIC to listOf("CADUCEUS", "TRIAGE", "ANGEL", "SERUM", "VITAL"),
-        OperatorSpecialty.COMMAND to listOf("GUIDON", "AIDE", "SCEPTRE", "STANDARD", "HERALD"),
-        OperatorSpecialty.AVIATION to listOf("ROTOR", "SKYHOOK", "DUSTOFF", "TALLY", "WINDSOCK")
+        OperatorSpecialty.ASSAULT to listOf(
+            "SABER", "ANVIL", "TALON", "IRON", "PIKE", "BAYONET", "RAMPART", "WARHOUND",
+            "GRANITE", "TOMAHAWK", "CLAYMORE", "BRAVADO", "VANGUARD", "BULWARK", "RIPTIDE", "HALBERD",
+            "TRIDENT", "MAVERICK", "SPARTAN", "GAUNTLET", "CROSSBOW", "RAZOR", "BOULDER", "DIESEL"
+        ),
+        OperatorSpecialty.RECON to listOf(
+            "HAWK", "FALCON", "STALKER", "GHOST", "LYNX", "SHADOW", "WRAITH", "COYOTE",
+            "OSPREY", "NIGHTJAR", "MIRAGE", "SPECTRAL", "FOXGLOVE", "SPARROW", "OWL", "PHANTOM",
+            "SCOUT", "DRIFTER", "WILLOW", "ECHO", "CINDER", "JACKAL", "HERON", "TRACKER"
+        ),
+        OperatorSpecialty.SIGNALS to listOf(
+            "RELAY", "PULSE", "VECTOR", "BEACON", "PRISM", "KEYSTROKE", "STATIC", "QUARTZ",
+            "CIRCUIT", "NEXUS", "SIGNAL", "ORBIT", "PIXEL", "MORSE", "ANTENNA", "PARITY",
+            "KILOWATT", "GLITCH", "SPARKS", "DATALINK", "FREQUENCY", "HEXAGON", "TELEX", "UPLINK"
+        ),
+        OperatorSpecialty.BREACHER to listOf(
+            "HAMMER", "BREACH", "FORGE", "SLEDGE", "MASON", "DEMO", "CHISEL", "CRATER",
+            "FUSE", "DYNAMO", "RIVET", "TORCH", "WRECKER", "BULLDOZER", "GIRDER", "MATTOCK",
+            "PICKAXE", "SAPPER", "CHARGE", "DETONATOR", "CROWBAR", "BEDROCK", "TREMOR", "KEYSTONE"
+        ),
+        OperatorSpecialty.MEDIC to listOf(
+            "CADUCEUS", "TRIAGE", "ANGEL", "SERUM", "VITAL", "PULSAR", "SUTURE", "HALO",
+            "MERCY", "LIFELINE", "BANDAGE", "REMEDY", "GUARDIAN", "TONIC", "SALVE", "DOC",
+            "NIGHTINGALE", "HEARTBEAT", "STETHOSCOPE", "TOURNIQUET", "PATCH", "SAINT", "COMPASSION", "RECOVERY"
+        ),
+        OperatorSpecialty.COMMAND to listOf(
+            "GUIDON", "AIDE", "SCEPTRE", "STANDARD", "HERALD", "BANNER", "MARSHAL", "REGENT",
+            "CITADEL", "COMPASS", "ATLAS", "LANTERN", "PROVOST", "SENTINEL", "CROWN", "OVERLORD",
+            "PALADIN", "EMISSARY", "ORACLE", "LEGATE", "CHANCELLOR", "STEWARD", "KEEP", "MERIDIAN"
+        ),
+        OperatorSpecialty.AVIATION to listOf(
+            "ROTOR", "SKYHOOK", "DUSTOFF", "TALLY", "WINDSOCK", "CHINOOK", "DERVISH", "HOVER",
+            "GUNSHIP", "SKYLARK", "NIGHTHAWK", "WHIRLWIND", "CONDOR", "TAILWIND", "AIRWOLF", "VORTEX",
+            "PROPWASH", "STRATUS", "CYCLONE", "KITE", "GALE", "SWIFT", "BLADE", "SKYWARD"
+        )
     )
+
+    /** Pool sizes, for tests. */
+    val recruitNamePoolSize: Int get() = recruitFirstNames.size * recruitLastNames.size
+    fun callsignPoolSize(specialty: OperatorSpecialty): Int = callsignsBySpecialty[specialty]?.size ?: 0
+
+    /** A first+last name not in [used]; falls back to a numbered name once every combination is taken. */
+    fun pickRecruitName(used: Set<String>, seed: Int): String {
+        val rng = kotlin.random.Random(seed)
+        repeat(400) {
+            val n = "${recruitFirstNames.random(rng)} ${recruitLastNames.random(rng)}"
+            if (n !in used) return n
+        }
+        for (f in recruitFirstNames) for (l in recruitLastNames) if ("$f $l" !in used) return "$f $l"
+        return "${recruitFirstNames.random(rng)} ${recruitLastNames.random(rng)} ${used.size + 1}"
+    }
+
+    /** A callsign for [specialty] not in [used]; numbered once the pool runs out. */
+    fun pickCallsign(specialty: OperatorSpecialty, used: Set<String>, seed: Int): String {
+        val pool = callsignsBySpecialty[specialty] ?: listOf("TROOPER")
+        val free = pool.filter { it !in used }
+        if (free.isNotEmpty()) return free[Math.floorMod(seed, free.size)]
+        var n = 2
+        val base = pool[Math.floorMod(seed, pool.size)]
+        while ("$base-$n" in used) n++
+        return "$base-$n"
+    }
 
     fun createPostBasicRecruit(
         id: String,
@@ -349,9 +465,9 @@ object GameCatalog {
      * Reception Station recruits get only Basic Training (the old behavior).
      */
     fun recruitAwardPackage(source: RecruitSource, specialty: OperatorSpecialty): List<String> {
-        val ncoPackage = listOf("medal_basic_training", "medal_good_conduct", "medal_nco_dev")
+        val ncoPackage = listOf("medal_basic_training", "medal_national_defense", "medal_good_conduct", "medal_nco_dev")
         val base = when (source) {
-            RecruitSource.RECEPTION, RecruitSource.OCS -> listOf("medal_basic_training")
+            RecruitSource.RECEPTION, RecruitSource.OCS -> listOf("medal_basic_training", "medal_national_defense")
             RecruitSource.NCO_ACADEMY -> ncoPackage
             RecruitSource.SENIOR_LEADER_COURSE, RecruitSource.WOCS_TECHNICAL, RecruitSource.WOCS_AVIATOR ->
                 ncoPackage + "medal_army_commendation"
@@ -393,15 +509,12 @@ object GameCatalog {
         requestedSpecialty: OperatorSpecialty,
         source: RecruitSource,
         existingCallsigns: Set<String>,
-        seedIndex: Int
+        seedIndex: Int,
+        usedNames: Set<String> = emptySet()
     ): Operator {
         val specialty = if (source == RecruitSource.WOCS_AVIATOR) OperatorSpecialty.AVIATION else requestedSpecialty
-        val name = recruitNames[seedIndex % recruitNames.size]
-        val pool = callsignsBySpecialty[specialty] ?: listOf("TROOPER")
-        var callsign = pool[seedIndex % pool.size]
-        if (callsign in existingCallsigns) {
-            callsign = "$callsign-${(seedIndex % 9) + 1}"
-        }
+        val name = pickRecruitName(usedNames, seedIndex)
+        val callsign = pickCallsign(specialty, existingCallsigns, seedIndex)
         val (fp, st, tc, rs) = when (specialty) {
             OperatorSpecialty.ASSAULT -> listOf(14, 10, 8, 12)
             OperatorSpecialty.RECON -> listOf(10, 14, 10, 10)
@@ -1216,6 +1329,24 @@ object GameCatalog {
             yieldBonusPct = 4
         ),
         MedalDefinition(
+            id = "medal_national_defense",
+            name = "National Defense Service Medal",
+            shortName = "NDSM",
+            category = AwardCategory.RIBBON,
+            tier = MedalTier.SERVICE,
+            precedenceOrder = 11,
+            description = "Service ribbon worn by every soldier who serves in the Directorate.",
+            qualificationRule = "Awarded on joining. One per soldier.",
+            ribbonStripeHexes = listOf(0xFF8C1D2C, 0xFFF2C744, 0xFF8C1D2C, 0xFFFFFFFF, 0xFF1F3A73, 0xFFFFFFFF, 0xFF8C1D2C, 0xFFF2C744, 0xFF8C1D2C),
+            prestigeCost = 0,
+            minMissionsRequired = 0,
+            firepowerBonus = 0,
+            stealthBonus = 0,
+            techBonus = 0,
+            resilienceBonus = 1,
+            yieldBonusPct = 1
+        ),
+        MedalDefinition(
             id = "medal_night_owl",
             name = "Night Ops Qualification Ribbon",
             shortName = "NIGHT QUAL",
@@ -1993,7 +2124,10 @@ object GameCatalog {
     )
 
     /** Missions with Session 10 MOS and insertion tags applied (see [tagMission]). */
-    val missions: List<MissionTemplate> by lazy { baseMissions.map { tagMission(it) } }
+    val missions: List<MissionTemplate> by lazy {
+        // Item 47: every mission and school length follows the global time scale
+        baseMissions.map { tagMission(it).let { m -> m.copy(durationSeconds = GameTiming.seconds(m.durationSeconds)) } }
+    }
 
     /**
      * Item 32/33 tags, kept in one table. Only missions where a specialty clearly matters get MOS tags.
@@ -2556,7 +2690,8 @@ object GameCatalog {
                 uniformKit = WardrobeKit.FIELD,
                 maxAttempts = 2,
                 prerequisiteAllIds = setOf("msn_basic_qual", "msn_night_qual"),
-                minRankTier = RankTier.NCO,
+                minRankTier = RankTier.SOLDIER,
+                minRank = OperatorRank.SPC,
                 minCombatRisk = MissionRisk.MODERATE,
                 minFirepower = 17,
                 minStealth = 16,
@@ -2573,7 +2708,7 @@ object GameCatalog {
                     OperatorSpecialty.RECON,
                     OperatorSpecialty.BREACHER
                 ),
-                suitabilitySummary = "MOS: Infantry, Recon, Engineer, Command or Medic (combat MOS favored) • NCO+ • Basics+Airborne • Mod+ Op • 17 FP/16 ST/17 RS",
+                suitabilitySummary = "MOS: Infantry, Recon, Engineer, Command or Medic (combat MOS favored) • SPC+ • Basics+Airborne • Mod+ Op • 17 FP/16 ST/17 RS",
                 graduationStatBonus = StatProfile(3, 3, 2, 3),
                 graduationRewardsSummary = "Grants +11 Base Stats • Awards SF Tab & Emerald Cord • Unlocks Green Beret & SF Gear"
             ),

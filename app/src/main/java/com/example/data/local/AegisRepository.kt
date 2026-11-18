@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 14
+        const val SAVE_FORMAT_VERSION = 15
     }
 
     private val commanderMutex = Mutex()
@@ -248,12 +248,28 @@ class AegisRepository(private val dao: AegisDao) {
             )
         )
         starterCitations.forEach { dao.insertCitation(it) }
+        // Item 43: starters also hold everything else their record already earns
+        GameCatalog.initialOperators.filter { it.unlocked }.forEach { op ->
+            val held = starterCitations.filter { it.operatorId == op.id }.map { it.medalId }.toSet()
+            TacticalCalculator.earnedStartingAwards(op, held).forEachIndexed { i, medalId ->
+                dao.insertCitation(
+                    CitationEntity(
+                        id = "cit_seed_${op.id}_$medalId",
+                        operatorId = op.id,
+                        medalId = medalId,
+                        citationNote = "Earned before reporting to Aegis HQ.",
+                        missionTitle = "Prior Service Record",
+                        awardedAtMillis = nowMillis - 80_000_000L + i
+                    )
+                )
+            }
+        }
 
         dao.upsertSquad(
             SquadEntity(
                 id = "sq_alpha",
                 name = "Alpha Squad",
-                memberIdsCsv = "op_kestrel,op_vesper,op_cipher",
+                memberIdsCsv = "op_kestrel,op_vesper,op_cipher,op_warden",
                 leaderId = "op_kestrel",
                 cohesionXp = 120,
                 missionsTogether = 2,

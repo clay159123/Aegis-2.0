@@ -509,7 +509,7 @@ class AegisOpsRobolectricTest {
         val alpha = initialSquads.first()
         assertEquals("sq_alpha", alpha.id)
         assertEquals("op_kestrel", alpha.leaderId)
-        assertEquals(listOf("op_kestrel", "op_vesper", "op_cipher"), alpha.memberIds)
+        assertEquals(listOf("op_kestrel", "op_vesper", "op_cipher", "op_warden"), alpha.memberIds)
 
         val updatedAlpha = alpha.copy(
             leaderId = "op_vesper",
@@ -532,7 +532,7 @@ class AegisOpsRobolectricTest {
         val alphaSquad = TacticalSquad(
             id = "sq_alpha",
             name = "Alpha Squad",
-            memberIds = listOf("op_kestrel", "op_vesper", "op_cipher"),
+            memberIds = listOf("op_kestrel", "op_vesper", "op_cipher", "op_warden"),
             leaderId = "op_kestrel",
             cohesionXp = 120,
             missionsTogether = 2
@@ -574,7 +574,7 @@ class AegisOpsRobolectricTest {
         composeTestRule.waitForIdle()
 
         assertEquals("op_cipher", savedLeaderId)
-        assertEquals(listOf("op_kestrel", "op_vesper", "op_cipher"), savedMembers)
+        assertEquals(listOf("op_kestrel", "op_vesper", "op_cipher", "op_warden"), savedMembers)
     }
 
     @Test
@@ -583,7 +583,7 @@ class AegisOpsRobolectricTest {
         val alphaSquad = TacticalSquad(
             id = "sq_alpha",
             name = "Alpha Squad",
-            memberIds = listOf("op_kestrel", "op_vesper", "op_cipher"),
+            memberIds = listOf("op_kestrel", "op_vesper", "op_cipher", "op_warden"),
             leaderId = "op_vesper",
             cohesionXp = 300,
             missionsTogether = 4

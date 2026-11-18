@@ -234,7 +234,7 @@ class WarrantAviationTest {
         }
         // Reception Station is the old behavior: PV2, Basic Training only, no schools
         val pv2 = GameCatalog.createRecruit("op_pv2", OperatorSpecialty.ASSAULT, RecruitSource.RECEPTION, emptySet(), 0)
-        assertEquals(listOf("medal_basic_training"), GameCatalog.recruitAwardPackage(RecruitSource.RECEPTION, OperatorSpecialty.ASSAULT))
+        assertEquals(listOf("medal_basic_training", "medal_national_defense"), GameCatalog.recruitAwardPackage(RecruitSource.RECEPTION, OperatorSpecialty.ASSAULT))
         assertTrue(pv2.completedMissionIds.isEmpty())
         // SFC comes with the NCO Academy behind them and the MOS school, but no Ranger/SF/Airborne
         val sfc = GameCatalog.createRecruit("op_sfc", OperatorSpecialty.MEDIC, RecruitSource.SENIOR_LEADER_COURSE, emptySet(), 0)
