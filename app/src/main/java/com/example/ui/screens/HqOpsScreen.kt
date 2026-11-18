@@ -68,6 +68,7 @@ fun HqOpsScreen(
     onNavigateToDress: () -> Unit,
     onNavigateToSquad: () -> Unit,
     onSwitchOperatorsToKit: (List<String>, WardrobeKit) -> Unit = { _, _ -> },
+    onSetTeamCamo: (List<String>, CamoPattern?) -> Unit = { _, _ -> },
     onRefreshRotatingMissions: () -> Unit = {},
     onOpenCommandGuide: () -> Unit,
     onOpenSettings: () -> Unit = {},
@@ -856,6 +857,7 @@ fun HqOpsScreen(
             deployedOpIds = deployedOpIds,
             onAutoGear = onAutoGear,
             onFieldKit = { ids -> onSwitchOperatorsToKit(ids, WardrobeKit.FIELD) },
+            onSetTeamCamo = onSetTeamCamo,
             onLaunch = { ids, insertion, pilotId, platoonLeaderId ->
                 launchPrepared(missionForPrep, ids, prepSquadId, insertion, pilotId, platoonLeaderId)
                 prepMission = null

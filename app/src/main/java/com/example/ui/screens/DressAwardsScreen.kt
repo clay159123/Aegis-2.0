@@ -54,6 +54,7 @@ fun DressAwardsScreen(
     onToggleSmartWardrobe: () -> Unit = {},
     onConductKitInspection: ((String, WardrobeKit) -> Unit)? = null,
     onAwardAllPending: () -> Unit = {},
+    onAwardAllEligible: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val extra = LocalAegisColors.current
@@ -193,6 +194,9 @@ fun DressAwardsScreen(
     }
     val opUnitAwards = remember(selectedOp, uiState.squads) {
         UniformRegaliaRules.unitAwardsFor(selectedOp, uiState.squads).toMap()
+    }
+    val eligibleFirstTime = remember(selectedOp, uiState.citations, uiState.pendingDeeds) {
+        AwardRules.eligibleFirstTimeAwards(selectedOp, uiState.citations, opDeeds.map { it.recommendedMedalId }.toSet())
     }
     val firstTimePendingCount = remember(uiState.pendingDeeds, uiState.citations) {
         val held = uiState.citations.map { it.operatorId to it.medalId }.toSet()
@@ -403,7 +407,7 @@ fun DressAwardsScreen(
                                     .padding(8.dp)
                             ) {
                                 Text(
-                                    text = previewKit.shortLabel.uppercase(),
+                                    text = previewKit.shortLabelFor(selectedOp).uppercase(),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = extra.signalsCyan,
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
@@ -461,7 +465,7 @@ fun DressAwardsScreen(
                                     },
                                     label = {
                                         Text(
-                                            text = if (!available) "${kit.shortLabel} (HQ)" else kit.shortLabel,
+                                            text = if (!available) "${kit.shortLabel} (${if (selectedOp.isAviator) "N/A" else "HQ"})" else kit.shortLabelFor(selectedOp),
                                             style = MaterialTheme.typography.labelMedium,
                                             maxLines = 1
                                         )
@@ -863,6 +867,27 @@ fun DressAwardsScreen(
                 title = "Army Awards & Regalia (${uiState.resources.prestige.toInt()} PRS)",
                 subtitle = "Medals, Ribbons, Shoulder Cords & Specialty School Insignia"
             )
+            // Every first-time award this soldier qualifies for, in one tap
+            if (eligibleFirstTime.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                val cost = eligibleFirstTime.sumOf { it.prestigeCost }
+                Button(
+                    onClick = { onAwardAllEligible(selectedOp.id) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("award_all_eligible"),
+                    colors = ButtonDefaults.buttonColors(containerColor = extra.brass, contentColor = MaterialTheme.colorScheme.onSecondary)
+                ) {
+                    Text("Award All Eligible to ${selectedOp.callsign} (${eligibleFirstTime.size} • $cost PRS)")
+                }
+                Text(
+                    eligibleFirstTime.joinToString(" • ") { it.shortName },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = extra.textMuted,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
 
         AwardRules.AwardGroup.entries.forEach { group ->

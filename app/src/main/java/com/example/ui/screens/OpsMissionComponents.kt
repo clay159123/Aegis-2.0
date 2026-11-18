@@ -492,7 +492,8 @@ internal fun HqStagingSheet(
         smartWardrobeEnabled = uiState.smartWardrobeEnabled
     )
     val avgSurvival = TacticalCalculator.squadAvgSurvivalPct(
-        mission, selectedOps, uiState.gearItems, uiState.citations, uiState.facilities, uiState.hqStaffCount, uiState.hqStaffSummary, uiState.squads
+        mission, selectedOps, uiState.gearItems, uiState.citations, uiState.facilities, uiState.hqStaffCount, uiState.hqStaffSummary, uiState.squads,
+        uiState.smartWardrobeEnabled
     )
     val successOdds = TacticalCalculator.missionSuccessOddsPct(
         mission = mission,

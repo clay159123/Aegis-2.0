@@ -809,7 +809,8 @@ class CommandViewModel(
                 facilities = state.facilities,
                 hqStaffCount = state.hqStaffCount,
                 hqStaffSummary = state.hqStaffSummary,
-                squads = state.squads
+                squads = state.squads,
+                smartWardrobeEnabled = state.smartWardrobeEnabled
             )
         }
         val now = System.currentTimeMillis()
@@ -1078,6 +1079,7 @@ class CommandViewModel(
             missionSucceeded = Random.nextInt(100) < successOdds
             val activeCohesionBonus = SquadCohesionRules.evaluateActiveBonus(groundOps, state.squads, mission.requiredSquads > 1)
             val cohesionSurvBonus = activeCohesionBonus?.survivalBonusPct ?: 0
+            val camoSurvBonus = TacticalCalculator.teamCamoEffect(mission, groundOps, state.squads, state.smartWardrobeEnabled).survivalDelta
 
             var petitionAlreadyActive = state.operators.any {
                 it.unlocked && !it.status.isOutOfActiveService && (it.transferRequested || it.retirementRequested)
@@ -1093,7 +1095,7 @@ class CommandViewModel(
                     facilities = state.facilities,
                     hqStaffCount = state.hqStaffCount,
                     hqStaffSummary = state.hqStaffSummary
-                ) + (if (op.id == pilotId) 0 else cohesionSurvBonus + platoonSurvBonus) + insertionSurvival).coerceIn(38, 98)
+                ) + (if (op.id == pilotId) 0 else cohesionSurvBonus + platoonSurvBonus + camoSurvBonus) + insertionSurvival).coerceIn(38, 98)
                 val survivalPct = if (missionSucceeded) baseSurvivalPct else (baseSurvivalPct - 8).coerceAtLeast(38)
                 val roll = Random.nextInt(100)
                 val outcome = when {
@@ -1859,7 +1861,8 @@ class CommandViewModel(
             transferRequested = false,
             retirementRequested = false,
             uniformMode = UniformMode.DRESS_UNIFORM,
-            activeWardrobeKit = if (op.activeWardrobeKit == WardrobeKit.FIELD) WardrobeKit.ALPHAS else op.activeWardrobeKit
+            // Item 91: HQ staff default to Alphas
+            activeWardrobeKit = WardrobeKit.ALPHAS
         )
         val updatedSquads = SquadCohesionRules.pruneUnavailableMembers(
             squads = state.squads,
@@ -2395,6 +2398,20 @@ class CommandViewModel(
         }
     }
 
+    /** Item 94: set the team's field camo from mission prep; null puts it back on Auto. */
+    fun setTeamFieldCamo(operatorIds: List<String>, camo: CamoPattern?) {
+        val state = uiState.value
+        val updated = operatorIds.distinct().mapNotNull { id ->
+            val op = state.operators.find { it.id == id && !it.isAviator } ?: return@mapNotNull null
+            op.copy(wardrobe = op.wardrobe.withKit(WardrobeKit.FIELD, op.wardrobe.field.copy(camoPattern = camo)))
+        }
+        if (updated.isEmpty()) return
+        viewModelScope.launch {
+            repository.saveOperators(updated)
+            showBanner(if (camo == null) "Team camo set to Auto." else "Team camo set to ${camo.label}.")
+        }
+    }
+
     fun toggleOperatorUniformMode(operatorId: String) {
         val state = uiState.value
         val op = state.operators.find { it.id == operatorId } ?: return
@@ -2716,6 +2733,26 @@ class CommandViewModel(
             )
         }
         return picks.map { it.first.id }.toSet()
+    }
+
+    /** Award All Eligible on the Uniform tab: every first-time award this soldier qualifies for now. */
+    fun awardAllEligible(operatorId: String) {
+        val state = uiState.value
+        val op = state.operators.find { it.id == operatorId && it.unlocked } ?: return
+        val pending = state.pendingDeeds.filter { it.operatorId == op.id }
+        val now = System.currentTimeMillis()
+        val deeds = AwardRules.eligibleFirstTimeAwards(op, state.citations, pending.map { it.recommendedMedalId }.toSet())
+            .map { medal ->
+                pending.firstOrNull { it.recommendedMedalId == medal.id } ?: PendingDeed(
+                    id = "deed_${UUID.randomUUID().toString().take(8)}",
+                    operatorId = op.id,
+                    missionTitle = "Uniform Tab Review",
+                    deedSummary = "Met the standard for the ${medal.name}.",
+                    recommendedMedalId = medal.id,
+                    createdAtMillis = now
+                )
+            }
+        awardAll(deeds)
     }
 
     /** Award all on the Honors screen: every soldier's pending first-time awards. */

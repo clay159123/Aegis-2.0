@@ -364,6 +364,8 @@ object UniformRegaliaRules {
         "insig_cib", "insig_eib_rifle", "insig_cab", "insig_combat_medic", "insig_cmb_medic"
     )
 
+    const val STAFF_CREST_ID = "insig_staff_crest"
+
     fun resolveChestBadgeSlots(
         operator: Operator,
         ownedBadgeMedals: List<MedalDefinition>,
@@ -415,8 +417,10 @@ object UniformRegaliaRules {
                         chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
                             .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS }
                     // Slot 3: an identification crest, else a catch-all for any unworn badge
+                    // Item 92: the War College / General Staff crest always sits below the name tag, whatever the MOS
                     ChestBadgeSlot.RIGHT_POCKET ->
-                        chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty).firstOrNull { it.id !in usedIds }
+                        ownedById[STAFF_CREST_ID]?.takeIf { it.id !in usedIds }
+                            ?: chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty).firstOrNull { it.id !in usedIds }
                             ?: ownedBadgeMedals.sortedBy { it.precedenceOrder }.firstOrNull { it.id !in usedIds }
                 }
                 if (pick != null) {

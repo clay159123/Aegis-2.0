@@ -185,7 +185,7 @@ fun CamoPatternDropdown(
     testTag: String = "dropdown_camo_pattern"
 ) {
     val options = remember {
-        CamoPattern.entries.map { pattern ->
+        CamoPattern.SELECTABLE.map { pattern ->
             DropdownOptionItem(
                 value = pattern,
                 title = pattern.label,

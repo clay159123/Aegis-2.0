@@ -607,7 +607,14 @@ enum class WardrobeKit(
     MESS("Evening Mess", "Mess", "Diplomatic missions & formal galas");
 
     fun isAvailableFor(operator: Operator): Boolean =
-        !(this == FIELD && operator.status == OperatorStatus.HQ_STAFF)
+        !(this == FIELD && (operator.status == OperatorStatus.HQ_STAFF || operator.isAviator))
+
+    /** Item 93: aviators wear a flight suit in place of Bravos. */
+    fun shortLabelFor(operator: Operator): String =
+        if (this == BRAVOS && operator.isAviator) "Flight Suit" else shortLabel
+
+    fun labelFor(operator: Operator): String =
+        if (this == BRAVOS && operator.isAviator) "Flight Suit" else label
 }
 
 enum class DutyUniformContext {
@@ -751,14 +758,40 @@ enum class CamoPattern(
     val label: String,
     val primaryHex: Long,
     val secondaryHex: Long,
-    val accentHex: Long
+    val accentHex: Long,
+    /** Item 94: terrain this pattern is made for (+3% pass, +2 survival when most of the team matches). */
+    val suitedTerrains: Set<Terrain>,
+    /** Terrain where this pattern clearly stands out (a small penalty). */
+    val wrongTerrains: Set<Terrain>
 ) {
-    WOODLAND_OLIVE("Army Scorpion OCP", 0xFF4F5D3B, 0xFF313924, 0xFF7B855B),
-    NIGHT_CHARCOAL("Night Ops Slate", 0xFF262D38, 0xFF171B22, 0xFF3E4A59),
-    ALPINE_FROST("Alpine Frost", 0xFF7D8B96, 0xFF49545E, 0xFFB8C4CE),
-    ARID_SAND("Arid Canyon", 0xFF8C7A5B, 0xFF5D4F38, 0xFFB5A17D),
-    RANGER_GREEN("Ranger Olive", 0xFF36452E, 0xFF212B1C, 0xFF566B4A)
+    WOODLAND_OLIVE("Army Scorpion OCP", 0xFF4F5D3B, 0xFF313924, 0xFF7B855B,
+        setOf(Terrain.WOODLAND, Terrain.MOUNTAIN), setOf(Terrain.ARCTIC)),
+    NIGHT_CHARCOAL("Night Ops Slate", 0xFF262D38, 0xFF171B22, 0xFF3E4A59,
+        setOf(Terrain.URBAN), setOf(Terrain.DESERT, Terrain.ARCTIC)),
+    ALPINE_FROST("Alpine Frost", 0xFF7D8B96, 0xFF49545E, 0xFFB8C4CE,
+        setOf(Terrain.ARCTIC, Terrain.MOUNTAIN), setOf(Terrain.JUNGLE, Terrain.DESERT, Terrain.WOODLAND)),
+    ARID_SAND("Arid Canyon", 0xFF8C7A5B, 0xFF5D4F38, 0xFFB5A17D,
+        setOf(Terrain.DESERT), setOf(Terrain.ARCTIC, Terrain.JUNGLE, Terrain.WOODLAND)),
+    RANGER_GREEN("Ranger Olive", 0xFF36452E, 0xFF212B1C, 0xFF566B4A,
+        setOf(Terrain.JUNGLE, Terrain.WOODLAND), setOf(Terrain.ARCTIC, Terrain.DESERT)),
+    LITTORAL_TIDE("Littoral Tide", 0xFF4A5A66, 0xFF2C3740, 0xFF7C8E99,
+        setOf(Terrain.COASTAL), setOf(Terrain.JUNGLE, Terrain.DESERT)),
+    /** Item 93: the aviator flight suit's solid sage. Not a field camo choice. */
+    FLIGHT_SAGE("Flight Suit Sage", 0xFF6E775B, 0xFF5D654C, 0xFF7C866A, emptySet(), emptySet());
+
+    companion object {
+        /** Patterns a player can pick for field uniforms. */
+        val SELECTABLE: List<CamoPattern> get() = entries.filter { it != FLIGHT_SAGE }
+    }
+
+    fun fitFor(terrain: Terrain): CamoFit = when (terrain) {
+        in suitedTerrains -> CamoFit.MATCH
+        in wrongTerrains -> CamoFit.WRONG
+        else -> CamoFit.NEUTRAL
+    }
 }
+
+enum class CamoFit { MATCH, NEUTRAL, WRONG }
 
 enum class DressUniformStyle(
     val label: String,

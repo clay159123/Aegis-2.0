@@ -326,6 +326,7 @@ fun AegisCommandApp() {
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
                                     onSwitchOperatorsToKit = viewModel::switchOperatorsToKit,
+                                    onSetTeamCamo = viewModel::setTeamFieldCamo,
                                     onRefreshRotatingMissions = viewModel::refreshRotatingMissions,
                                     onOpenSettings = { showSettings = true },
                                     onOpenCommandGuide = {
@@ -398,6 +399,7 @@ fun AegisCommandApp() {
                                     onSelectWardrobeKit = viewModel::selectWardrobeKit,
                                     onToggleSmartWardrobe = viewModel::toggleSmartWardrobe,
                                     onAwardAllPending = viewModel::awardAllPending,
+                                    onAwardAllEligible = viewModel::awardAllEligible,
                                     onConductKitInspection = { opId, kit ->
                                         viewModel.conductUniformInspection(operatorId = opId, inspectedKit = kit)
                                     }

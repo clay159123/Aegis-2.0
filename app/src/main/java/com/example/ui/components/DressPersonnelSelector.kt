@@ -975,7 +975,7 @@ private fun PersonnelDirectoryRow(
                     }
                 }
                 Text(
-                    text = "$honorCount Honors • ${operator.activeWardrobeKit.shortLabel}",
+                    text = "$honorCount Honors • ${operator.activeWardrobeKit.shortLabelFor(operator)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = extra.textMuted,
                     maxLines = 1
