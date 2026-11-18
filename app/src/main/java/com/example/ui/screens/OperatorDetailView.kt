@@ -332,6 +332,26 @@ fun OperatorDetailView(
                         }
                     }
 
+                    // Item 40: experience gains, on their own line, with points to the next +1
+                    Text(
+                        text = "Experience: " + StatType.entries.joinToString("  •  ") { stat ->
+                            val pts = operator.expPoints(stat)
+                            val gain = TacticalCalculator.experienceGain(pts)
+                            val next = TacticalCalculator.pointsToNextExperienceGain(pts)
+                            "${stat.shortLabel} +$gain" + if (next != null) " ($next to next)" else " (max)"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("operator_experience_line")
+                    )
+                    if (operator.combatJumps > 0) {
+                        Text(
+                            text = "Combat jumps: ${operator.combatJumps}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = extra.brassBright
+                        )
+                    }
+
                     val xpProgress = if (nextRank != null) {
                         val span = (nextRank.xpRequired - operator.rank.xpRequired).coerceAtLeast(1)
                         ((operator.xp - operator.rank.xpRequired).toFloat() / span.toFloat()).coerceIn(0f, 1f)

@@ -737,6 +737,60 @@ object TacticalCalculator {
         )
     }
 
+    // ---- Session 10b: experience (item 40) and combat jumps (item 39) ----
+    /** Experience points at which a stat gains +1: up to +6 per stat, each step slower. */
+    val EXPERIENCE_GAIN_THRESHOLDS: List<Int> = listOf(4, 10, 18, 28, 40, 54)
+    const val EXP_POINTS_LOW = 1
+    const val EXP_POINTS_MODERATE = 2
+    const val EXP_POINTS_HIGH = 3
+    const val EXP_POINTS_EXTREME = 4
+    const val EXP_POINTS_HQ_STAFF_TECH = 1
+    const val EXP_POINTS_RIFLE_QUAL_FIREPOWER = 1
+    /** Combat jump stars shown on jump wings. A sixth jump and beyond still shows five. */
+    const val MAX_COMBAT_JUMP_STARS = 5
+
+    /** Stat bonus earned from [points] of experience (0..6). */
+    fun experienceGain(points: Int): Int = EXPERIENCE_GAIN_THRESHOLDS.count { points >= it }
+
+    /** Points still needed for the next +1, or null once maxed. */
+    fun pointsToNextExperienceGain(points: Int): Int? =
+        EXPERIENCE_GAIN_THRESHOLDS.firstOrNull { points < it }?.let { it - points }
+
+    /**
+     * Experience each trained stat earns on this mission: by risk, halved (rounded up) on a failure.
+     * Fallen soldiers, schools and training earn nothing.
+     */
+    fun missionExperiencePoints(mission: MissionTemplate, outcome: OperatorOutcomeType, missionSucceeded: Boolean): Int {
+        if (mission.scope == MissionScope.TRAINING || mission.risk.isTraining) return 0
+        if (outcome == OperatorOutcomeType.FALLEN || outcome == OperatorOutcomeType.STAFF_SUPPORT) return 0
+        val base = when (mission.risk) {
+            MissionRisk.LOW -> EXP_POINTS_LOW
+            MissionRisk.MODERATE -> EXP_POINTS_MODERATE
+            MissionRisk.HIGH -> EXP_POINTS_HIGH
+            MissionRisk.EXTREME -> EXP_POINTS_EXTREME
+            else -> 0
+        }
+        return if (missionSucceeded) base else (base + 1) / 2
+    }
+
+    /** Adds [points] to each of [stats]; returns the soldier and a debrief note for any +1 that landed. */
+    fun applyExperience(op: Operator, stats: Set<StatType>, points: Int): Pair<Operator, String> {
+        if (points <= 0 || stats.isEmpty()) return op to ""
+        var updated = op
+        val gains = mutableListOf<String>()
+        for (stat in stats) {
+            val before = updated.expPoints(stat)
+            val after = before + points
+            updated = updated.withExpPoints(stat, after)
+            val delta = experienceGain(after) - experienceGain(before)
+            if (delta > 0) gains += "${stat.label} +$delta (experience)"
+        }
+        return updated to if (gains.isEmpty()) "" else " ${gains.joinToString(", ")}."
+    }
+
+    /** Combat jump stars to draw on this soldier's jump wings (0..5). */
+    fun combatJumpStars(op: Operator): Int = op.combatJumps.coerceIn(0, MAX_COMBAT_JUMP_STARS)
+
     /** True once a soldier has started (attempted) or finished this school. */
     private fun hasEnteredSchool(operator: Operator, missionId: String): Boolean =
         missionId in operator.completedMissionIds || (operator.schoolAttempts[missionId] ?: 0) > 0
@@ -1726,10 +1780,10 @@ object TacticalCalculator {
         }
 
         return StatProfile(
-            firepower = operator.baseFirepower + rankBonus + gearFp + medFp,
-            stealth = operator.baseStealth + rankBonus + gearSt + medSt,
-            tech = operator.baseTech + rankBonus + gearTc + medTc,
-            resilience = operator.baseResilience + rankBonus + gearRs + medRs
+            firepower = operator.baseFirepower + rankBonus + gearFp + medFp + experienceGain(operator.expPointsFirepower),
+            stealth = operator.baseStealth + rankBonus + gearSt + medSt + experienceGain(operator.expPointsStealth),
+            tech = operator.baseTech + rankBonus + gearTc + medTc + experienceGain(operator.expPointsTech),
+            resilience = operator.baseResilience + rankBonus + gearRs + medRs + experienceGain(operator.expPointsResilience)
         )
     }
 

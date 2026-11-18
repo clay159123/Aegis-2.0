@@ -1165,8 +1165,29 @@ data class Operator(
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */
-    val combatSortiesFlown: Int = 0
+    val combatSortiesFlown: Int = 0,
+    /** Item 39: field combat missions finished after an Airborne or HALO insertion (stars on jump wings). */
+    val combatJumps: Int = 0,
+    /** Item 40: experience points per stat from missions; gains come from TacticalCalculator.experienceGain. */
+    val expPointsFirepower: Int = 0,
+    val expPointsStealth: Int = 0,
+    val expPointsTech: Int = 0,
+    val expPointsResilience: Int = 0
 ) {
+    fun expPoints(stat: StatType): Int = when (stat) {
+        StatType.FIREPOWER -> expPointsFirepower
+        StatType.STEALTH -> expPointsStealth
+        StatType.TECH -> expPointsTech
+        StatType.RESILIENCE -> expPointsResilience
+    }
+
+    fun withExpPoints(stat: StatType, points: Int): Operator = when (stat) {
+        StatType.FIREPOWER -> copy(expPointsFirepower = points)
+        StatType.STEALTH -> copy(expPointsStealth = points)
+        StatType.TECH -> copy(expPointsTech = points)
+        StatType.RESILIENCE -> copy(expPointsResilience = points)
+    }
+
     val isWarrantOfficer: Boolean get() = authorizedTier == RankTier.WARRANT
     val isAviator: Boolean get() = specialty == OperatorSpecialty.AVIATION
     /** Technical warrant officers keep their MOS; aviators are the 153A pilots. */
@@ -1348,6 +1369,8 @@ data class MissionTemplate(
     val recommendedSpecialties: List<OperatorSpecialty> = emptyList(),
     /** Item 33: how the team can get there. Ground is always allowed. */
     val allowedInsertions: List<InsertionMethod> = listOf(InsertionMethod.GROUND),
+    /** Item 40: stats this mission trains through experience. Empty for schools. */
+    val trainsStats: Set<StatType> = emptySet(),
     /** On the water: Maritime insertion is possible (SF missions only). */
     val coastal: Boolean = theater == TheaterRegion.KESTREL_STRAIT || theater == TheaterRegion.OBSIDIAN_HARBOR
 ) {
@@ -1360,6 +1383,14 @@ data class MissionTemplate(
     companion object {
         const val NO_CLASS_CAP = Int.MAX_VALUE
     }
+}
+
+/** The four soldier stats, used where a mission trains specific stats (item 40). */
+enum class StatType(val label: String, val shortLabel: String) {
+    FIREPOWER("Firepower", "FP"),
+    STEALTH("Stealth", "ST"),
+    TECH("Tech", "TC"),
+    RESILIENCE("Resilience", "RS")
 }
 
 /** Item 33: how a team reaches the objective. All tuning numbers live in TacticalCalculator. */

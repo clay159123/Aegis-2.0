@@ -1978,7 +1978,9 @@ object GameCatalog {
      * Every field mission can go by ground; most allow helicopters; open terrain allows Airborne drops.
      * HALO and Maritime arrive with Special Forces missions (Session 11).
      */
-    private fun tagMission(m: MissionTemplate): MissionTemplate {
+    private fun tagMission(raw: MissionTemplate): MissionTemplate {
+        if (raw.scope == MissionScope.TRAINING) return raw
+        val m = raw.copy(trainsStats = trainedStatsFor(raw))
         if (m.scope != MissionScope.FIELD_COMBAT) return m
         val A = OperatorSpecialty.ASSAULT
         val R = OperatorSpecialty.RECON
@@ -2015,6 +2017,23 @@ object GameCatalog {
         )
         val (mos, insertions) = tags[m.id] ?: return m.copy(allowedInsertions = listOf(G, H))
         return m.copy(recommendedSpecialties = mos, allowedInsertions = insertions)
+    }
+
+    /**
+     * Item 40: the stats a mission trains, from its focus. Assault and armor: Firepower and Resilience;
+     * recon and night stealth: Stealth; signals, EOD and intel: Tech; trauma and rescue: Resilience;
+     * diplomatic and staff work: Tech. At most two.
+     */
+    fun trainedStatsFor(m: MissionTemplate): Set<StatType> {
+        if (m.scope == MissionScope.STAFF_DIPLOMATIC) return setOf(StatType.TECH)
+        val f = m.primaryFocus.lowercase()
+        val picks = linkedSetOf<StatType>()
+        if (listOf("stealth", "recon", "infiltration", "night").any { it in f }) picks += StatType.STEALTH
+        if (listOf("assault", "armor", "strike", "firepower", "breach", "task force", "valor").any { it in f }) picks += StatType.FIREPOWER
+        if (listOf("signals", "tech", "eod", "intel", "ew").any { it in f }) picks += StatType.TECH
+        if (listOf("trauma", "rescue", "armor", "escort", "logistics").any { it in f }) picks += StatType.RESILIENCE
+        if (picks.isEmpty()) picks += StatType.FIREPOWER
+        return picks.take(2).toSet()
     }
 
     private val baseMissions: List<MissionTemplate> = listOf(
