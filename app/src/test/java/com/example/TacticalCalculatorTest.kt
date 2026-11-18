@@ -2625,7 +2625,8 @@ class TacticalCalculatorTest {
         // 4. Clearing all 4 campaigns unlocks Full Free Replay across every campaign and stage + all Theater Perks
         val allCleared = GameCatalog.campaigns.map { it.id }.toSet()
         assertTrue(TacticalCalculator.isAllCampaignsCleared(allCleared))
-        GameCatalog.campaigns.forEach { camp ->
+        // (the SF campaign is gated by the SF squad instead; see MissionNamesTest)
+        GameCatalog.campaigns.filter { !it.isSpecialForces }.forEach { camp ->
             assertTrue(TacticalCalculator.isCampaignUnlocked(camp, allCleared))
             camp.stageMissionIds.forEach { stageId ->
                 val stage = GameCatalog.campaignMissionsById.getValue(stageId)

@@ -112,10 +112,18 @@ object TacticalCalculator {
         GameCatalog.campaigns.any { !it.isSpecialForces } &&
             GameCatalog.campaigns.filter { !it.isSpecialForces }.all { it.id in completedCampaignIds }
 
+    /**
+     * Item 49: the SF campaign opens once the command has an SF squad, not after Campaign IV. Until the SF
+     * squad arrives (Session 17), 3 SF-qualified soldiers stand in for it. Set from game state.
+     */
+    @Volatile
+    var sfSquadEstablished: Boolean = false
+
     fun isCampaignUnlocked(
         campaign: TheaterCampaign,
         completedCampaignIds: Set<String>
     ): Boolean {
+        if (campaign.isSpecialForces) return sfSquadEstablished
         if (isAllCampaignsCleared(completedCampaignIds)) return true
         if (campaign.order <= 1) return true
         val prevCampaign = GameCatalog.campaigns.find { it.order == campaign.order - 1 } ?: return true
@@ -128,8 +136,8 @@ object TacticalCalculator {
         completedCampaignIds: Set<String>
     ): Boolean {
         val campId = mission.campaignId ?: return true
-        if (isAllCampaignsCleared(completedCampaignIds)) return true
         val campaign = GameCatalog.campaigns.find { it.id == campId } ?: return true
+        if (isAllCampaignsCleared(completedCampaignIds) && !campaign.isSpecialForces) return true
         if (!isCampaignUnlocked(campaign, completedCampaignIds)) return false
         val stageOrder = mission.campaignStageOrder ?: 1
         if (stageOrder <= 1) return true

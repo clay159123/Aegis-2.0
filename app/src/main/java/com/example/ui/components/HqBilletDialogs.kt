@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.data.catalog.GameCatalog
+import com.example.domain.displayTitle
 import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.theme.LocalAegisColors
@@ -591,7 +592,7 @@ fun DispatchHqMemberTaskingDialog(
                             }
 
                             Text(
-                                text = mission.title,
+                                text = mission.displayTitle,
                                 style = MaterialTheme.typography.titleSmall,
                                 color = if (eligibility.eligible) MaterialTheme.colorScheme.onSurface else extra.textMuted
                             )
