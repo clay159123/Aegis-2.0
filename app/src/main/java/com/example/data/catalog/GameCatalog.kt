@@ -3047,7 +3047,7 @@ object GameCatalog {
                 allowedSpecialties = setOf(OperatorSpecialty.AVIATION),
                 naturalFitSpecialties = setOf(OperatorSpecialty.AVIATION),
                 suitabilitySummary = "Aviators only • Needs an Airfield • Repeatable",
-                graduationRewardsSummary = "+${TacticalCalculator.FLIGHT_HOURS_SKILL_GAIN} flight skill (max ${TacticalCalculator.MAX_FLIGHT_SKILL}) • Counts toward Senior and Master wings"
+                graduationRewardsSummary = "Choose 1 to ${TacticalCalculator.MAX_FLIGHT_HOURS} hours: +${TacticalCalculator.FLIGHT_SKILL_PER_HOUR} flight skill per hour (max ${TacticalCalculator.MAX_FLIGHT_SKILL}) • Counts toward Senior and Master wings"
             ),
             baseSuccessRatePct = 100,
             briefing = "Training sorties from the Airfield to build flight skill. Not a deployment: no combat credit.",

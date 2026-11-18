@@ -252,11 +252,18 @@ object PromotionBoardEvaluator {
                 )
             }
             RankTier.FLAG_OFFICER -> {
+                // Item 61: every star is a board; each one asks for more (BG 12 ops, MG 16, LTG 20, GEN 25)
+                val opsNeeded = when (nextRank) {
+                    OperatorRank.MG -> 16
+                    OperatorRank.LTG -> 20
+                    OperatorRank.GEN -> 25
+                    else -> 12
+                }
                 meritChecks += PromotionMeritCheck(
                     id = "ops_flag",
                     label = "Executive Service Record",
-                    statusText = "$totalOps/12 Ops Completed",
-                    satisfied = totalOps >= 12
+                    statusText = "$totalOps/$opsNeeded Ops Completed",
+                    satisfied = totalOps >= opsNeeded
                 )
                 val commandTenureMet = operator.status == OperatorStatus.HQ_STAFF ||
                     operator.staffOpsSupported >= 3 ||
@@ -279,14 +286,15 @@ object PromotionBoardEvaluator {
                         it.id == "medal_meritorious" ||
                         it.id == "cord_general_aiguillette"
                 }
-                val honorsFlagOk = opMedalDefs.size >= 3 && hasKeyHonor
+                val honorsNeeded = 2 + nextRank.flagGrade
+                val honorsFlagOk = opMedalDefs.size >= honorsNeeded && hasKeyHonor
                 meritChecks += PromotionMeritCheck(
                     id = "honors_flag",
                     label = "Distinguished Honors",
                     statusText = if (honorsFlagOk) {
                         "${opMedalDefs.size} Honors (Valor/Leadership Held)"
                     } else {
-                        "${opMedalDefs.size}/3 Honors (incl. Valor/Merit)"
+                        "${opMedalDefs.size}/$honorsNeeded Honors (incl. Valor/Merit)"
                     },
                     satisfied = honorsFlagOk
                 )

@@ -537,11 +537,88 @@ object TacticalCalculator {
     const val AIR_MEDAL_ID = "medal_air_medal"
     /** Flight skill a new Flight School graduate starts with. */
     const val FLIGHT_SCHOOL_STARTING_SKILL = 10
-    /** Flight skill each Flight Hours session adds, up to [MAX_FLIGHT_SKILL]. */
-    const val FLIGHT_HOURS_SKILL_GAIN = 5
+    /** Item 95: flight skill per hour flown in a passed Flight Hours session, up to [MAX_FLIGHT_SKILL]. */
+    const val FLIGHT_SKILL_PER_HOUR = 2
     const val MAX_FLIGHT_SKILL = 100
-    /** Hours logged per Flight Hours session (sessions become 1 to 10 hours in Session 17). */
+    /** Item 95: a Flight Hours session books 1 to 10 hours; the base mission length is for [FLIGHT_HOURS_PER_SESSION]. */
+    const val MIN_FLIGHT_HOURS = 1
+    const val MAX_FLIGHT_HOURS = 10
     const val FLIGHT_HOURS_PER_SESSION = 2
+
+    /** Mission length multiplier for a Flight Hours session of [hours]. */
+    fun flightHoursDurationMultiplier(hours: Int): Double =
+        hours.coerceIn(MIN_FLIGHT_HOURS, MAX_FLIGHT_HOURS).toDouble() / FLIGHT_HOURS_PER_SESSION
+
+    /**
+     * A finished Flight Hours session. Passed: every hour is logged and builds skill, plus the Airfield's
+     * per-session bonus. Failed: half the hours (at least 1) are logged at half the skill rate.
+     */
+    fun applyFlightHours(op: Operator, hours: Int, passed: Boolean, airfield: Int = airfieldLevel): Operator {
+        val booked = hours.coerceIn(MIN_FLIGHT_HOURS, MAX_FLIGHT_HOURS)
+        val logged = if (passed) booked else ((booked + 1) / 2).coerceAtLeast(1)
+        val skill = if (passed) logged * FLIGHT_SKILL_PER_HOUR + airfieldFlightSkillBonus(airfield) else logged * FLIGHT_SKILL_PER_HOUR / 2
+        return op.copy(
+            flightSkill = (op.flightSkill + skill).coerceAtMost(MAX_FLIGHT_SKILL),
+            flightHoursLogged = op.flightHoursLogged + logged
+        )
+    }
+
+    // ============================================================
+    // Item 97: Airfield levels
+    // ============================================================
+    /** The current Airfield level, set from game state for perks applied deep in the calculations. */
+    @Volatile
+    var airfieldLevel: Int = 0
+
+    /** Helicopter survival: +1 for every two Airfield levels. */
+    fun airfieldHeloSurvivalBonus(level: Int = airfieldLevel): Int = level.coerceAtLeast(0) / 2
+    /** Helicopter time: 2% less per Airfield level. */
+    const val AIRFIELD_HELO_TIME_CUT_PER_LEVEL = 0.02
+    /** Flight School pass chance: +2% per Airfield level. */
+    fun airfieldFlightSchoolBonus(level: Int = airfieldLevel): Int = level.coerceAtLeast(0) * 2
+    /** Flight Hours: +1 flight skill per passed session for every two Airfield levels. */
+    fun airfieldFlightSkillBonus(level: Int = airfieldLevel): Int = level.coerceAtLeast(0) / 2
+    /** Airborne and HALO scatter: 1 point lower per Airfield level. */
+    fun airfieldScatterCut(level: Int = airfieldLevel): Int = level.coerceAtLeast(0)
+    const val AIRFIELD_FAST_ROPE_LEVEL = 3
+    const val AIRFIELD_NIGHT_FLYING_LEVEL = 5
+    const val NIGHT_FLYING_PASS_BONUS = 3
+
+    /** Helicopter missions that can be in the air at once: 1, then 2 from level 4, then 3 from level 8. */
+    fun maxHelicopterMissions(level: Int = airfieldLevel): Int = when {
+        level >= 8 -> 3
+        level >= 4 -> 2
+        else -> 1
+    }
+
+    /** One-line perk list for the Airfield building card. */
+    fun airfieldPerkSummary(level: Int): String = buildList {
+        add("${maxHelicopterMissions(level)} helo mission${if (maxHelicopterMissions(level) > 1) "s" else ""} at once")
+        add("Helo -${(level * AIRFIELD_HELO_TIME_CUT_PER_LEVEL * 100).roundToInt()}% time, +${airfieldHeloSurvivalBonus(level)} survival")
+        add("-${(level * HELO_AIRFIELD_DISCOUNT_PER_LEVEL * 100).roundToInt().coerceAtMost((HELO_MAX_AIRFIELD_DISCOUNT * 100).roundToInt())}% helo supply")
+        add("Flight School +${airfieldFlightSchoolBonus(level)}%")
+        if (airfieldFlightSkillBonus(level) > 0) add("Flight Hours +${airfieldFlightSkillBonus(level)} skill")
+        add("Drop scatter -${airfieldScatterCut(level)}")
+        if (level >= AIRFIELD_FAST_ROPE_LEVEL) add("Fast Rope (Session 17b)")
+        if (level >= AIRFIELD_NIGHT_FLYING_LEVEL) add("Night flying +$NIGHT_FLYING_PASS_BONUS% pass")
+    }.joinToString(" • ")
+
+    // ============================================================
+    // Item 96: SF-only schools have no hard attempt limit; retries past the old limit cost more
+    // ============================================================
+    val SF_RETRY_SCHOOL_IDS: Set<String> = setOf("msn_sf_school", "msn_combat_diver_school", "msn_mff_school")
+    /** Each retry past the old limit adds this share of the school's supply cost for that soldier. */
+    const val SF_RETRY_SURCHARGE_PER_ATTEMPT = 0.5
+
+    /** Extra supply for soldiers retrying an SF school past its old attempt limit. */
+    fun schoolRetrySurcharge(mission: MissionTemplate, team: List<Operator>, multiplier: Double): Int {
+        val limit = mission.schoolRequirements?.maxAttempts ?: return 0
+        if (mission.id !in SF_RETRY_SCHOOL_IDS) return 0
+        return team.sumOf { op ->
+            val over = (op.schoolAttempts[mission.id] ?: 0) - limit + 1
+            if (over > 0) mission.supplyCost * multiplier * SF_RETRY_SURCHARGE_PER_ATTEMPT * over else 0.0
+        }.roundToInt()
+    }
     /** Hours logged per combat sortie flown as pilot. */
     const val FLIGHT_HOURS_PER_SORTIE = 1
     const val SENIOR_WINGS_FLIGHT_SKILL = 40
@@ -707,15 +784,16 @@ object TacticalCalculator {
     fun insertionDurationMultiplier(method: InsertionMethod, pilot: Operator?): Double = when (method) {
         InsertionMethod.GROUND -> 1.0
         InsertionMethod.HELICOPTER ->
-            (HELO_DURATION_MULT - (pilot?.flightSkill ?: 0) * HELO_DURATION_PER_SKILL).coerceAtLeast(HELO_MIN_DURATION_MULT)
+            (HELO_DURATION_MULT - (pilot?.flightSkill ?: 0) * HELO_DURATION_PER_SKILL).coerceAtLeast(HELO_MIN_DURATION_MULT) *
+                (1.0 - airfieldLevel.coerceAtLeast(0) * AIRFIELD_HELO_TIME_CUT_PER_LEVEL).coerceAtLeast(0.7)
         InsertionMethod.AIRBORNE -> AIRBORNE_DURATION_MULT
         InsertionMethod.HALO -> HALO_DURATION_MULT
         InsertionMethod.MARITIME -> MARITIME_DURATION_MULT
     }
 
     fun scatterChancePct(method: InsertionMethod): Int = when (method) {
-        InsertionMethod.AIRBORNE -> AIRBORNE_SCATTER_CHANCE_PCT
-        InsertionMethod.HALO -> HALO_SCATTER_CHANCE_PCT
+        InsertionMethod.AIRBORNE -> (AIRBORNE_SCATTER_CHANCE_PCT - airfieldScatterCut()).coerceAtLeast(3)
+        InsertionMethod.HALO -> (HALO_SCATTER_CHANCE_PCT - airfieldScatterCut()).coerceAtLeast(1)
         else -> 0
     }
 
@@ -724,6 +802,8 @@ object TacticalCalculator {
         val bonus = when (method) {
             InsertionMethod.HALO -> if (isStealthWeighted(mission)) HALO_STEALTH_PASS_BONUS else 0
             InsertionMethod.MARITIME -> if (isStealthWeighted(mission)) MARITIME_STEALTH_PASS_BONUS else 0
+            InsertionMethod.HELICOPTER ->
+                if (mission.isNightOp && airfieldLevel >= AIRFIELD_NIGHT_FLYING_LEVEL) NIGHT_FLYING_PASS_BONUS else 0
             else -> 0
         }
         return bonus - if (scattered) SCATTER_PASS_PENALTY else 0
@@ -734,7 +814,7 @@ object TacticalCalculator {
         val helo = if (method == InsertionMethod.HELICOPTER) {
             val skill = (pilot?.flightSkill ?: 0) / 20 * HELO_SURVIVAL_PER_20_SKILL
             val airOps = (HELO_SURVIVAL_BONUS * airOpsBonusPct / 100.0).roundToInt()
-            HELO_SURVIVAL_BONUS + skill + airOps
+            HELO_SURVIVAL_BONUS + skill + airOps + airfieldHeloSurvivalBonus()
         } else 0
         return helo - if (scattered) SCATTER_SURVIVAL_PENALTY else 0
     }
@@ -1163,7 +1243,7 @@ object TacticalCalculator {
                     if (operator.flightSkill >= MAX_FLIGHT_SKILL) missing += "Flight skill maxed ($MAX_FLIGHT_SKILL)"
                 }
                 val attemptsUsed = operator.schoolAttempts[mission.id] ?: 0
-                if (req.maxAttempts != null && attemptsUsed >= req.maxAttempts) {
+                if (req.maxAttempts != null && attemptsUsed >= req.maxAttempts && mission.id !in SF_RETRY_SCHOOL_IDS) {
                     missing += if (mission.id == RIFLE_QUAL_MISSION_ID) {
                         "No requalification attempts left"
                     } else {
@@ -1725,7 +1805,8 @@ object TacticalCalculator {
         }
         // Training Range bonus still stops at the school's cap
         val rangeBonus = rangeSchoolBonusPct(mission, facilities)
-        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus + rangeBonus).coerceIn(15, maxCap)
+        val airfieldBonus = if (mission.id == FLIGHT_SCHOOL_MISSION_ID) airfieldFlightSchoolBonus(facilityLevel(facilities, FacilityType.AIRFIELD)) else 0
+        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus + rangeBonus + airfieldBonus).coerceIn(15, maxCap)
     }
 
     fun missionSuccessOddsPct(

@@ -78,6 +78,7 @@ data class OperatorEntity(
     val pendingMarksmanshipQualName: String? = null,
     val lastQualScore: Int = 0,
     val warrantGrade: Int = 0,
+    val flagGrade: Int = 0,
     val flightSkill: Int = 0,
     val combatSortiesFlown: Int = 0,
     val combatJumps: Int = 0,
@@ -130,7 +131,8 @@ data class DeploymentEntity(
     val insertionName: String = "GROUND",
     val pilotId: String? = null,
     val platoonLeaderId: String? = null,
-    val missionTitle: String? = null
+    val missionTitle: String? = null,
+    val flightHours: Int = 0
 )
 
 @Entity(tableName = "squads")

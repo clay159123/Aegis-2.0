@@ -60,6 +60,7 @@ fun HqOpsScreen(
     onRushFacility: (FacilityType) -> Unit = {},
     onStartDeployment: (MissionTemplate, List<String>) -> Unit,
     onStartDeploymentWithSquad: ((MissionTemplate, List<String>, String?) -> Unit)? = null,
+    onStartFlightHours: ((MissionTemplate, List<String>, Int) -> Unit)? = null,
     /** Item 34: field missions launch from the prep screen with an insertion method and optional pilot. */
     onLaunchPrepared: ((MissionTemplate, List<String>, String?, InsertionMethod, String?, String?) -> Unit)? = null,
     onAutoGear: () -> Unit = {},
@@ -82,6 +83,7 @@ fun HqOpsScreen(
     var collapsedGroupIds by remember { mutableStateOf(setOf("campaigns")) }
     var expandedMissionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expandedCampaignIds by remember { mutableStateOf(setOf("camp_veridian")) }
+    var flightHours by remember { mutableStateOf(TacticalCalculator.FLIGHT_HOURS_PER_SESSION) }
     val theaterCampaignIds = remember { GameCatalog.campaigns.filter { !it.isSpecialForces }.map { it.id }.toSet() }
     val theaterTotal = theaterCampaignIds.size
     val theaterCleared = uiState.completedCampaignIds.count { it in theaterCampaignIds }
@@ -926,6 +928,8 @@ fun HqOpsScreen(
                     }
                 },
                 onSwitchOperatorsToKit = onSwitchOperatorsToKit,
+                flightHours = flightHours,
+                onFlightHoursChange = { flightHours = it },
                 onEditKits = {
                     stagingMission = null
                     selectedOperatorIds = emptyList()
@@ -934,7 +938,10 @@ fun HqOpsScreen(
                 },
                 onLaunch = {
                     val launchWithSquad = onStartDeploymentWithSquad
-                    if (missionToStage.scope == MissionScope.FIELD_COMBAT && onLaunchPrepared != null) {
+                    val launchFlightHours = onStartFlightHours
+                    if (missionToStage.id == TacticalCalculator.FLIGHT_HOURS_MISSION_ID && launchFlightHours != null) {
+                        launchFlightHours(missionToStage, selectedOperatorIds, flightHours)
+                    } else if (missionToStage.scope == MissionScope.FIELD_COMBAT && onLaunchPrepared != null) {
                         // Field missions get the prep screen first
                         prepMission = missionToStage
                         prepTeamIds = selectedOperatorIds

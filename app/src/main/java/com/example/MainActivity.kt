@@ -319,6 +319,7 @@ fun AegisCommandApp() {
                                     onRushFacility = viewModel::rushFacility,
                                     onStartDeployment = { m, ids -> viewModel.startDeployment(m, ids) },
                                     onStartDeploymentWithSquad = viewModel::startDeployment,
+                                    onStartFlightHours = { m, ids, h -> viewModel.startDeployment(m, ids, flightHours = h) },
                                     onLaunchPrepared = viewModel::startDeployment,
                                     onAutoGear = viewModel::autoDistributeFieldGear,
                                     onClaimDeployment = viewModel::claimDeployment,

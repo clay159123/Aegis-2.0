@@ -165,6 +165,7 @@ class CommandViewModel(
                 .filter { id -> id.isNotBlank() && GameCatalog.rotatingStandalonePool.any { it.id == id } }
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.operators)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
+            TacticalCalculator.airfieldLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.AIRFIELD)
             // Item 50: generated names for the current board, from the rotation time
             MissionNames.current = MissionNameGenerator.namesFor(
                 rotatingIds.mapNotNull { id -> GameCatalog.rotatingStandalonePool.find { it.id == id } },
@@ -592,7 +593,12 @@ class CommandViewModel(
     }
 
     /** WOCS appoints WO1 (keeping MOS); Flight School makes a 153A aviator; Flight Hours builds flight skill. */
-    private fun applyCareerSchoolEffects(op: Operator, missionId: String, passed: Boolean): Operator = when {
+    private fun applyCareerSchoolEffects(
+        op: Operator,
+        missionId: String,
+        passed: Boolean,
+        flightHours: Int = TacticalCalculator.FLIGHT_HOURS_PER_SESSION
+    ): Operator = when {
         passed && missionId == TacticalCalculator.WOCS_MISSION_ID -> {
             val prevRank = op.rank
             applyTierProgressionOnRankUp(op.promotedTo(OperatorRank.WO1), prevRank, OperatorRank.WO1)
@@ -603,10 +609,9 @@ class CommandViewModel(
             // Pilots aren't ground troops: their field kit goes back to the Armory (item 81)
             equippedGearIds = emptyMap()
         )
-        passed && missionId == TacticalCalculator.FLIGHT_HOURS_MISSION_ID -> op.copy(
-            flightSkill = (op.flightSkill + TacticalCalculator.FLIGHT_HOURS_SKILL_GAIN).coerceAtMost(TacticalCalculator.MAX_FLIGHT_SKILL),
-            flightHoursLogged = op.flightHoursLogged + TacticalCalculator.FLIGHT_HOURS_PER_SESSION
-        )
+        // Item 95: passed or failed, a Flight Hours session logs hours (a failed one logs about half)
+        missionId == TacticalCalculator.FLIGHT_HOURS_MISSION_ID ->
+            TacticalCalculator.applyFlightHours(op, flightHours.takeIf { it > 0 } ?: TacticalCalculator.FLIGHT_HOURS_PER_SESSION, passed)
         else -> op
     }
 
@@ -675,9 +680,19 @@ class CommandViewModel(
         squadId: String? = null,
         insertion: InsertionMethod = InsertionMethod.GROUND,
         pilotId: String? = null,
-        platoonLeaderId: String? = null
+        platoonLeaderId: String? = null,
+        flightHours: Int = 0
     ) {
         val state = uiState.value
+        // Item 97: the Airfield limits how many helicopter missions fly at once
+        if (insertion == InsertionMethod.HELICOPTER) {
+            val inAir = state.deployments.count { it.insertion == InsertionMethod.HELICOPTER }
+            val maxInAir = TacticalCalculator.maxHelicopterMissions(TacticalCalculator.facilityLevel(state.facilities, FacilityType.AIRFIELD))
+            if (inAir >= maxInAir) {
+                showBanner("Airfield can fly $maxInAir helicopter mission${if (maxInAir == 1) "" else "s"} at once. Upgrade the Airfield for more.")
+                return
+            }
+        }
         if (mission.scope != MissionScope.TRAINING && state.occupiedDeploymentSlots >= state.maxDeploymentSlots) {
             showBanner("All HQ tasking slots occupied.")
             return
@@ -764,7 +779,11 @@ class CommandViewModel(
                 hqStaffSummary = state.hqStaffSummary,
                 completedCampaignIds = state.completedCampaignIds
             )
-        ) + TacticalCalculator.insertionSupplyCost(insertion, state.facilities, airOps)).toDouble()
+        ) + TacticalCalculator.insertionSupplyCost(insertion, state.facilities, airOps) +
+            TacticalCalculator.schoolRetrySurcharge(
+                mission, chosenOps,
+                TacticalCalculator.supplyCostMultiplier(state.facilities, state.hqStaffSummary, state.completedCampaignIds)
+            )).toDouble()
         if (state.resources.supplies < effectiveSupplyCost) {
             showBanner("Need ${effectiveSupplyCost.toInt()} SUP to deploy.")
             return
@@ -774,8 +793,13 @@ class CommandViewModel(
         val resolvedSquadId = squadId?.takeIf { id -> state.squads.any { it.id == id } }
             ?: activeBonus?.squad?.id
 
+        val bookedHours = if (mission.id == TacticalCalculator.FLIGHT_HOURS_MISSION_ID) {
+            (flightHours.takeIf { it > 0 } ?: TacticalCalculator.FLIGHT_HOURS_PER_SESSION)
+                .coerceIn(TacticalCalculator.MIN_FLIGHT_HOURS, TacticalCalculator.MAX_FLIGHT_HOURS)
+        } else 0
+        val hoursMult = if (bookedHours > 0) TacticalCalculator.flightHoursDurationMultiplier(bookedHours) else 1.0
         val durationMs = (mission.durationSeconds * 1000.0 * TacticalCalculator.durationMultiplier(state.facilities, state.hqStaffSummary) *
-            TacticalCalculator.insertionDurationMultiplier(insertion, pilot)).toLong()
+            TacticalCalculator.insertionDurationMultiplier(insertion, pilot) * hoursMult).toLong()
         val effPct = TacticalCalculator.missionEfficiencyPct(
             mission = mission,
             selectedOperators = chosenOps,
@@ -828,7 +852,8 @@ class CommandViewModel(
             insertion = insertion,
             pilotId = pilot?.id,
             platoonLeaderId = platoonLeader?.id,
-            missionTitle = mission.displayTitle
+            missionTitle = if (bookedHours > 0) "${mission.displayTitle} (${bookedHours}h)" else mission.displayTitle,
+            flightHours = bookedHours
         )
 
         viewModelScope.launch {
@@ -955,7 +980,7 @@ class CommandViewModel(
                     completedMissionIds = updatedCompletedIds,
                     schoolAttempts = updatedAttempts,
                     status = nextStatus
-                ).let { grad -> applyCareerSchoolEffects(grad, mission.id, passed) }
+                ).let { grad -> applyCareerSchoolEffects(grad, mission.id, passed, deployment.flightHours) }
                 newRank = graduatedOp.rank
                 // Rifle Qualification, and graduating Marksmanship & Tactical Basics, both shoot for a badge
                 val shootsForQual = isRifleQual || (passed && mission.id == "msn_basic_qual")

@@ -86,7 +86,7 @@ fun facilityPerkSummary(type: FacilityType, level: Int): String {
         FacilityType.DFAC -> "Cohesion gains +${5 * level}% • requests -${6 * level}%"
         FacilityType.TRAINING_RANGE -> "Schools +$level% (SF, Ranger, EIB +${2 * level}%)"
         FacilityType.AID_STATION -> "Recovery -${7 * level}% • ${5 * level}% casualty save"
-        FacilityType.AIRFIELD -> "Air operations base"
+        FacilityType.AIRFIELD -> com.example.domain.TacticalCalculator.airfieldPerkSummary(level)
     }
 }
 
