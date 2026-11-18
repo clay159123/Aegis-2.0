@@ -31,11 +31,12 @@ object GearAutoDistributor {
         val weightPenalty: Double
     )
 
-    /** Field soldiers who carry kit: unlocked, active and not on HQ staff. */
+    /** Field soldiers who carry kit: unlocked, active, not on HQ staff and not pilots (item 81). */
     fun carriesFieldKit(operator: Operator): Boolean =
         operator.unlocked &&
             !operator.status.isOutOfActiveService &&
-            operator.status != OperatorStatus.HQ_STAFF
+            operator.status != OperatorStatus.HQ_STAFF &&
+            !operator.isAviator
 
     /**
      * Gear types are shared, so every standby field soldier independently gets the highest-scoring

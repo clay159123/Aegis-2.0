@@ -214,7 +214,31 @@ class CommandViewModel(
         initialValue = CommandUiState(isLoading = true)
     )
 
+    /** Item 75: squads that no longer have a single active member disband on their own. */
+    private val autoDisbanding = mutableSetOf<String>()
+
+    private fun disbandEmptySquads(state: CommandUiState) {
+        if (state.isLoading) return
+        val opsById = state.operators.associateBy { it.id }
+        state.squads.filter { squad ->
+            squad.id !in autoDisbanding &&
+                squad.memberIds.none { id -> opsById[id]?.let { SquadCohesionRules.isOperatorEligibleForFieldSquad(it) } == true }
+        }.forEach { squad ->
+            autoDisbanding += squad.id
+            val keepers = state.operators.mapNotNull { op ->
+                val earned = squad.unitCitations.count { op.id in it.memberIds }
+                if (earned > 0) op.copy(retainedUnitCitations = op.retainedUnitCitations + earned) else null
+            }
+            viewModelScope.launch {
+                if (keepers.isNotEmpty()) repository.saveOperators(keepers)
+                repository.deleteSquad(squad.id)
+                showBanner("${squad.name} had no soldiers left and was disbanded.")
+            }
+        }
+    }
+
     init {
+        viewModelScope.launch { uiState.collect { disbandEmptySquads(it) } }
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val loadResult = repository.loadOrResetSave(now)
@@ -573,10 +597,13 @@ class CommandViewModel(
         }
         passed && missionId == TacticalCalculator.FLIGHT_SCHOOL_MISSION_ID -> op.copy(
             specialty = OperatorSpecialty.AVIATION,
-            flightSkill = maxOf(op.flightSkill, TacticalCalculator.FLIGHT_SCHOOL_STARTING_SKILL)
+            flightSkill = maxOf(op.flightSkill, TacticalCalculator.FLIGHT_SCHOOL_STARTING_SKILL),
+            // Pilots aren't ground troops: their field kit goes back to the Armory (item 81)
+            equippedGearIds = emptyMap()
         )
         passed && missionId == TacticalCalculator.FLIGHT_HOURS_MISSION_ID -> op.copy(
-            flightSkill = (op.flightSkill + TacticalCalculator.FLIGHT_HOURS_SKILL_GAIN).coerceAtMost(TacticalCalculator.MAX_FLIGHT_SKILL)
+            flightSkill = (op.flightSkill + TacticalCalculator.FLIGHT_HOURS_SKILL_GAIN).coerceAtMost(TacticalCalculator.MAX_FLIGHT_SKILL),
+            flightHoursLogged = op.flightHoursLogged + TacticalCalculator.FLIGHT_HOURS_PER_SESSION
         )
         else -> op
     }
@@ -1158,7 +1185,8 @@ class CommandViewModel(
                     transferRequested = askTransfer,
                     retirementRequested = if (outcome == OperatorOutcomeType.FALLEN) false else askRetirement,
                     // The pilot logs a combat sortie (Air Medal progress)
-                    combatSortiesFlown = op.combatSortiesFlown + if (op.id == pilotId && isCombatOp) 1 else 0
+                    combatSortiesFlown = op.combatSortiesFlown + if (op.id == pilotId && isCombatOp) 1 else 0,
+                    flightHoursLogged = op.flightHoursLogged + if (op.id == pilotId) TacticalCalculator.FLIGHT_HOURS_PER_SORTIE else 0
                 ),
                     // Item 40: the ground team trains the mission's stats; pilots log sorties instead
                     stats = if (op.id == pilotId) emptySet() else mission.trainsStats,
@@ -1518,6 +1546,12 @@ class CommandViewModel(
             )
             outcomes[i] = o.copy(deedText = text, recommendedMedalId = TacticalCalculator.SOVEREIGN_STAR_ID)
         }
+        // Item 76: one pending award per soldier per award; skip anything already waiting
+        val alreadyPending = state.pendingDeeds.map { it.operatorId to it.recommendedMedalId }.toSet()
+        val uniqueDeeds = newDeeds.distinctBy { it.operatorId to it.recommendedMedalId }
+            .filter { (it.operatorId to it.recommendedMedalId) !in alreadyPending }
+        newDeeds.clear()
+        newDeeds.addAll(uniqueDeeds)
         enqueueAwardPrompts(newDeeds)
         viewModelScope.launch {
             repository.removeDeployment(deployment.id)
@@ -1769,6 +1803,35 @@ class CommandViewModel(
                 repository.saveSquads(updatedSquads)
             }
             showBanner("${op.rank.code} ${op.callsign} assigned as ${targetRole.shortCode} (${targetRole.title})!")
+        }
+    }
+
+    /** Item 86: release an HQ staffer back to field duty. Frees the billet; needs an open field roster slot. */
+    fun returnHqStaffToField(operatorId: String) {
+        val state = uiState.value
+        val op = state.operators.find {
+            it.id == operatorId && it.unlocked && it.status == OperatorStatus.HQ_STAFF
+        } ?: return
+        val activeFieldCount = state.operators.count {
+            it.unlocked && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService
+        }
+        if (activeFieldCount >= state.maxFieldRosterSlots) {
+            showBanner("Field roster full (${state.maxFieldRosterSlots}/${state.maxFieldRosterSlots}). Free a field slot before releasing ${op.callsign}.")
+            return
+        }
+        val oldRole = op.hqRole
+        viewModelScope.launch {
+            repository.saveOperator(
+                op.copy(
+                    status = OperatorStatus.READY,
+                    hqRole = null,
+                    uniformMode = UniformMode.FIELD_TACTICAL,
+                    activeWardrobeKit = if (op.isAviator) op.activeWardrobeKit else WardrobeKit.FIELD
+                )
+            )
+            showBanner(
+                "${op.rank.code} ${op.callsign} released from ${oldRole?.shortCode ?: "HQ Staff"} and back on field duty."
+            )
         }
     }
 

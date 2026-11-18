@@ -70,6 +70,7 @@ fun HqOpsScreen(
     onSwitchOperatorsToKit: (List<String>, WardrobeKit) -> Unit = { _, _ -> },
     onRefreshRotatingMissions: () -> Unit = {},
     onOpenCommandGuide: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val extra = LocalAegisColors.current
@@ -355,6 +356,24 @@ fun HqOpsScreen(
                                         if (showFacilities) "Hide HQ" else "HQ Upgrades",
                                         style = MaterialTheme.typography.labelSmall
                                     )
+                                }
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                    border = BorderStroke(1.dp, extra.borderSubtle)
+                                ) {
+                                    IconButton(
+                                        onClick = onOpenSettings,
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .testTag("open_settings")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Settings,
+                                            contentDescription = "Settings",
+                                            tint = extra.brassBright
+                                        )
+                                    }
                                 }
                                 Surface(
                                     shape = MaterialTheme.shapes.small,

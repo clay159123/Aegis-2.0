@@ -20,8 +20,9 @@ enum class TimeMode(
 }
 
 object GameTiming {
-    /** Flip to RELEASE when testing is done. */
-    val MODE: TimeMode = TimeMode.TESTING
+    /** Testing by default; the Settings menu can switch it (applies on the next app start). */
+    @Volatile
+    var MODE: TimeMode = TimeMode.TESTING
 
     fun seconds(base: Int): Int = (base * MODE.durationMultiplier).roundToInt().coerceAtLeast(1)
     fun seconds(base: Long): Long = (base * MODE.durationMultiplier).roundToLong().coerceAtLeast(1L)

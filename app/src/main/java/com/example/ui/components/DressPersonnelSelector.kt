@@ -128,7 +128,7 @@ internal fun buildOrganizedRosterSections(
             val leaderOp = squadMembers.find { it.id == squad.leaderId }
             sections += OrganizedRosterSection(
                 id = "sec_squad_${squad.id}",
-                title = "${squad.name} (${squadMembers.size}/4)",
+                title = "${squad.name} (${squadMembers.size}/$MAX_SQUAD_SIZE)",
                 subtitle = if (leaderOp != null) {
                     "Squad Leader: ${leaderOp.rank.code} ${leaderOp.callsign} • ${squad.missionsTogether} Ops together"
                 } else {
@@ -144,6 +144,7 @@ internal fun buildOrganizedRosterSections(
         .filter {
             it.status != OperatorStatus.HQ_STAFF &&
                 !it.status.isOutOfActiveService &&
+                !it.isAviator &&
                 it.id !in assignedSquadMemberIds
         }
         .sortedWith(
@@ -160,6 +161,19 @@ internal fun buildOrganizedRosterSections(
             },
             subtitle = "Active deployable soldiers & operators",
             operators = unassignedField
+        )
+    }
+
+    // 3b. Aviators (item 81): pilots aren't squad members, so they get their own group
+    val aviators = unlockedOps
+        .filter { it.isAviator && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService }
+        .sortedWith(compareByDescending<Operator> { it.rank.seniorityIndex }.thenByDescending { it.flightSkill })
+    if (aviators.isNotEmpty()) {
+        sections += OrganizedRosterSection(
+            id = "sec_aviators",
+            title = "Aviators (${aviators.size})",
+            subtitle = "Warrant officer pilots of the Aviation Pool",
+            operators = aviators
         )
     }
 
@@ -397,18 +411,22 @@ fun DressPersonnelSwitcherCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                // Item 74: the name shrinks with an ellipsis; the counter never gets squeezed
                                 Text(
                                     text = "${selectedOp.rank.code} ${selectedOp.callsign}",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = extra.brassBright,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 Text(
                                     text = "$displayPos/${currentGroupOps.size}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = extra.signalsCyan
+                                    color = extra.signalsCyan,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                             Text(

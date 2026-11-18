@@ -607,7 +607,9 @@ internal fun HqStagingSheet(
             }
         }
 
-        if (uiState.squads.isNotEmpty() && readyOperators.isNotEmpty()) {
+        // Item 82: aviator-only training (Flight Hours) has no squads to pick
+        val aviatorsOnly = mission.schoolRequirements?.allowedSpecialties == setOf(OperatorSpecialty.AVIATION)
+        if (uiState.squads.isNotEmpty() && readyOperators.isNotEmpty() && !aviatorsOnly) {
             Text(
                 text = "SELECT SQUAD (ONE-TAP TEAM • LEADER FIRST)",
                 style = MaterialTheme.typography.labelSmall,

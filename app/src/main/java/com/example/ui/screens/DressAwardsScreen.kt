@@ -815,7 +815,7 @@ fun DressAwardsScreen(
                                     .defaultMinSize(minHeight = 48.dp)
                                     .testTag("present_deed_${deed.id}"),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = extra.brass,
+                                    containerColor = if (alreadyHas && isRepeatable) extra.signalsCyan else extra.brass,
                                     contentColor = MaterialTheme.colorScheme.onSecondary
                                 )
                             ) {
@@ -1145,7 +1145,11 @@ internal fun AwardCatalogCard(
                 .defaultMinSize(minHeight = 48.dp)
                 .testTag("confer_${medal.id}"),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (medal.tier == MedalTier.SUPREME) extra.brass else MaterialTheme.colorScheme.primary,
+                containerColor = when {
+                    alreadyHeld && isRepeatable -> extra.signalsCyan
+                    medal.tier == MedalTier.SUPREME -> extra.brass
+                    else -> MaterialTheme.colorScheme.primary
+                },
                 contentColor = MaterialTheme.colorScheme.onPrimary
             )
         ) {
