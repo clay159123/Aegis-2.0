@@ -435,13 +435,15 @@ object UniformRegaliaRules {
 
     /**
      * Left shoulder (unit patch). Auto follows the soldier's situation at render time:
-     * HQ staff wear High Command, squad members wear their squad's division patch, and
+     * HQ staff wear High Command, aviators wear the Aviation Brigade, squad members wear their squad's division patch, and
      * anyone else wears the Unassigned patch. A Tailor Studio pick overrides Auto.
      */
     fun resolveUnitPatch(operator: Operator, squads: List<TacticalSquad>): UnitPatchStyle {
         val chosen = operator.tailorOverrides.unitPatch
         if (chosen != UnitPatchStyle.AUTO_MOS) return chosen
         if (operator.status == OperatorStatus.HQ_STAFF) return UnitPatchStyle.SUPREME_HQ
+        // Item 100: aviators wear the Aviation Brigade patch
+        if (operator.specialty == OperatorSpecialty.AVIATION) return UnitPatchStyle.AVIATION_BRIGADE
         return squads.firstOrNull { operator.id in it.memberIds }?.standardPatch
             ?.takeIf { it.isDivision }
             ?: UnitPatchStyle.UNASSIGNED

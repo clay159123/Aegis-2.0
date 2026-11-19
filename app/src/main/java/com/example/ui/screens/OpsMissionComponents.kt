@@ -20,6 +20,10 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,10 +53,12 @@ internal fun ActiveHqDeploymentCard(
     operators: List<Operator>,
     squads: List<TacticalSquad> = emptyList(),
     nowMillis: Long,
-    onClaim: () -> Unit
+    onClaim: () -> Unit,
+    onCancel: (() -> Unit)? = null
 ) {
     val extra = LocalAegisColors.current
     val mission = GameCatalog.missions.find { it.id == deployment.templateId } ?: return
+    var confirmCancel by remember { mutableStateOf(false) }
     val complete = deployment.isComplete(nowMillis)
     val progress = deployment.progressFraction(nowMillis)
     val remaining = deployment.remainingSeconds(nowMillis)
@@ -164,7 +170,48 @@ internal fun ActiveHqDeploymentCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Debrief & Review Deeds")
             }
+        } else if (onCancel != null) {
+            // Item 103: cancel a school or abort a mission, with confirmation
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { confirmCancel = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 44.dp)
+                    .testTag("cancel_deployment_${deployment.id}"),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text(if (mission.risk.isTraining) "Cancel Class" else "Abort Mission")
+            }
         }
+    }
+
+    if (confirmCancel && onCancel != null) {
+        val title = deployment.missionTitle ?: mission.displayTitle
+        val (woundPct, deathPct) = TacticalCalculator.abortCasualtyOddsPct(mission.risk, progress, deployment.insertion)
+        AlertDialog(
+            onDismissRequest = { confirmCancel = false },
+            title = { Text(if (mission.risk.isTraining) "Cancel $title?" else "Abort $title?") },
+            text = {
+                Text(
+                    if (mission.risk.isTraining) {
+                        "Everyone returns to the unit. The attempt still counts and the cost is not refunded."
+                    } else {
+                        "The team pulls out with no rewards. Each soldier risks about ${"%.1f".format(woundPct)}% wounded" +
+                            (if (deathPct > 0.0) " and ${"%.1f".format(deathPct)}% killed" else "") +
+                            " during the withdrawal. Good Conduct streaks reset."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { confirmCancel = false; onCancel() },
+                    modifier = Modifier.testTag("confirm_cancel_deployment")
+                ) { Text(if (mission.risk.isTraining) "Cancel Class" else "Abort", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("Keep Going") } }
+        )
     }
 }
 

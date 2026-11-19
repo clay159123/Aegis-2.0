@@ -214,6 +214,7 @@ internal fun resolveOperatorAssignmentSummary(
     }
     val squad = squads.find { operator.id in it.memberIds }
     val statusSuffix = when {
+        operator.id in TacticalCalculator.tdyOperatorIds -> " • TDY"
         isDeployed || operator.status == OperatorStatus.DEPLOYED -> " • Deployed"
         operator.status == OperatorStatus.RECOVERING -> " • Medbay"
         else -> ""

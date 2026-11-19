@@ -165,6 +165,7 @@ class CommandViewModel(
                 .filter { id -> id.isNotBlank() && GameCatalog.rotatingStandalonePool.any { it.id == id } }
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.operators)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
+            TacticalCalculator.tdyOperatorIds = TacticalCalculator.tdyOperatorIdsFor(data.deployments)
             TacticalCalculator.airfieldLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.AIRFIELD)
             // Item 50: generated names for the current board, from the rotation time
             MissionNames.current = MissionNameGenerator.namesFor(
@@ -689,8 +690,8 @@ class CommandViewModel(
     ) {
         val state = uiState.value
         // Item 97: the Airfield limits how many helicopter missions fly at once
-        if (insertion == InsertionMethod.HELICOPTER) {
-            val inAir = state.deployments.count { it.insertion == InsertionMethod.HELICOPTER }
+        if (insertion.isHelicopter) {
+            val inAir = state.deployments.count { it.insertion.isHelicopter }
             val maxInAir = TacticalCalculator.maxHelicopterMissions(TacticalCalculator.facilityLevel(state.facilities, FacilityType.AIRFIELD))
             if (inAir >= maxInAir) {
                 showBanner("Airfield can fly $maxInAir helicopter mission${if (maxInAir == 1) "" else "s"} at once. Upgrade the Airfield for more.")
@@ -766,7 +767,7 @@ class CommandViewModel(
         }
         val platoonLeader = TacticalCalculator.platoonLeaderFor(mission, chosenOps, platoonLeaderId)
         // Item 33: the insertion must be allowed and the team (and pilot) qualified
-        val pilot = if (insertion == InsertionMethod.HELICOPTER) {
+        val pilot = if (insertion.isHelicopter) {
             state.operators.find { it.id == pilotId && it.id !in deployedIds && it.status == OperatorStatus.READY }
         } else null
         val insertionBlocker = TacticalCalculator.insertionBlocker(mission, insertion, chosenOps, pilot, state.facilities)
@@ -856,7 +857,12 @@ class CommandViewModel(
             insertion = insertion,
             pilotId = pilot?.id,
             platoonLeaderId = platoonLeader?.id,
-            missionTitle = if (bookedHours > 0) "${mission.displayTitle} (${bookedHours}h)" else mission.displayTitle,
+            missionTitle = when {
+                bookedHours > 0 -> "${mission.displayTitle} (${bookedHours}h)"
+                // Item 60: temporary duty away from the unit
+                mission.isTdy -> "TDY: ${mission.displayTitle.removePrefix("School: ")}"
+                else -> mission.displayTitle
+            },
             flightHours = bookedHours
         )
 
@@ -1185,7 +1191,9 @@ class CommandViewModel(
                 val updatedWoundedCount = if (outcome == OperatorOutcomeType.WOUNDED) op.timesWounded + 1 else op.timesWounded
                 // Campaign missions record the squad patch worn; the newest campaign becomes the combat patch
                 val updatedCombatPatchHistory = mission.campaignId?.let { campaignId ->
-                    val wornPatch = UniformRegaliaRules.resolveUnitPatch(op, state.squads)
+                    // Item 100: aviators' combat patch is always the Aviation Brigade
+                    val wornPatch = if (op.specialty == OperatorSpecialty.AVIATION) UnitPatchStyle.AVIATION_BRIGADE
+                        else UniformRegaliaRules.resolveUnitPatch(op, state.squads)
                     if (wornPatch == UnitPatchStyle.NONE) {
                         op.combatPatchHistory
                     } else {
@@ -1702,6 +1710,126 @@ class CommandViewModel(
                     cohesionSummaryNote
                 ).joinToString(" ").ifBlank { null },
                 campaignProgressNote = campaignProgressNote
+            )
+        }
+    }
+
+    /**
+     * Item 103: cancel a school or abort a mission before it returns. Schools send everyone home READY and
+     * count the attempt with no refund. Missions pay nothing, and each soldier can be wounded or killed
+     * pulling out. An abort isn't a failure for awards, but it resets the Good Conduct streak.
+     */
+    fun cancelDeployment(deploymentId: String) {
+        val state = uiState.value
+        val deployment = state.deployments.find { it.id == deploymentId } ?: return
+        val mission = GameCatalog.missions.find { it.id == deployment.templateId } ?: return
+        val now = System.currentTimeMillis()
+        if (deployment.isComplete(now)) return
+        val title = deployment.missionTitle ?: mission.displayTitle
+        val targetOps = state.operators.filter { it.id in deployment.operatorIds }
+        fun homeStatus(op: Operator) = if (op.status == OperatorStatus.HQ_STAFF) OperatorStatus.HQ_STAFF else OperatorStatus.READY
+
+        if (mission.risk.isTraining) {
+            val updated = targetOps.map { op ->
+                op.copy(
+                    schoolAttempts = op.schoolAttempts + (mission.id to ((op.schoolAttempts[mission.id] ?: 0) + 1)),
+                    status = homeStatus(op)
+                )
+            }
+            viewModelScope.launch {
+                repository.removeDeployment(deployment.id)
+                repository.saveOperators(updated)
+            }
+            showBanner("$title cancelled. The attempt counts and the cost is not refunded.")
+            return
+        }
+
+        val (woundPct, deathPct) = TacticalCalculator.abortCasualtyOddsPct(
+            mission.risk, deployment.progressFraction(now), deployment.insertion
+        )
+        val updated = mutableListOf<Operator>()
+        val newDeeds = mutableListOf<PendingDeed>()
+        val outcomes = mutableListOf<OperatorDebriefOutcome>()
+        for (op in targetOps) {
+            val roll = Random.nextDouble() * 100.0
+            val outcome = when {
+                roll < deathPct -> OperatorOutcomeType.FALLEN
+                roll < deathPct + woundPct -> OperatorOutcomeType.WOUNDED
+                else -> OperatorOutcomeType.SAFE
+            }
+            val updatedOp = op.copy(
+                status = when (outcome) {
+                    OperatorOutcomeType.FALLEN -> OperatorStatus.FALLEN
+                    OperatorOutcomeType.WOUNDED -> OperatorStatus.RECOVERING
+                    else -> homeStatus(op)
+                },
+                recoveryUntilMillis = if (outcome == OperatorOutcomeType.WOUNDED) {
+                    now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities)).roundToLong())
+                } else {
+                    op.recoveryUntilMillis
+                },
+                timesWounded = op.timesWounded + if (outcome == OperatorOutcomeType.WOUNDED) 1 else 0,
+                hqRole = if (outcome == OperatorOutcomeType.FALLEN) null else op.hqRole,
+                goodConductStreak = 0
+            )
+            updated.add(updatedOp)
+            val casualty = outcome == OperatorOutcomeType.WOUNDED || outcome == OperatorOutcomeType.FALLEN
+            val deedText = when (outcome) {
+                OperatorOutcomeType.FALLEN -> "Killed in action during the withdrawal from $title."
+                OperatorOutcomeType.WOUNDED -> "Wounded during the withdrawal from $title."
+                else -> "Withdrew safely when $title was aborted."
+            }
+            val purple = "medal_purple_shield"
+            val queuePurple = casualty &&
+                state.pendingDeeds.none { it.operatorId == op.id && it.recommendedMedalId == purple } &&
+                !TacticalCalculator.isAtAwardLimit(op.id, purple, state.citations)
+            if (queuePurple) {
+                newDeeds.add(
+                    PendingDeed(
+                        id = "deed_${UUID.randomUUID().toString().take(8)}",
+                        operatorId = op.id,
+                        missionTitle = title,
+                        deedSummary = deedText,
+                        recommendedMedalId = purple,
+                        createdAtMillis = now
+                    )
+                )
+            }
+            outcomes.add(
+                OperatorDebriefOutcome(
+                    operatorId = op.id,
+                    callsign = op.callsign,
+                    rankCode = op.rank.code,
+                    outcome = outcome,
+                    deedText = deedText,
+                    recommendedMedalId = if (queuePurple) purple else null,
+                    xpEarned = 0,
+                    promotedToRankCode = null,
+                    readyForCategoryRankCode = null
+                )
+            )
+        }
+        val effectiveRoster = state.operators.map { o -> updated.find { it.id == o.id } ?: o }
+        val prunedSquads = SquadCohesionRules.pruneUnavailableMembers(state.squads, effectiveRoster)
+            .filter { sq -> state.squads.find { it.id == sq.id } != sq }
+        enqueueAwardPrompts(newDeeds)
+        viewModelScope.launch {
+            repository.removeDeployment(deployment.id)
+            repository.saveOperators(updated)
+            if (prunedSquads.isNotEmpty()) repository.saveSquads(prunedSquads)
+            if (newDeeds.isNotEmpty()) repository.addPendingDeeds(newDeeds)
+            _lastDebrief.value = DebriefSummary(
+                missionTitle = "$title (Aborted)",
+                theaterName = mission.theater.label,
+                missionSucceeded = false,
+                isTrainingMission = false,
+                efficiencyPct = deployment.efficiencyPct,
+                creditsEarned = 0.0,
+                suppliesEarned = 0.0,
+                intelEarned = 0.0,
+                prestigeEarned = 0.0,
+                operatorOutcomes = outcomes,
+                squadCohesionNote = "Mission aborted at ${(deployment.progressFraction(now) * 100).roundToInt()}%. No rewards; the team pulled out."
             )
         }
     }

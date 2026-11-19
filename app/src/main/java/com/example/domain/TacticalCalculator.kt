@@ -135,6 +135,32 @@ object TacticalCalculator {
     @Volatile
     var sfSquadEstablished: Boolean = false
 
+    /**
+     * Item 103: wound and death odds (percent) for each soldier when a mission is aborted. The base odds
+     * apply at the midpoint and scale with progress; helicopter insertions pull the team out faster.
+     */
+    fun abortCasualtyOddsPct(risk: MissionRisk, progress: Float, insertion: InsertionMethod): Pair<Double, Double> {
+        val (wound, death) = when (risk) {
+            MissionRisk.TRAINING -> 0.0 to 0.0
+            MissionRisk.LOW -> 2.0 to 0.0
+            MissionRisk.MODERATE -> 4.0 to 0.5
+            MissionRisk.HIGH -> 7.0 to 1.0
+            MissionRisk.EXTREME -> 10.0 to 2.0
+        }
+        val scale = (progress * 2.0).coerceIn(0.2, 2.0) * if (insertion.isHelicopter) ABORT_HELICOPTER_FACTOR else 1.0
+        return (wound * scale) to (death * scale)
+    }
+
+    const val ABORT_HELICOPTER_FACTOR = 0.8
+
+    /** Item 60: soldiers away on temporary duty (a TDY school). Set from game state. */
+    @Volatile
+    var tdyOperatorIds: Set<String> = emptySet()
+
+    fun tdyOperatorIdsFor(deployments: List<ActiveDeployment>): Set<String> =
+        deployments.filter { d -> GameCatalog.missions.find { it.id == d.templateId }?.isTdy == true }
+            .flatMap { it.operatorIds }.toSet()
+
     fun isCampaignUnlocked(
         campaign: TheaterCampaign,
         completedCampaignIds: Set<String>
@@ -614,7 +640,7 @@ object TacticalCalculator {
         add("Flight School +${airfieldFlightSchoolBonus(level)}%")
         if (airfieldFlightSkillBonus(level) > 0) add("Flight Hours +${airfieldFlightSkillBonus(level)} skill")
         add("Drop scatter -${airfieldScatterCut(level)}")
-        if (level >= AIRFIELD_FAST_ROPE_LEVEL) add("Fast Rope (Session 17b)")
+        if (level >= AIRFIELD_FAST_ROPE_LEVEL) add("Fast Rope")
         if (level >= AIRFIELD_NIGHT_FLYING_LEVEL) add("Night flying +$NIGHT_FLYING_PASS_BONUS% pass")
     }.joinToString(" • ")
 
@@ -765,6 +791,14 @@ object TacticalCalculator {
     fun isAirborneQualified(op: Operator): Boolean = AIRBORNE_SCHOOL_ID in op.completedMissionIds
     fun isFreeFallQualified(op: Operator): Boolean = MFF_SCHOOL_ID in op.completedMissionIds
     fun isCombatDiver(op: Operator): Boolean = COMBAT_DIVER_SCHOOL_ID in op.completedMissionIds
+    const val AIR_ASSAULT_SCHOOL_ID = "msn_air_assault_school"
+    fun isAirAssaultQualified(op: Operator): Boolean = AIR_ASSAULT_SCHOOL_ID in op.completedMissionIds
+    /** Fast Rope: a little quicker than landing, and a bonus on assault and urban missions. */
+    const val FAST_ROPE_DURATION_FACTOR = 0.95
+    const val FAST_ROPE_ASSAULT_PASS_BONUS = 4
+
+    private fun isAssaultOrUrban(m: MissionTemplate): Boolean =
+        m.theater.terrain == Terrain.URBAN || listOf("Assault", "Breach", "Strike").any { it in m.primaryFocus }
 
     /** Why this team can't use [method] on [mission], or null when it can. */
     fun insertionBlocker(
@@ -783,6 +817,12 @@ object TacticalCalculator {
                 !(pilot.isAviator && pilot.isWarrantOfficer) -> "Pilot must be a warrant officer aviator"
                 else -> null
             }
+            InsertionMethod.FAST_ROPE -> when {
+                facilityLevel(facilities, FacilityType.AIRFIELD) < AIRFIELD_FAST_ROPE_LEVEL -> "Needs Airfield level $AIRFIELD_FAST_ROPE_LEVEL"
+                pilot == null -> "Assign a pilot from the Aviation Pool"
+                !(pilot.isAviator && pilot.isWarrantOfficer) -> "Pilot must be a warrant officer aviator"
+                else -> team.firstOrNull { !isAirAssaultQualified(it) }?.let { "${it.callsign} isn't Air Assault qualified" }
+            }
             InsertionMethod.AIRBORNE -> team.firstOrNull { !isAirborneQualified(it) }
                 ?.let { "${it.callsign} isn't Airborne-qualified" }
             InsertionMethod.HALO -> if (!mission.requiresSfTeam) "SF missions only"
@@ -797,9 +837,10 @@ object TacticalCalculator {
 
     fun insertionDurationMultiplier(method: InsertionMethod, pilot: Operator?): Double = when (method) {
         InsertionMethod.GROUND -> 1.0
-        InsertionMethod.HELICOPTER ->
+        InsertionMethod.HELICOPTER, InsertionMethod.FAST_ROPE ->
             (HELO_DURATION_MULT - (pilot?.flightSkill ?: 0) * HELO_DURATION_PER_SKILL).coerceAtLeast(HELO_MIN_DURATION_MULT) *
-                (1.0 - airfieldLevel.coerceAtLeast(0) * AIRFIELD_HELO_TIME_CUT_PER_LEVEL).coerceAtLeast(0.7)
+                (1.0 - airfieldLevel.coerceAtLeast(0) * AIRFIELD_HELO_TIME_CUT_PER_LEVEL).coerceAtLeast(0.7) *
+                (if (method == InsertionMethod.FAST_ROPE) FAST_ROPE_DURATION_FACTOR else 1.0)
         InsertionMethod.AIRBORNE -> AIRBORNE_DURATION_MULT
         InsertionMethod.HALO -> HALO_DURATION_MULT
         InsertionMethod.MARITIME -> MARITIME_DURATION_MULT
@@ -818,6 +859,9 @@ object TacticalCalculator {
             InsertionMethod.MARITIME -> if (isStealthWeighted(mission)) MARITIME_STEALTH_PASS_BONUS else 0
             InsertionMethod.HELICOPTER ->
                 if (mission.isNightOp && airfieldLevel >= AIRFIELD_NIGHT_FLYING_LEVEL) NIGHT_FLYING_PASS_BONUS else 0
+            InsertionMethod.FAST_ROPE ->
+                (if (mission.isNightOp && airfieldLevel >= AIRFIELD_NIGHT_FLYING_LEVEL) NIGHT_FLYING_PASS_BONUS else 0) +
+                    (if (isAssaultOrUrban(mission)) FAST_ROPE_ASSAULT_PASS_BONUS else 0)
             else -> 0
         }
         return bonus - if (scattered) SCATTER_PASS_PENALTY else 0
@@ -825,7 +869,7 @@ object TacticalCalculator {
 
     /** Survival points from the insertion for each soldier: helicopters cut risk; scattered drops raise it. */
     fun insertionSurvivalDelta(method: InsertionMethod, pilot: Operator?, airOpsBonusPct: Int, scattered: Boolean): Int {
-        val helo = if (method == InsertionMethod.HELICOPTER) {
+        val helo = if (method.isHelicopter) {
             val skill = (pilot?.flightSkill ?: 0) / 20 * HELO_SURVIVAL_PER_20_SKILL
             val airOps = (HELO_SURVIVAL_BONUS * airOpsBonusPct / 100.0).roundToInt()
             HELO_SURVIVAL_BONUS + skill + airOps + airfieldHeloSurvivalBonus()
@@ -835,7 +879,7 @@ object TacticalCalculator {
 
     /** Extra supply for a helicopter lift: Airfield levels and the Air Operations Officer cut it. */
     fun insertionSupplyCost(method: InsertionMethod, facilities: List<FacilityState>, airOpsBonusPct: Int): Int {
-        if (method != InsertionMethod.HELICOPTER) return 0
+        if (!method.isHelicopter) return 0
         val airfield = facilityLevel(facilities, FacilityType.AIRFIELD).coerceAtLeast(0)
         val fieldCut = (airfield * HELO_AIRFIELD_DISCOUNT_PER_LEVEL).coerceAtMost(HELO_MAX_AIRFIELD_DISCOUNT)
         return (HELO_BASE_SUPPLY_COST * (1.0 - fieldCut) * (1.0 - airOpsBonusPct / 100.0)).roundToInt()
@@ -1815,6 +1859,7 @@ object TacticalCalculator {
             "msn_mff_school" -> 70
             "msn_pathfinder_school" -> 78
             "msn_night_qual" -> 76
+            AIR_ASSAULT_SCHOOL_ID -> 74
             "msn_intel_school", "msn_ocs_school" -> 80
             "msn_signals_school", "msn_medical_school", "msn_engineer_school", "msn_logistics_school" -> 84
             "msn_snco_school" -> 86
@@ -2668,8 +2713,8 @@ object TacticalCalculator {
                 }
             }
             "insig_air_assault" -> {
-                if ("msn_night_qual" !in operator.completedMissionIds) {
-                    missing += "Graduate Army Airborne & Parachutist School"
+                if (AIR_ASSAULT_SCHOOL_ID !in operator.completedMissionIds) {
+                    missing += "Graduate Army Air Assault School"
                 }
             }
             "insig_eib_rifle" -> {
@@ -2894,11 +2939,14 @@ object TacticalCalculator {
                                     "insig_airborne_tab",
                                     "insig_parachutist",
                                     "cord_airborne_crimson",
-                                    "medal_night_owl",
-                                    "insig_air_assault"
+                                    "medal_night_owl"
                                 )
                                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
-                                medalId to "Graduated ${mission.title} static-line jump, fast-rope air assault & night drop zones — Maroon Beret authorized."
+                                medalId to "Graduated ${mission.title} static-line jumps and night drop zones. Maroon Beret authorized."
+                            }
+                            AIR_ASSAULT_SCHOOL_ID -> {
+                                val medalId = firstEligibleUnowned(listOf("insig_air_assault"), includeGeneralFallback = false)
+                                medalId to "Graduated ${mission.title}: sling loads, rappelling and the fast rope."
                             }
                             "msn_ranger_school" -> {
                                 // Ranger awards the Ranger Tab only, for every MOS
@@ -2948,7 +2996,8 @@ object TacticalCalculator {
                                 medalId to "Graduated ${mission.title} — qualified for NCO → SNCO Promotion Board."
                             }
                             "msn_ocs_school" -> {
-                                val candidates = listOf("insig_staff_crest")
+                                // OCS commissions officers; the staff crest comes from HQ staff work
+                                val candidates = emptyList<String>()
                                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} — qualified for Enlisted → Officer Commissioning Board."
                             }

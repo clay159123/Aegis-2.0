@@ -236,7 +236,7 @@ fun FieldSquadsSection(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = if (isDeployed) "DEPLOYED" else if (member.status == OperatorStatus.RECOVERING) "MEDBAY" else member.specialty.roleTag,
+                                            text = if (isDeployed && member.id in com.example.domain.TacticalCalculator.tdyOperatorIds) "TDY" else if (isDeployed) "DEPLOYED" else if (member.status == OperatorStatus.RECOVERING) "MEDBAY" else member.specialty.roleTag,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (isDeployed) extra.signalsCyan else extra.textMuted,
                                             maxLines = 1,

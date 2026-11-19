@@ -205,14 +205,14 @@ fun MissionPrepDialog(
                 Text("Insertion", style = MaterialTheme.typography.labelMedium, color = extra.brassBright)
                 InsertionMethod.entries.filter { it in allowed }.forEach { method ->
                     val blocker = TacticalCalculator.insertionBlocker(
-                        mission, method, team, if (method == InsertionMethod.HELICOPTER) (pilot ?: pilots.firstOrNull()) else null, uiState.facilities
+                        mission, method, team, if (method.isHelicopter) (pilot ?: pilots.firstOrNull()) else null, uiState.facilities
                     )
                     val selected = insertion == method
                     Surface(
                         onClick = {
                             if (blocker == null) {
                                 insertion = method
-                                if (method == InsertionMethod.HELICOPTER && pilotId == null) pilotId = pilots.firstOrNull()?.id
+                                if (method.isHelicopter && pilotId == null) pilotId = pilots.firstOrNull()?.id
                             }
                         },
                         enabled = blocker == null,
@@ -241,7 +241,7 @@ fun MissionPrepDialog(
                 }
 
                 // Pilot
-                if (insertion == InsertionMethod.HELICOPTER) {
+                if (insertion.isHelicopter) {
                     Text("Pilot", style = MaterialTheme.typography.labelMedium, color = extra.brassBright)
                     pilots.forEach { p ->
                         Row(
@@ -333,7 +333,7 @@ fun MissionPrepDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onLaunch(teamIds, insertion, pilotId.takeIf { insertion == InsertionMethod.HELICOPTER }, preview.platoonLeader?.id) },
+                onClick = { onLaunch(teamIds, insertion, pilotId.takeIf { insertion.isHelicopter }, preview.platoonLeader?.id) },
                 enabled = preview.insertionBlocker == null && preview.teamBlocker == null && canAfford && team.size >= mission.minOperators,
                 modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("prep_launch")
             ) { Text("Launch") }
@@ -356,8 +356,9 @@ private fun PrepStat(label: String, value: String, color: Color, tag: String) {
 private fun insertionSummary(method: InsertionMethod, mission: MissionTemplate): String = when (method) {
     InsertionMethod.GROUND -> "Baseline time and risk"
     InsertionMethod.HELICOPTER -> "Faster, lower casualty risk • needs a pilot and supply"
+    InsertionMethod.FAST_ROPE -> "Helicopter with the team roping in • +4% on assault and urban missions • Air Assault-qualified team, Airfield level 3"
     InsertionMethod.AIRBORNE -> "Fastest • ${TacticalCalculator.AIRBORNE_SCATTER_CHANCE_PCT}% chance of a scattered drop"
     InsertionMethod.HALO -> "Fastest" + (if (TacticalCalculator.isStealthWeighted(mission)) " • +${TacticalCalculator.HALO_STEALTH_PASS_BONUS}% pass" else "") +
         " • ${TacticalCalculator.HALO_SCATTER_CHANCE_PCT}% scatter"
-    InsertionMethod.MARITIME -> "Quicker" + if (TacticalCalculator.isStealthWeighted(mission)) " • +${TacticalCalculator.MARITIME_STEALTH_PASS_BONUS}% pass" else ""
+    InsertionMethod.MARITIME -> "Navy boat or submarine delivers the divers • Quicker" + if (TacticalCalculator.isStealthWeighted(mission)) " • +${TacticalCalculator.MARITIME_STEALTH_PASS_BONUS}% pass" else ""
 }
