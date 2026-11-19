@@ -94,3 +94,62 @@ class Session20Test {
         assertEquals(MissionScope.STAFF_DIPLOMATIC, talks.scope)
     }
 }
+
+/** Session 20 follow-up: who sits at the table, and what a failed round costs. */
+class Session20TalksTest {
+    private val now = 50_000_000L
+    private fun op(id: String, rank: OperatorRank, status: OperatorStatus = OperatorStatus.READY, role: HqStaffRole? = null) =
+        GameCatalog.createPostBasicRecruit(id, OperatorSpecialty.COMMAND, emptySet(), 0).copy(
+            id = id, unlocked = true, xp = rank.xpRequired, authorizedTier = rank.tier, status = status, hqRole = role,
+            flagGrade = if (rank.tier == RankTier.FLAG_OFFICER) rank.flagGrade else 0
+        )
+    private val talks = GameCatalog.missions.first { it.id == PowRules.NEGOTIATION_MISSION_ID }
+    private val pow = PowRules.capture(op("pow", OperatorRank.SGT), GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT }, now)
+
+    @Test
+    fun seniorityBilletsAndSupportSetTheBonus() {
+        assertEquals(15, PowRules.leadBonusPct(op("bg", OperatorRank.BG)))
+        assertEquals(20, PowRules.leadBonusPct(op("gen", OperatorRank.GEN)))
+        assertEquals(8, PowRules.leadBonusPct(op("col", OperatorRank.COL)))
+        assertEquals(8, PowRules.leadBonusPct(op("sgm", OperatorRank.SGM)))
+        assertEquals(0, PowRules.leadBonusPct(op("cpt", OperatorRank.CPT)))
+        // Only the best lead counts; extras add support, billets add their own
+        val gen = op("gen", OperatorRank.GEN, OperatorStatus.HQ_STAFF, HqStaffRole.CO_COMMANDING_OFFICER)
+        val s2 = op("s2", OperatorRank.MAJ, OperatorStatus.HQ_STAFF, HqStaffRole.S2_INTEL_OVERWATCH)
+        val dcg = op("dcg", OperatorRank.BG, OperatorStatus.HQ_STAFF, HqStaffRole.DEPUTY_COMMANDER)
+        assertEquals(20, PowRules.talksTeamBonusPct(listOf(gen)))
+        assertEquals(20 + 5 + 3, PowRules.talksTeamBonusPct(listOf(gen, s2)))
+        assertEquals(20 + 10 + 6, PowRules.talksTeamBonusPct(listOf(gen, s2, dcg)))
+        assertEquals(0 + 0, PowRules.talksTeamBonusPct(listOf(op("p1", OperatorRank.SPC), op("p2", OperatorRank.PFC))))
+        // Generals close the deal for less
+        assertEquals(PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST, PowRules.talksPrestigeCost(listOf(gen)), 0.001)
+        assertEquals(PowRules.NEGOTIATION_PRESTIGE_COST, PowRules.talksPrestigeCost(listOf(s2)), 0.001)
+        // Juniors alone can't open talks
+        assertNotNull(PowRules.operationBlocker(talks, pow, emptyList(), 999.0, now, listOf(op("p", OperatorRank.SPC))))
+        assertNull(PowRules.operationBlocker(talks, pow, emptyList(), 999.0, now, listOf(op("p", OperatorRank.SPC), op("sfc", OperatorRank.SFC))))
+        assertNotNull(PowRules.operationBlocker(talks, pow, emptyList(), 50.0, now, listOf(s2)))
+        assertNull(PowRules.operationBlocker(talks, pow, emptyList(), 50.0, now, listOf(gen)))
+    }
+
+    @Test
+    fun failedTalksCollapseHardenAndMayMoveOrKill() {
+        var moved = 0; var killed = 0
+        repeat(2000) { i ->
+            val (after, _) = PowRules.failedTalks(pow, now, kotlin.random.Random(i))
+            if (after.status == OperatorStatus.FALLEN) killed++
+            else {
+                assertEquals(1, after.powTalksFailures)
+                assertTrue(PowRules.talksCoolingDown(after, now + 1000L))
+                assertNotNull(PowRules.operationBlocker(talks, after, emptyList(), 999.0, now + 1000L))
+                if (after.powRescueClosed) { moved++; assertFalse(PowRules.rescueWindowOpen(after, now + 1000L)) }
+            }
+        }
+        assertTrue("killed $killed", killed in 60..140)
+        assertTrue("moved $moved", moved in 850..1050)
+        assertEquals(20 - 10, PowRules.talksModifierPct(listOf(op("gen", OperatorRank.GEN)), failures = 2))
+        // A fresh capture clears the old record
+        val again = PowRules.capture(pow.copy(powTalksFailures = 3, powRescueClosed = true), GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT }, now)
+        assertEquals(0, again.powTalksFailures)
+        assertFalse(again.powRescueClosed)
+    }
+}

@@ -1087,7 +1087,8 @@ private fun PowListPanel(
         )
         Text(
             "Held soldiers keep their roster slot. Rescue them while the window is open, open release talks " +
-                "(${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS), or wait: they're released or lost when the time runs out.",
+                "(${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS, ${PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST.toInt()} with a general; senior people at the table help), " +
+                "or wait: they're released or lost when the time runs out.",
             style = MaterialTheme.typography.labelSmall,
             color = extra.textMuted
         )
@@ -1110,7 +1111,9 @@ private fun PowListPanel(
                     Text(
                         "Held in ${pow.captureTheater?.label ?: "enemy territory"} • " +
                             (if (inProgress) "operation under way" else "release or loss in ${formatMinSec(waitLeft)}") +
-                            " • ${PowRules.releaseSurvivalPct(pow)}% survive the wait",
+                            " • ${PowRules.releaseSurvivalPct(pow)}% survive the wait" +
+                            (if (pow.powTalksFailures > 0) " • captors hardened -${pow.powTalksFailures * PowRules.HARDENED_PENALTY_PCT}%" else "") +
+                            (if (pow.powRescueClosed) " • prisoner moved" else ""),
                         style = MaterialTheme.typography.labelSmall,
                         color = extra.textMuted
                     )
@@ -1120,11 +1123,17 @@ private fun PowListPanel(
                             enabled = !inProgress && rescueLeft > 0L,
                             modifier = Modifier.weight(1f).testTag("pow_rescue_${pow.id}")
                         ) { Text(if (rescueLeft > 0L) "Rescue (${formatMinSec(rescueLeft)})" else "Rescue closed", maxLines = 1) }
+                        val cooling = PowRules.talksCoolingDown(pow, nowMillis)
                         OutlinedButton(
                             onClick = { onNegotiate(pow.id) },
-                            enabled = !inProgress && prestige >= PowRules.NEGOTIATION_PRESTIGE_COST,
+                            enabled = !inProgress && !cooling && prestige >= PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST,
                             modifier = Modifier.weight(1f).testTag("pow_negotiate_${pow.id}")
-                        ) { Text("Talks (${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS)", maxLines = 1) }
+                        ) {
+                            Text(
+                                if (cooling) "Talks (${formatMinSec(pow.powTalksCooldownUntilMillis - nowMillis)})" else "Talks (${PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST.toInt()}-${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS)",
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }

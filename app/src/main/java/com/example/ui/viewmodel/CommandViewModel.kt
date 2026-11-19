@@ -490,6 +490,7 @@ class CommandViewModel(
 
     fun selectPowTarget(operatorId: String) {
         powOperationTargetId = operatorId
+        PowRules.activeTalksFailures = uiState.value.operators.find { it.id == operatorId }?.powTalksFailures ?: 0
     }
 
     /** Item 69: answer the waiting soldier event. */
@@ -842,7 +843,8 @@ class CommandViewModel(
         // Item 63: rescues and release talks need a POW and an open window (talks also cost prestige)
         val powTarget = if (PowRules.isPowOperation(mission)) state.operators.find { it.id == powOperationTargetId } else null
         if (PowRules.isPowOperation(mission)) {
-            PowRules.operationBlocker(mission, powTarget, state.deployments, state.resources.prestige, System.currentTimeMillis())?.let {
+            val team = state.operators.filter { it.id in selectedOperatorIds }
+            PowRules.operationBlocker(mission, powTarget, state.deployments, state.resources.prestige, System.currentTimeMillis(), team)?.let {
                 showBanner(it)
                 return
             }
@@ -1012,7 +1014,9 @@ class CommandViewModel(
             flightHours = bookedHours,
             targetOperatorId = powTarget?.id
         )
-        val talksCost = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) PowRules.NEGOTIATION_PRESTIGE_COST else 0.0
+        val talksCost = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) {
+            PowRules.talksPrestigeCost(state.operators.filter { it.id in selectedOperatorIds })
+        } else 0.0
 
         viewModelScope.launch {
             repository.updateCommanderState { cur ->
@@ -1248,6 +1252,7 @@ class CommandViewModel(
             val platoonSurvBonus = if (TacticalCalculator.platoonLeaderFor(mission, groundOps, deployment.platoonLeaderId) != null) {
                 TacticalCalculator.PLATOON_LEADER_SURVIVAL_BONUS
             } else 0
+            PowRules.activeTalksFailures = deployment.targetOperatorId?.let { id -> state.operators.find { it.id == id }?.powTalksFailures } ?: 0
             val successOdds = TacticalCalculator.missionSuccessOddsPct(
                 insertion = deployment.insertion,
                 scatteredDrop = scatteredDrop,
@@ -1820,8 +1825,13 @@ class CommandViewModel(
             )
             if (o.recommendedMedalId == null) outcomes[i] = o.copy(deedText = text, recommendedMedalId = medalId)
         }
-        // Item 63: a successful rescue or negotiation brings the POW home
+        // Item 63: a successful rescue or negotiation brings the POW home; failed talks have consequences
         val freedPow = deployment.targetOperatorId?.let { id -> state.operators.find { it.id == id && it.status == OperatorStatus.CAPTURED } }
+        if (mission.id == PowRules.NEGOTIATION_MISSION_ID && !missionSucceeded && freedPow != null) {
+            val (afterTalks, note) = PowRules.failedTalks(freedPow, now)
+            updatedOperators.add(afterTalks)
+            showBanner(note)
+        }
         if (PowRules.isPowOperation(mission) && missionSucceeded && freedPow != null) {
             updatedOperators.add(PowRules.released(freedPow, now, TacticalCalculator.aidRecoveryMultiplier(state.facilities)))
             newDeeds.add(

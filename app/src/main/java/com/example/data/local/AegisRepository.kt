@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 26
+        const val SAVE_FORMAT_VERSION = 27
     }
 
     private val commanderMutex = Mutex()
@@ -470,6 +470,9 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     captivityResolveAtMillis = captivityResolveAtMillis,
     captureTheater = captureTheaterName?.let { n -> TheaterRegion.entries.find { it.name == n } },
     timesCaptured = timesCaptured,
+    powTalksFailures = powTalksFailures,
+    powTalksCooldownUntilMillis = powTalksCooldownUntilMillis,
+    powRescueClosed = powRescueClosed,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -555,6 +558,9 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     captivityResolveAtMillis = captivityResolveAtMillis,
     captureTheaterName = captureTheater?.name,
     timesCaptured = timesCaptured,
+    powTalksFailures = powTalksFailures,
+    powTalksCooldownUntilMillis = powTalksCooldownUntilMillis,
+    powRescueClosed = powRescueClosed,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
