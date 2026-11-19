@@ -59,7 +59,7 @@ class TacticalCalculatorTest {
             "msn_ranger_school", "msn_sf_school", "msn_ocs_school",
             "msn_sapper_school", "msn_pathfinder_school", "msn_eib_testing", "msn_rifle_qual",
             "msn_flight_school", "msn_flight_hours", "msn_combat_diver_school", "msn_mff_school",
-            "msn_air_assault_school"
+            "msn_air_assault_school", "msn_sere_school", "msn_sf_aviation_school"
         )
         GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.forEach { school ->
             val expected = if (school.id in fieldSchools) WardrobeKit.FIELD else WardrobeKit.BRAVOS
@@ -1558,7 +1558,9 @@ class TacticalCalculatorTest {
                 "msn_flight_hours",
                 "msn_combat_diver_school",
                 "msn_mff_school",
-                "msn_air_assault_school"
+                "msn_air_assault_school",
+                "msn_sere_school",
+                "msn_sf_aviation_school"
             ),
             schoolIds
         )
@@ -1852,11 +1854,11 @@ class TacticalCalculatorTest {
             )
         }
 
-        // Ranger Course is open to every MOS
+        // Ranger Course is open to every ground MOS (item 114: aviators stay on their own track)
         for (mos in OperatorSpecialty.entries) {
             assertEquals(
                 "Ranger MOS check for ${mos.name}",
-                true,
+                mos != OperatorSpecialty.AVIATION,
                 TacticalCalculator.canOperatorDeployOnMission(maxedOp(mos).copy(completedMissionIds = setOf("msn_basic_qual", "msn_night_qual")), rangerSchool, emptySet()).eligible
             )
             // SFQC: combat MOS (Infantry, Recon, Engineer) plus Command and Medic; not Signals or Aviation
@@ -2715,7 +2717,7 @@ class TacticalCalculatorTest {
     @Test
     fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
         val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-        assertEquals(22, schools.size)
+        assertEquals(24, schools.size)
         schools.forEach { school ->
             assertFalse(school.id, school.hasClassCap)
             assertTrue(school.id, 15 in school.minOperators..school.maxOperators)

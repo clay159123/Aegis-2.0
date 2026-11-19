@@ -428,6 +428,7 @@ fun UniformTailorStudioCard(
                     },
                     isAviator = operator.specialty == OperatorSpecialty.AVIATION,
                     isSfSquad = squads.any { it.isSpecialForces && operator.id in it.memberIds },
+                    isSfAviator = TacticalCalculator.isSfAviator(operator),
                     testTag = "dropdown_unit_patch"
                 )
                 CombatPatchDropdown(

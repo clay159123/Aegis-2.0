@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 23
+        const val SAVE_FORMAT_VERSION = 24
     }
 
     private val commanderMutex = Mutex()

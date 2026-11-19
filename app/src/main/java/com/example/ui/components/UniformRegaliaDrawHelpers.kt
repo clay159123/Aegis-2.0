@@ -695,6 +695,16 @@ internal fun DrawScope.drawUnitPatchEmblem(
             }
         }
 
+        // Special Operations Aviation: a crescent moon over a rotor, gold on black
+        UnitPatchStyle.SOA -> {
+            val gold = Color(0xFFD8B24C)
+            drawCircle(accent, radius = rx * 0.55f, center = Offset(center.x - rx * 0.35f, center.y - ry * 0.45f))
+            drawCircle(Color(UnitPatchStyle.SOA.primaryHex), radius = rx * 0.48f, center = Offset(center.x - rx * 0.15f, center.y - ry * 0.55f))
+            drawLine(gold, Offset(center.x - rx * 1.0f, center.y + ry * 0.35f), Offset(center.x + rx * 1.0f, center.y + ry * 0.35f), strokeWidth = stroke, cap = StrokeCap.Round)
+            drawLine(gold, Offset(center.x, center.y + ry * 0.35f), Offset(center.x, center.y + ry * 0.95f), strokeWidth = stroke, cap = StrokeCap.Round)
+            drawCircle(gold, radius = rx * 0.18f, center = Offset(center.x, center.y + ry * 0.35f))
+        }
+
         // Aviation Brigade: spread wings around a three-blade rotor hub
         UnitPatchStyle.AVIATION_BRIGADE -> {
             val gold = Color(0xFFD8B24C)

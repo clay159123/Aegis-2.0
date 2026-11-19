@@ -771,6 +771,8 @@ enum class UnitPatchStyle(
     SUPREME_HQ("Aegis High Command", "Worn by HQ staff only", 0xFF141E33, 0xFFF5D576),
     /** Item 58: the SF squad's arrowhead patch (dagger and lightning), black and red; subdued in the field. */
     SPECIAL_FORCES("Special Forces", "Black and red arrowhead with dagger and lightning; worn by the SF squad", 0xFF141414, 0xFFB3202A),
+    /** Item 111: SF aviators' patch. */
+    SOA("Special Operations Aviation", "Black and gold shield with a night-sky moon and rotor; worn by SF aviators", 0xFF0F1116, 0xFFD8B24C),
     /** Item 100: the aviators' own unit patch. */
     AVIATION_BRIGADE("Aegis Aviation Brigade", "Sky blue and gold shield with winged rotor; worn by aviators", 0xFF1E3550, 0xFF8EC3EA),
     UNASSIGNED("Unassigned", "Generic Aegis patch for field soldiers without a squad", 0xFF5B6472, 0xFFB8C0CC),
@@ -868,11 +870,13 @@ enum class CamoPattern(
     LITTORAL_TIDE("Littoral Tide", 0xFF4A5A66, 0xFF2C3740, 0xFF7C8E99,
         setOf(Terrain.COASTAL), setOf(Terrain.JUNGLE, Terrain.DESERT)),
     /** Item 93: the aviator flight suit's solid sage. Not a field camo choice. */
-    FLIGHT_SAGE("Flight Suit Sage", 0xFF6E775B, 0xFF5D654C, 0xFF7C866A, emptySet(), emptySet());
+    FLIGHT_SAGE("Flight Suit Sage", 0xFF6E775B, 0xFF5D654C, 0xFF7C866A, emptySet(), emptySet()),
+    /** Item 113: SF aviators' black flight suit. */
+    FLIGHT_BLACK("Flight Suit Black", 0xFF1E2023, 0xFF16181A, 0xFF2A2D31, emptySet(), emptySet());
 
     companion object {
         /** Patterns a player can pick for field uniforms. */
-        val SELECTABLE: List<CamoPattern> get() = entries.filter { it != FLIGHT_SAGE }
+        val SELECTABLE: List<CamoPattern> get() = entries.filter { it != FLIGHT_SAGE && it != FLIGHT_BLACK }
     }
 
     fun fitFor(terrain: Terrain): CamoFit = when (terrain) {

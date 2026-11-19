@@ -1311,6 +1311,24 @@ object GameCatalog {
             yieldBonusPct = 5
         ),
         MedalDefinition(
+            id = "medal_sere",
+            name = "SERE Ribbon",
+            shortName = "SERE",
+            category = AwardCategory.RIBBON,
+            tier = MedalTier.SERVICE,
+            precedenceOrder = 24,
+            description = "Awarded on graduating SERE: survival, evasion, resistance to interrogation and escape.",
+            qualificationRule = "Graduate SERE school.",
+            ribbonStripeHexes = listOf(0xFF1A1A1A, 0xFF5E6B4A, 0xFFE8E2CF, 0xFF5E6B4A, 0xFF1A1A1A),
+            prestigeCost = 6,
+            minMissionsRequired = 0,
+            firepowerBonus = 0,
+            stealthBonus = 2,
+            techBonus = 0,
+            resilienceBonus = 2,
+            yieldBonusPct = 3
+        ),
+        MedalDefinition(
             id = "medal_good_conduct",
             name = "Army Good Conduct Ribbon",
             shortName = "GOOD CONDUCT",
@@ -2537,6 +2555,7 @@ object GameCatalog {
                 maxAttempts = 2,
                 prerequisiteAnyIds = setOf(
                     "msn_basic_qual",
+                    "msn_flight_school",
                     "msn_medical_school",
                     "msn_engineer_school",
                     "msn_logistics_school",
@@ -2544,9 +2563,9 @@ object GameCatalog {
                 ),
                 minFirepower = 12,
                 minResilience = 14,
-                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
+                allowedSpecialties = OperatorSpecialty.entries.toSet(),
                 naturalFitSpecialties = setOf(OperatorSpecialty.ASSAULT, OperatorSpecialty.BREACHER),
-                suitabilitySummary = "All ground MOS • 1 Entry School • 12+ FP & 14+ Res • Max 2 attempts",
+                suitabilitySummary = "All MOS • 1 Entry School • 12+ FP & 14+ Res • Max 2 attempts",
                 graduationStatBonus = StatProfile(1, 0, 0, 2),
                 graduationRewardsSummary = "Grants +1 FP, +2 RS • Awards Air Assault Wings • Unlocks the Fast Rope insertion"
             ),
@@ -2582,7 +2601,7 @@ object GameCatalog {
                 prerequisiteAllIds = setOf("msn_basic_qual", "msn_night_qual"),
                 minFirepower = 16,
                 minResilience = 15,
-                allowedSpecialties = OperatorSpecialty.entries.toSet(),
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
                 naturalFitSpecialties = setOf(
                     OperatorSpecialty.ASSAULT,
                     OperatorSpecialty.RECON,
@@ -2706,7 +2725,7 @@ object GameCatalog {
                 minFirepower = 16,
                 minResilience = 16,
                 // Infantry, plus SF-qualified soldiers of any MOS (checked in TacticalCalculator)
-                allowedSpecialties = OperatorSpecialty.entries.toSet(),
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
                 naturalFitSpecialties = setOf(OperatorSpecialty.ASSAULT),
                 suitabilitySummary = "Infantry or SF-qualified only • Basics • 16+ FP & 16+ Res • Max 3 tries • Very low pass rate",
                 graduationStatBonus = StatProfile(1, 0, 0, 1),
@@ -2884,7 +2903,7 @@ object GameCatalog {
                     "msn_signals_school"
                 ),
                 minRankTier = RankTier.SOLDIER,
-                allowedSpecialties = OperatorSpecialty.entries.toSet(),
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
                 naturalFitSpecialties = setOf(
                     OperatorSpecialty.COMMAND,
                     OperatorSpecialty.ASSAULT,
@@ -2924,7 +2943,7 @@ object GameCatalog {
                 maxAttempts = null,
                 prerequisiteAllIds = setOf("msn_nco_school"),
                 minRankTier = RankTier.NCO,
-                allowedSpecialties = OperatorSpecialty.entries.toSet(),
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
                 naturalFitSpecialties = setOf(
                     OperatorSpecialty.COMMAND,
                     OperatorSpecialty.ASSAULT,
@@ -2976,7 +2995,7 @@ object GameCatalog {
                 minCombatRisk = MissionRisk.MODERATE,
                 minTech = 12,
                 minResilience = 14,
-                allowedSpecialties = OperatorSpecialty.entries.toSet(),
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
                 naturalFitSpecialties = setOf(
                     OperatorSpecialty.COMMAND,
                     OperatorSpecialty.SIGNALS,
@@ -3089,6 +3108,81 @@ object GameCatalog {
                 "Primary flight: hover, autorotation and traffic pattern work.",
                 "Instrument and night vision goggle flights graded.",
                 "Wings pinned: Army Aviator!"
+            )
+        ),
+        MissionTemplate(
+            id = "msn_sere_school",
+            title = "School: SERE (Survival, Evasion, Resistance, Escape)",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 58,
+                uniformKit = WardrobeKit.FIELD,
+                maxAttempts = 2,
+                prerequisiteAnyIds = setOf("msn_flight_school", "msn_sf_school", "msn_night_qual"),
+                minResilience = 14,
+                allowedSpecialties = OperatorSpecialty.entries.toSet(),
+                naturalFitSpecialties = setOf(OperatorSpecialty.RECON, OperatorSpecialty.AVIATION),
+                suitabilitySummary = "Aviators, SF-qualified or Airborne graduates • 14+ RS • Max 2 attempts",
+                graduationStatBonus = StatProfile(0, 2, 0, 2),
+                graduationRewardsSummary = "Grants +2 ST, +2 RS • Awards the SERE Ribbon • Required for SF Aviation"
+            ),
+            baseSuccessRatePct = 58,
+            briefing = "Survival in the field, evading a hunter force, and resisting interrogation in a mock prison camp.",
+            durationSeconds = 28,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 90,
+            primaryFocus = "SERE • Hard",
+            supplyCost = 14.0,
+            rewardCredits = 50.0,
+            rewardSupplies = 10.0,
+            rewardIntel = 14.0,
+            rewardPrestige = 10.0,
+            rewardXp = 110,
+            commsFeed = listOf(
+                "Survival phase: shelter, water and fire with what the woods give.",
+                "Evasion lane: hunter force on the trail all night.",
+                "Resistance lab complete. SERE graduate!"
+            )
+        ),
+        MissionTemplate(
+            id = "msn_sf_aviation_school",
+            title = "School: Special Operations Aviation Qualification",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 46,
+                uniformKit = WardrobeKit.FIELD,
+                maxAttempts = 2,
+                prerequisiteAllIds = setOf("msn_flight_school", "msn_sere_school"),
+                minTech = 18,
+                minStealth = 14,
+                allowedSpecialties = setOf(OperatorSpecialty.AVIATION),
+                naturalFitSpecialties = setOf(OperatorSpecialty.AVIATION),
+                suitabilitySummary = "Warrant aviators only • Flight School and SERE • 18 TC/14 ST • Max 2 attempts",
+                graduationStatBonus = StatProfile(0, 2, 2, 1),
+                graduationRewardsSummary = "Grants +2 ST, +2 TC, +1 RS • Becomes an SF aviator: flies SF missions • Special Operations Aviation patch • Black flight suit"
+            ),
+            baseSuccessRatePct = 46,
+            briefing = "Night, low-level and over-water flying for special operations: precision insertions on target, on time, in the dark.",
+            durationSeconds = 36,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 120,
+            primaryFocus = "SF Aviation • Very Hard",
+            supplyCost = 22.0,
+            rewardCredits = 70.0,
+            rewardSupplies = 10.0,
+            rewardIntel = 16.0,
+            rewardPrestige = 16.0,
+            rewardXp = 150,
+            commsFeed = listOf(
+                "Night low-level navigation over broken terrain.",
+                "Over-water insertion drills with the SF teams.",
+                "Qualified: Special Operations Aviator!"
             )
         ),
         MissionTemplate(
