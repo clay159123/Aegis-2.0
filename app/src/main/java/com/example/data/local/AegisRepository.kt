@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 22
+        const val SAVE_FORMAT_VERSION = 23
     }
 
     private val commanderMutex = Mutex()
@@ -832,7 +832,8 @@ private fun SquadEntity.toDomain(): TacticalSquad {
         standardMessDressStyle = standardMessDressStyleName?.let { n -> DressUniformStyle.entries.find { it.name == n } },
         standardMessHeadgear = standardMessHeadgearName?.let { n -> HeadgearStyle.entries.find { it.name == n } },
         standardAlphasGloves = standardAlphasGloves,
-        standardMessGloves = standardMessGloves
+        standardMessGloves = standardMessGloves,
+        isSpecialForces = isSpecialForces
     )
 }
 
@@ -857,7 +858,8 @@ private fun TacticalSquad.toEntity(): SquadEntity {
         standardMessDressStyleName = standardMessDressStyle?.name,
         standardMessHeadgearName = standardMessHeadgear?.name,
         standardAlphasGloves = standardAlphasGloves,
-        standardMessGloves = standardMessGloves
+        standardMessGloves = standardMessGloves,
+        isSpecialForces = isSpecialForces
     )
 }
 

@@ -555,7 +555,7 @@ class AegisOpsRobolectricTest {
                     onEquipGear = { _, _ -> },
                     onUnequipGear = { _, _ -> },
                     onPurchaseOrUpgradeGear = {},
-                    onSaveSquad = { _, _, members, leader, _, _ ->
+                    onSaveSquad = { _, _, members, leader, _, _, _ ->
                         savedMembers = members
                         savedLeaderId = leader
                     }
@@ -870,7 +870,7 @@ class AegisOpsRobolectricTest {
                             switchedSquadId = sqId
                             switchedKit = kit
                         },
-                        onSaveSquad = { _, _, _, _, _, std ->
+                        onSaveSquad = { _, _, _, _, _, std, _ ->
                             savedStandard = std
                         }
                     )

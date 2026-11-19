@@ -43,7 +43,8 @@ fun SquadEditorDialog(
         memberIds: List<String>,
         leaderId: String?,
         teamLeaderId: String?,
-        standard: SquadUniformStandard
+        standard: SquadUniformStandard,
+        specialForces: Boolean
     ) -> Unit,
     onDisband: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -57,6 +58,9 @@ fun SquadEditorDialog(
     var memberIds by remember(key) { mutableStateOf(editingSquad?.memberIds ?: emptyList()) }
     var leaderId by remember(key) { mutableStateOf(editingSquad?.leaderId) }
     var teamLeaderId by remember(key) { mutableStateOf(editingSquad?.teamLeaderId) }
+    // Item 58/87: normal or SF squad, chosen when forming it; only one SF squad at a time
+    val otherSfSquad = allSquads.firstOrNull { it.isSpecialForces && it.id != key }
+    var specialForces by remember(key) { mutableStateOf(editingSquad?.isSpecialForces == true) }
     var standardPatch by remember(key) {
         mutableStateOf(editingSquad?.standardPatch?.takeIf { it.isDivision } ?: UnitPatchStyle.firstUnusedDivision(allSquads, excludingSquadId = key))
     }
@@ -112,7 +116,8 @@ fun SquadEditorDialog(
             standardMessDressStyle = std.messDressStyle,
             standardMessHeadgear = std.messHeadgear,
             standardAlphasGloves = std.alphasGloves,
-            standardMessGloves = std.messGloves
+            standardMessGloves = std.messGloves,
+            isSpecialForces = specialForces
         )
     }
     val previewSquads = otherSquads + draftSquad
@@ -170,6 +175,13 @@ fun SquadEditorDialog(
                             teamLeaderId = teamLeaderId,
                             fieldOperators = fieldOperators,
                             otherSquads = otherSquads,
+                            specialForces = specialForces,
+                            sfLockedBy = otherSfSquad?.name,
+                            onSpecialForcesChange = { sf ->
+                                specialForces = sf
+                                // An SF squad keeps SF-qualified soldiers only
+                                if (sf) memberIds = memberIds.filter { id -> fieldOperators.find { it.id == id }?.let(TacticalCalculator::isSfQualified) == true }
+                            },
                             onMembersChange = { next ->
                                 memberIds = next
                                 if (leaderId !in next) leaderId = SquadCohesionRules.pickDefaultLeaderId(next, fieldOperators)
@@ -188,6 +200,7 @@ fun SquadEditorDialog(
                             owned = ::owned,
                             standardPatch = standardPatch,
                             onPatchChange = { standardPatch = it },
+                            specialForces = specialForces,
                             kitControls = { kit ->
                                 when (kit) {
                                     WardrobeKit.FIELD -> KitStandardSection(kit, fieldOn, {
@@ -238,7 +251,7 @@ fun SquadEditorDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    onSave(key, squadName, memberIds, leaderId, teamLeaderId, buildStandard())
+                    onSave(key, squadName, memberIds, leaderId, teamLeaderId, buildStandard(), specialForces)
                     onDismiss()
                 },
                 enabled = memberIds.size >= MIN_SQUAD_SIZE,
@@ -264,6 +277,9 @@ private fun RosterTab(
     teamLeaderId: String?,
     fieldOperators: List<Operator>,
     otherSquads: List<TacticalSquad>,
+    specialForces: Boolean,
+    sfLockedBy: String?,
+    onSpecialForcesChange: (Boolean) -> Unit,
     onMembersChange: (List<String>) -> Unit,
     onLeaderChange: (String) -> Unit,
     onTeamLeaderChange: (String?) -> Unit
@@ -276,6 +292,8 @@ private fun RosterTab(
         singleLine = true,
         modifier = Modifier.fillMaxWidth().testTag("squad_name_input")
     )
+
+    SquadTypeSelector(specialForces = specialForces, sfLockedBy = sfLockedBy, onChange = onSpecialForcesChange)
 
     // Cohesion lost to turnover, shown before the player confirms
     if (editingSquad != null && (memberIds != editingSquad.memberIds || leaderId != editingSquad.leaderId)) {
@@ -302,7 +320,7 @@ private fun RosterTab(
     }
 
     Text(
-        text = "SQUAD ROSTER (${members.size}/$MAX_SQUAD_SIZE) • $MIN_SQUAD_SIZE MIN • FULL STRENGTH AT $FULL_STRENGTH_SQUAD_SIZE",
+        text = "SQUAD ROSTER (${members.size}/$MAX_SQUAD_SIZE) • $MIN_SQUAD_SIZE MIN • FULL STRENGTH AT ${if (specialForces) MAX_SQUAD_SIZE else FULL_STRENGTH_SQUAD_SIZE}",
         style = MaterialTheme.typography.labelSmall,
         color = extra.textMuted
     )
@@ -390,7 +408,7 @@ private fun RosterTab(
     }
 
     val otherSquadByMember = otherSquads.flatMap { sq -> sq.memberIds.map { it to sq.name } }.toMap()
-    val candidates = fieldOperators.filter { it.id !in memberIds }
+    val candidates = fieldOperators.filter { it.id !in memberIds && (!specialForces || TacticalCalculator.isSfQualified(it)) }
     if (candidates.isNotEmpty()) {
         HorizontalDivider(color = extra.borderSubtle)
         val full = members.size >= MAX_SQUAD_SIZE
@@ -440,6 +458,7 @@ private fun UniformTab(
     owned: (Operator) -> Set<String>,
     standardPatch: UnitPatchStyle,
     onPatchChange: (UnitPatchStyle) -> Unit,
+    specialForces: Boolean = false,
     kitControls: @Composable (WardrobeKit) -> Unit
 ) {
     val extra = LocalAegisColors.current
@@ -451,7 +470,13 @@ private fun UniformTab(
             DropdownOptionItem(patch, patch.label, patch.subtitle, Color(patch.primaryHex), Color(patch.accentHex))
         }
     }
-    SingleChoiceDropdown(
+    if (specialForces) {
+        Text(
+            "Unit patch: ${UnitPatchStyle.SPECIAL_FORCES.label} (fixed for the SF squad; subdued on field uniforms)",
+            style = MaterialTheme.typography.labelMedium,
+            color = Color(SF_PATCH_RED_BRIGHT)
+        )
+    } else SingleChoiceDropdown(
         label = "Division Patch (left shoulder)",
         selectedText = standardPatch.label,
         selectedPrimaryColor = Color(standardPatch.primaryHex),
@@ -622,5 +647,41 @@ private fun GlovesStandardDropdown(value: Boolean?, tag: String, onSelect: (Bool
         selectedValue = value,
         onSelect = { it?.let(onSelect) },
         fieldTestTag = tag
+    )
+}
+
+/** Item 58/68/87: Normal or Special Forces squad, with the SF option clearly marked. */
+@Composable
+private fun SquadTypeSelector(specialForces: Boolean, sfLockedBy: String?, onChange: (Boolean) -> Unit) {
+    val extra = LocalAegisColors.current
+    Text("SQUAD TYPE", style = MaterialTheme.typography.labelSmall, color = extra.textMuted)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = !specialForces,
+            onClick = { onChange(false) },
+            label = { Text("Normal Squad") },
+            modifier = Modifier.weight(1f).testTag("squad_type_normal")
+        )
+        FilterChip(
+            selected = specialForces,
+            onClick = { onChange(true) },
+            enabled = sfLockedBy == null || specialForces,
+            leadingIcon = { SfMarker() },
+            label = { Text("Special Forces") },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = Color(SF_PATCH_BLACK),
+                selectedLabelColor = Color(SF_PATCH_RED_BRIGHT)
+            ),
+            modifier = Modifier.weight(1f).testTag("squad_type_sf")
+        )
+    }
+    Text(
+        text = when {
+            sfLockedBy != null && !specialForces -> "$sfLockedBy is already the SF squad (one at a time)."
+            specialForces -> "SF-qualified soldiers only, up to $MAX_SQUAD_SIZE. Sterile field uniforms and the SF arrowhead patch."
+            else -> "Any field soldiers, $MIN_SQUAD_SIZE to $MAX_SQUAD_SIZE."
+        },
+        style = MaterialTheme.typography.labelSmall,
+        color = if (specialForces) Color(SF_PATCH_RED_BRIGHT) else extra.textMuted
     )
 }

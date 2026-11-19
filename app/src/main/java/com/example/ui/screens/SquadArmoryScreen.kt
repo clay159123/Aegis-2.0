@@ -53,8 +53,9 @@ fun SquadArmoryScreen(
         memberIds: List<String>,
         leaderId: String?,
         teamLeaderId: String?,
-        standard: SquadUniformStandard
-    ) -> Unit = { _, _, _, _, _, _ -> },
+        standard: SquadUniformStandard,
+        specialForces: Boolean
+    ) -> Unit = { _, _, _, _, _, _, _ -> },
     onDisbandSquad: (String) -> Unit = {},
     onAwardMarksmanship: (String) -> Unit = {},
     onConductSquadInspection: (String) -> Unit = {},

@@ -158,8 +158,8 @@ fun HqOpsScreen(
         }
     }
 
-    // Item 36: SF missions and the UW campaign stay hidden until 3 soldiers are SF-qualified
-    val sfUnlocked = TacticalCalculator.sfMissionsUnlocked(uiState.operators)
+    // Item 58: SF missions and the SF campaign stay hidden until the command forms an SF squad
+    val sfUnlocked = TacticalCalculator.sfMissionsUnlocked(uiState.squads)
     val orderedGroups = remember(activeRotatingSet, sfUnlocked) {
         listOfNotNull(
             OpsMissionGroup(
@@ -248,14 +248,21 @@ fun HqOpsScreen(
             ).eligible
         }
         val readyIds = readyOps.map { it.id }.toSet()
-        val matchingSquad = uiState.squads.firstOrNull { sq ->
+        // Item 58: SF missions are SF-squad-first; other SF-qualified soldiers fill out a short team
+        val sfSquad = TacticalCalculator.sfSquadOf(uiState.squads)
+        val matchingSquad = if (mission.requiresSfTeam) null else uiState.squads.firstOrNull { sq ->
             SquadCohesionRules.orderedMembersForDeployment(
                 squad = sq,
                 eligibleOperatorIds = readyIds,
                 maxCount = mission.maxOperators
             ).size >= mission.minOperators
         }
-        if (matchingSquad != null && !mission.risk.isTraining) {
+        if (mission.requiresSfTeam && sfSquad != null) {
+            val core = SquadCohesionRules.orderedMembersForDeployment(sfSquad, readyIds, mission.maxOperators)
+            val fill = readyOps.map { it.id }.filter { it !in core }.take((mission.minOperators - core.size).coerceAtLeast(0))
+            selectedSquadId = sfSquad.id
+            selectedOperatorIds = core + fill
+        } else if (matchingSquad != null && !mission.risk.isTraining) {
             selectedSquadId = matchingSquad.id
             selectedOperatorIds = SquadCohesionRules.orderedMembersForDeployment(
                 squad = matchingSquad,

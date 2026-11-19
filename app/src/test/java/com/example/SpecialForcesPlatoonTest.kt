@@ -41,8 +41,8 @@ class SpecialForcesPlatoonTest {
         )
         sfMissions.forEach {
             assertEquals(it.id, MissionScope.FIELD_COMBAT, it.scope)
-            assertEquals(it.id, 4, it.minOperators)
-            assertEquals(it.id, 4, it.maxOperators)
+            assertEquals(it.id, TacticalCalculator.SF_MIN_TEAM, it.minOperators)
+            assertEquals(it.id, TacticalCalculator.SF_MAX_TEAM, it.maxOperators)
             assertTrue(it.id, InsertionMethod.HALO in it.allowedInsertions)
             assertEquals(it.id, it.coastal, InsertionMethod.MARITIME in it.allowedInsertions)
         }
@@ -62,22 +62,25 @@ class SpecialForcesPlatoonTest {
     }
 
     @Test
-    fun sfMissionsUnlockAtThreeQualifiedSoldiers() {
-        val two = listOf(sf("a"), sf("b"), soldier("c"))
-        assertFalse(TacticalCalculator.sfMissionsUnlocked(two))
-        assertTrue(TacticalCalculator.sfMissionsUnlocked(two + sf("d")))
-        assertFalse(TacticalCalculator.sfMissionsUnlocked(listOf(sf("a"), sf("b"), sf("x").copy(status = OperatorStatus.FALLEN))))
+    fun sfMissionsUnlockWithAnSfSquad() {
+        val normal = TacticalSquad("sq1", "Alpha", listOf("a", "b"), "a")
+        assertFalse(TacticalCalculator.sfMissionsUnlocked(listOf(normal)))
+        assertFalse(TacticalCalculator.sfMissionsUnlocked(listOf(normal.copy(isSpecialForces = true, memberIds = emptyList()))))
+        assertTrue(TacticalCalculator.sfMissionsUnlocked(listOf(normal, normal.copy(id = "sq2", isSpecialForces = true))))
     }
 
     @Test
-    fun sfTeamsAreFourWithThreeQualifiedAndRewardDifferentMos() {
+    fun sfTeamsAreFourToSixQualifiedAndRewardDifferentMos() {
         val da = mission("msn_sf_da_hostage")
-        val team = listOf(sf("a"), sf("m", OperatorSpecialty.MEDIC), sf("e", OperatorSpecialty.BREACHER), soldier("x", OperatorSpecialty.SIGNALS))
-        assertNull(TacticalCalculator.teamBlocker(da, team, emptyList()))
-        assertNotNull(TacticalCalculator.teamBlocker(da, team.take(3), emptyList()))
-        assertNotNull(TacticalCalculator.teamBlocker(da, listOf(sf("a"), sf("b"), soldier("c"), soldier("d")), emptyList()))
+        val team = listOf(sf("a"), sf("m", OperatorSpecialty.MEDIC), sf("e", OperatorSpecialty.BREACHER), sf("x", OperatorSpecialty.SIGNALS))
+        val sfSquad = listOf(TacticalSquad("sq_sf", "ODA", listOf("a", "m"), "a", isSpecialForces = true))
+        assertNull(TacticalCalculator.teamBlocker(da, team, sfSquad))
+        assertNotNull(TacticalCalculator.teamBlocker(da, team, emptyList()))
+        assertNotNull(TacticalCalculator.teamBlocker(da, team.take(3), sfSquad))
+        assertNotNull(TacticalCalculator.teamBlocker(da, team.take(3) + soldier("c"), sfSquad))
         // Four different MOS beat four of the same
         val sameMos = listOf(sf("a"), sf("b"), sf("c"), sf("d"))
+        assertNull(TacticalCalculator.teamBlocker(da, sameMos + sf("f") + sf("g"), sfSquad.map { it.copy(memberIds = listOf("a", "b")) }))
         assertEquals(12, TacticalCalculator.mosCoverage(da, team).second)
         assertEquals(3, TacticalCalculator.mosCoverage(da, sameMos).second)
         // Heroism rolls apply (field combat)

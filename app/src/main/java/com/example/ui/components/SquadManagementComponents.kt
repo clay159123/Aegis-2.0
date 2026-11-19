@@ -102,7 +102,8 @@ fun FieldSquadsSection(
                 val unanimousKit = members.map { it.activeWardrobeKit }.distinct().singleOrNull()
 
                 TacticalPanelCard(
-                    borderColor = cohesionColor.copy(alpha = 0.55f),
+                    // Item 68: the SF squad stands out in red
+                    borderColor = if (squad.isSpecialForces) Color(SF_PATCH_RED_BRIGHT).copy(alpha = 0.8f) else cohesionColor.copy(alpha = 0.55f),
                     modifier = Modifier.testTag("squad_card_${squad.id}")
                 ) {
                     Row(
@@ -115,18 +116,22 @@ fun FieldSquadsSection(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                if (squad.isSpecialForces) SfMarker()
                                 Text(
                                     text = squad.name.uppercase(),
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = extra.brassBright
+                                    color = if (squad.isSpecialForces) Color(SF_PATCH_RED_BRIGHT) else extra.brassBright,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 Surface(
                                     shape = MaterialTheme.shapes.extraSmall,
                                     color = cohesionColor.copy(alpha = 0.16f)
                                 ) {
                                     Text(
-                                        text = "${members.size}/$MAX_SQUAD_SIZE • $readyCount READY" +
-                                            if (members.size >= FULL_STRENGTH_SQUAD_SIZE) " • FULL STRENGTH" else "",
+                                        text = (if (squad.isSpecialForces) "SF • " else "") + "${members.size}/$MAX_SQUAD_SIZE • $readyCount READY" +
+                                            if (members.size >= (if (squad.isSpecialForces) MAX_SQUAD_SIZE else FULL_STRENGTH_SQUAD_SIZE)) " • FULL STRENGTH" else "",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = cohesionColor,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

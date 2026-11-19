@@ -83,8 +83,14 @@ object PromotionBoardEvaluator {
             allOperators.filter { it.status == OperatorStatus.HQ_STAFF && it.id != operator.id }
                 .maxOfOrNull { it.hqRole?.warrantPromotionDiscountPct ?: 0 } ?: 0
         } else 0
-        val creditCost = currentRank.promotionCreditCost() * (100 - warrantDiscountPct) / 100.0
-        val prestigeCost = currentRank.promotionPrestigeCost() * (100 - warrantDiscountPct) / 100
+        // Item 110: a seated Command Sergeant Major makes enlisted boards cheaper
+        val enlistedDiscountPct = if (currentRank.tier.isEnlisted && nextRank?.tier?.isEnlisted == true) {
+            allOperators.filter { it.status == OperatorStatus.HQ_STAFF && it.id != operator.id }
+                .maxOfOrNull { it.hqRole?.enlistedBoardDiscountPct ?: 0 } ?: 0
+        } else 0
+        val discountPct = maxOf(warrantDiscountPct, enlistedDiscountPct)
+        val creditCost = currentRank.promotionCreditCost() * (100 - discountPct) / 100.0
+        val prestigeCost = currentRank.promotionPrestigeCost() * (100 - discountPct) / 100
 
         // Item 107: an HQ billet's top rank ends promotions there (treated like having no next rank)
         if (nextRank == null || operator.isAtHqRankCap) {

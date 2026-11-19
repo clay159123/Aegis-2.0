@@ -98,6 +98,7 @@ fun OperatorUniformPreview(
         emptyList()
     }
     val combatPatch = UniformRegaliaRules.resolveCombatPatch(renderOperator)
+    val sterileField = UniformRegaliaRules.isSfSquadMember(renderOperator, squads)
     val marksmanshipTier = UniformRegaliaRules.resolveMarksmanshipTier(renderOperator, equippedGear)
     val overseasBars = UniformRegaliaRules.resolveOverseasBars(renderOperator)
     val awardDevices = (rackDecorations + hangingMedals)
@@ -164,8 +165,10 @@ fun OperatorUniformPreview(
                     h = h,
                     cx = cx,
                     operator = renderOperator,
-                    wornRegalia = wornRegalia,
-                    combatPatch = combatPatch,
+                    wornRegalia = if (sterileField) wornRegalia.copy(shoulderTabs = emptyList(), chestBadges = emptyList(),
+                        chestPinAboveRack = null, chestPinLeftPocket = null, chestPinRightPocket = null) else wornRegalia,
+                    combatPatch = if (sterileField) UnitPatchStyle.NONE else combatPatch,
+                    sterile = sterileField,
                     leaderRole = leaderRole,
                     equippedWeaponId = equippedWeaponId,
                     skinTone = skinTone,
@@ -1394,7 +1397,8 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
             val flashH = h * 0.026f
             // Item 66: squad members wear a flash in their squad's division patch colors (fill and diagonal
             // stripe); soldiers with no squad wear the plain Army flash for their beret
-            val squadPatch = operator.tailorOverrides.unitPatch.takeIf { it.isDivision }
+            // Item 68: the SF squad wears a black and red SF flash
+            val squadPatch = operator.tailorOverrides.unitPatch.takeIf { it.isDivision || it == UnitPatchStyle.SPECIAL_FORCES }
             val flashFill = squadPatch?.let { Color(it.primaryHex) } ?: when (operator.headgearStyle) {
                 HeadgearStyle.TAN_BERET -> Color(0xFF14181F)
                 HeadgearStyle.MAROON_BERET -> Color(0xFF1C4378)
@@ -1619,7 +1623,7 @@ internal fun DrawScope.drawWrappedSleeveRankInsignia(
         OperatorRank.SSG -> Triple(3, 1, false)
         OperatorRank.SFC -> Triple(3, 2, false)
         OperatorRank.MSG -> Triple(3, 3, false)
-        OperatorRank.SGM -> Triple(3, 3, true)
+        OperatorRank.SGM, OperatorRank.CSM -> Triple(3, 3, true)
         else -> Triple(rank.insigniaCount.coerceAtMost(3), (rank.insigniaCount - 3).coerceIn(0, 3), false)
     }
 
@@ -1708,6 +1712,12 @@ internal fun DrawScope.drawWrappedSleeveRankInsignia(
         val starFrac = startFrac + 0.020f + chevrons * chevStep
         val sx = sleeveFaceX(sideSign, starFrac, 0.54f)
         drawStar(Offset(sx, h * starFrac), w * 0.009f, w * 0.004f, trimCol)
+        // Item 110: the Command Sergeant Major's star sits in a wreath
+        if (rank == OperatorRank.CSM) {
+            val r = w * 0.0145f
+            drawArc(trimCol, startAngle = 20f, sweepAngle = 140f, useCenter = false,
+                topLeft = Offset(sx - r, h * starFrac - r), size = Size(r * 2f, r * 2f), style = Stroke(width = 1.2f, cap = StrokeCap.Round))
+        }
     }
 }
 
@@ -2014,7 +2024,9 @@ private fun DrawScope.drawFieldTacticalFigure(
     hasWeapon: Boolean,
     hasNvg: Boolean,
     textMeasurer: TextMeasurer,
-    flightSuit: Boolean = false
+    flightSuit: Boolean = false,
+    /** Item 58: SF squad field uniforms carry no name, rank, tabs, badges or awards. */
+    sterile: Boolean = false
 ) {
     val primaryCamo = Color(operator.camoPattern.primaryHex)
     // Item 105: sewn-on items are subdued in the colors of the camo they're sewn onto
@@ -2160,6 +2172,7 @@ private fun DrawScope.drawFieldTacticalFigure(
         cornerRadius = CornerRadius(3f, 3f),
         style = Stroke(width = 1.1f)
     )
+    if (!sterile) {
     val tabCenter = Offset(cx, rankTabTop + rankTabH * 0.5f)
     when (operator.rank.tier) {
         RankTier.FLAG_OFFICER -> {
@@ -2227,9 +2240,11 @@ private fun DrawScope.drawFieldTacticalFigure(
         }
     }
 
+    }
+
     // Leader tab below the rank: Squad Leader green with brass border and gold star,
     // Team Leader green with silver border and silver chevron
-    if (leaderRole != LeaderRole.NONE) {
+    if (leaderRole != LeaderRole.NONE && !sterile) {
         val isTeamLeader = leaderRole == LeaderRole.TEAM_LEADER
         val leadW = rankTabW * if (isTeamLeader) 0.9f else 1f
         val leadH = h * 0.016f
@@ -2279,12 +2294,12 @@ private fun DrawScope.drawFieldTacticalFigure(
         listOf(nameCx to operator.callsign.trim().uppercase().take(10), branchCx to "AEGIS").forEach { (tx, label) ->
             drawRoundRect(secondaryCamo, Offset(tx - tapeW / 2f, tapeTop), Size(tapeW, tapeH), CornerRadius(1.5f, 1.5f))
             drawRoundRect(threadCol.copy(alpha = 0.55f), Offset(tx - tapeW / 2f, tapeTop), Size(tapeW, tapeH), CornerRadius(1.5f, 1.5f), style = Stroke(width = 0.8f))
-            drawFieldTapeText(label, Offset(tx, tapeTop + tapeH / 2f), tapeW, tapeH, threadCol, textMeasurer)
+            if (!sterile) drawFieldTapeText(label, Offset(tx, tapeTop + tapeH / 2f), tapeW, tapeH, threadCol, textMeasurer)
         }
     }
 
     // Above the AEGIS tape: Slot 1 (combat/expert) badge with the Slot 2 skill badge below it, sewn on subdued
-    val fieldBadges = if (flightSuit) emptyList() else listOfNotNull(wornRegalia.chestPinAboveRack, wornRegalia.chestPinLeftPocket)
+    val fieldBadges = if (flightSuit || sterile) emptyList() else listOfNotNull(wornRegalia.chestPinAboveRack, wornRegalia.chestPinLeftPocket)
     val badgeW = w * 0.086f
     val badgeH = h * 0.022f
     subduedLayer(subduedLow, subduedHigh) {

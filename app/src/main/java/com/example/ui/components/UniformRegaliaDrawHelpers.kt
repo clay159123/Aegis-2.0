@@ -669,6 +669,32 @@ internal fun DrawScope.drawUnitPatchEmblem(
             )
         }
 
+        // Special Forces: arrowhead with an upright dagger crossed by three lightning bolts
+        UnitPatchStyle.SPECIAL_FORCES -> {
+            val head = Path().apply {
+                moveTo(center.x, center.y - ry * 1.25f)
+                lineTo(center.x + rx * 0.95f, center.y + ry * 0.55f)
+                quadraticTo(center.x, center.y + ry * 0.2f, center.x - rx * 0.95f, center.y + ry * 0.55f)
+                close()
+            }
+            drawPath(head, color = accent, style = Stroke(width = stroke, join = StrokeJoin.Round))
+            // Dagger: blade, guard and grip
+            val steel = accent.copy(alpha = 0.95f)
+            drawLine(steel, Offset(center.x, center.y - ry * 0.95f), Offset(center.x, center.y + ry * 0.35f), strokeWidth = stroke * 1.1f, cap = StrokeCap.Round)
+            drawLine(steel, Offset(center.x - rx * 0.32f, center.y + ry * 0.12f), Offset(center.x + rx * 0.32f, center.y + ry * 0.12f), strokeWidth = stroke * 0.8f)
+            // Three lightning bolts, lower left to upper right
+            for (k in -1..1) {
+                val oy = k * ry * 0.32f
+                val bolt = Path().apply {
+                    moveTo(center.x - rx * 0.6f, center.y + ry * 0.1f + oy)
+                    lineTo(center.x - rx * 0.12f, center.y - ry * 0.12f + oy)
+                    lineTo(center.x + rx * 0.08f, center.y + ry * 0.02f + oy)
+                    lineTo(center.x + rx * 0.6f, center.y - ry * 0.25f + oy)
+                }
+                drawPath(bolt, color = accent, style = Stroke(width = stroke * 0.6f, join = StrokeJoin.Miter))
+            }
+        }
+
         // Aviation Brigade: spread wings around a three-blade rotor hub
         UnitPatchStyle.AVIATION_BRIGADE -> {
             val gold = Color(0xFFD8B24C)

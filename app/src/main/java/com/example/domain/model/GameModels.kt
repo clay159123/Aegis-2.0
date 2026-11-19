@@ -262,7 +262,11 @@ enum class OperatorRank(
     CW2("CW2", "W-2", "Chief Warrant Officer 2", RankTier.WARRANT, 2600, 2),
     CW3("CW3", "W-3", "Chief Warrant Officer 3", RankTier.WARRANT, 3300, 3),
     CW4("CW4", "W-4", "Chief Warrant Officer 4", RankTier.WARRANT, 4100, 4),
-    CW5("CW5", "W-5", "Chief Warrant Officer 5", RankTier.WARRANT, 5000, 5);
+    CW5("CW5", "W-5", "Chief Warrant Officer 5", RankTier.WARRANT, 5000, 5),
+
+    // Item 110: the Command Sergeant Major's grade (E-9, same as SGM). Never comes from XP; a SGM seated
+    // as the CSM wears it. Kept last so no other ordinal moves.
+    CSM("CSM", "E-9", "Command Sergeant Major", RankTier.SNCO, 1520, 7);
 
     /** Officer uniforms and courtesies: commissioned, flag and warrant officers. */
     val isOfficer: Boolean get() = tier.isOfficer
@@ -283,6 +287,7 @@ enum class OperatorRank(
         CW3 -> LT1.ordinal
         CW4 -> CPT.ordinal
         CW5 -> MAJ.ordinal
+        CSM -> SGM.ordinal
         else -> ordinal
     }
     val isFieldGradeOfficer: Boolean get() = this == MAJ || this == LTC || this == COL
@@ -312,7 +317,7 @@ enum class OperatorRank(
             if (maxTier == RankTier.WARRANT) return forXp(xp, RankTier.SNCO)
             var current = PVT
             for (rank in entries) {
-                if (rank.isWarrant) continue
+                if (rank.isWarrant || rank == CSM) continue
                 if (rank.tier.order <= maxTier.order && xp >= rank.xpRequired) {
                     current = rank
                 }
@@ -342,6 +347,7 @@ enum class OperatorRank(
                 return if (current == CW5) null else forWarrantGrade(current.warrantGrade + 1)
             }
             if (current == GEN) return null
+            if (current == CSM) return nextRank(SGM)
             val idx = entries.indexOf(current)
             return if (idx in 0 until entries.lastIndex) entries[idx + 1] else null
         }
@@ -400,7 +406,8 @@ enum class OperatorStatus(val label: String) {
  * Major (enlisted only) and stops at SGM.
  */
 fun HqStaffRole.rankCapFor(rank: OperatorRank): OperatorRank? = when (this) {
-    HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.DEPUTY_COMMANDER, HqStaffRole.CCWO_COMMAND_CHIEF_WARRANT -> null
+    HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.DEPUTY_COMMANDER, HqStaffRole.CCWO_COMMAND_CHIEF_WARRANT,
+    HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR -> null
     HqStaffRole.XO_CHIEF_OF_STAFF -> OperatorRank.COL
     HqStaffRole.S3_OPS_DIRECTOR -> if (rank.tier.isEnlisted) OperatorRank.SGM else null
     HqStaffRole.AIR_OPS_OFFICER -> if (rank.isWarrant) OperatorRank.CW4 else OperatorRank.MAJ
@@ -412,7 +419,7 @@ fun HqStaffRole.rankCapFor(rank: OperatorRank): OperatorRank? = when (this) {
 }
 
 /** Item 107: billets enlisted soldiers only can hold. */
-val HqStaffRole.isEnlistedOnly: Boolean get() = this == HqStaffRole.S3_OPS_DIRECTOR
+val HqStaffRole.isEnlistedOnly: Boolean get() = this == HqStaffRole.S3_OPS_DIRECTOR || this == HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR
 
 enum class HqStaffRole(
     val slotOrder: Int,
@@ -440,7 +447,16 @@ enum class HqStaffRole(
     /** Cut to warrant officer promotion costs while filled. */
     val warrantPromotionDiscountPct: Int = 0,
     /** Cut to helicopter insertion supply cost and risk while filled (insertions arrive in Session 10). */
-    val heloInsertionBonusPct: Int = 0
+    val heloInsertionBonusPct: Int = 0,
+    /** Item 102: pass bonus on SF missions and SF campaign stages, and on SF schools. */
+    val sfMissionPassBonusPct: Int = 0,
+    val sfSchoolPassBonusPct: Int = 0,
+    /** Item 102: the billet needs an SF-qualified soldier, SFC or above (or an officer or warrant). */
+    val requiresSfQualified: Boolean = false,
+    /** Item 110: cheaper enlisted promotion boards, easier NCO schools and faster cohesion. */
+    val enlistedBoardDiscountPct: Int = 0,
+    val ncoSchoolPassBonusPct: Int = 0,
+    val cohesionGainBonusPct: Int = 0
 ) {
     CO_COMMANDING_OFFICER(
         slotOrder = 1,
@@ -472,6 +488,22 @@ enum class HqStaffRole(
         survivalBonusPct = 2,
         efficiencyBonusPct = 5,
         prestigeBonusPct = 10
+    ),
+    /** Item 110: the CO's senior enlisted partner; unlocks with the XO. */
+    CSM_COMMAND_SERGEANT_MAJOR(
+        slotOrder = 2,
+        requiredHqLevel = 1,
+        shortCode = "CSM",
+        title = "Command Sergeant Major",
+        description = "The command's senior enlisted leader. Smooths enlisted promotion boards, sharpens the NCO schools and pulls squads together faster.",
+        minRank = OperatorRank.SGM,
+        minMissionsRequired = 4,
+        survivalBonusPct = 1,
+        efficiencyBonusPct = 3,
+        xpBonusPct = 5,
+        enlistedBoardDiscountPct = 20,
+        ncoSchoolPassBonusPct = 5,
+        cohesionGainBonusPct = 20
     ),
     S1_PERSONNEL_HONORS(
         slotOrder = 3,
@@ -540,6 +572,24 @@ enum class HqStaffRole(
         supplyDiscountPct = 10,
         survivalBonusPct = 3,
         efficiencyBonusPct = 3
+    ),
+    /** Item 102: the HQ's Special Forces officer; unlocks with the S-4. */
+    SOF_SPECIAL_OPERATIONS(
+        slotOrder = 6,
+        requiredHqLevel = 4,
+        shortCode = "SOF",
+        title = "SOF: Special Operations Officer",
+        description = "SF-qualified staff officer backing the SF squad: better odds on SF missions, SF campaign stages and SF schools.",
+        minRank = OperatorRank.SFC,
+        minMissionsRequired = 4,
+        requiredSchoolIds = setOf("msn_sf_school"),
+        requiredSchoolLabel = "Special Forces Qualification Course",
+        intelFlowPct = 6,
+        survivalBonusPct = 2,
+        efficiencyBonusPct = 3,
+        sfMissionPassBonusPct = 5,
+        sfSchoolPassBonusPct = 6,
+        requiresSfQualified = true
     ),
     DEPUTY_COMMANDER(
         slotOrder = 7,
@@ -615,6 +665,11 @@ enum class HqStaffRole(
             if (efficiencyBonusPct > 0) add("+${efficiencyBonusPct}% Eff")
             if (prestigeBonusPct > 0) add("+${prestigeBonusPct}% PRS")
             if (xpBonusPct > 0) add("+${xpBonusPct}% XP")
+            if (sfMissionPassBonusPct > 0) add("+${sfMissionPassBonusPct}% SF Ops")
+            if (sfSchoolPassBonusPct > 0) add("+${sfSchoolPassBonusPct}% SF Schools")
+            if (enlistedBoardDiscountPct > 0) add("-${enlistedBoardDiscountPct}% Enlisted Boards")
+            if (ncoSchoolPassBonusPct > 0) add("+${ncoSchoolPassBonusPct}% NCO Schools")
+            if (cohesionGainBonusPct > 0) add("+${cohesionGainBonusPct}% Cohesion")
         }.joinToString(" • ")
 }
 
@@ -694,6 +749,11 @@ enum class DressDisplayMode(val label: String) {
     CLEAN("None Worn")
 }
 
+/** Item 58/68: the SF patch and beret flash colors. */
+const val SF_PATCH_BLACK = 0xFF141414
+const val SF_PATCH_RED = 0xFFB3202A
+const val SF_PATCH_RED_BRIGHT = 0xFFE0444C
+
 enum class UnitPatchStyle(
     val label: String,
     val subtitle: String,
@@ -709,6 +769,8 @@ enum class UnitPatchStyle(
     DIVISION_5("5th Aegis Division", "Slate gray and orange shield with a tower", 0xFF4A5563, 0xFFE8862A),
     DIVISION_6("6th Aegis Division", "Navy and silver shield with an eagle", 0xFF13213F, 0xFFC9D1DC),
     SUPREME_HQ("Aegis High Command", "Worn by HQ staff only", 0xFF141E33, 0xFFF5D576),
+    /** Item 58: the SF squad's arrowhead patch (dagger and lightning), black and red; subdued in the field. */
+    SPECIAL_FORCES("Special Forces", "Black and red arrowhead with dagger and lightning; worn by the SF squad", 0xFF141414, 0xFFB3202A),
     /** Item 100: the aviators' own unit patch. */
     AVIATION_BRIGADE("Aegis Aviation Brigade", "Sky blue and gold shield with winged rotor; worn by aviators", 0xFF1E3550, 0xFF8EC3EA),
     UNASSIGNED("Unassigned", "Generic Aegis patch for field soldiers without a squad", 0xFF5B6472, 0xFFB8C0CC),
@@ -1298,6 +1360,10 @@ data class Operator(
     val rank: OperatorRank
         get() {
             val earned = earnedRank
+            // Item 110: a SGM seated as Command Sergeant Major wears the CSM grade
+            if (earned == OperatorRank.SGM && status == OperatorStatus.HQ_STAFF && hqRole == HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR) {
+                return OperatorRank.CSM
+            }
             val cap = hqRankCap ?: return earned
             return if (earned.seniorityIndex > cap.seniorityIndex) cap else earned
         }
@@ -1644,7 +1710,9 @@ data class TacticalSquad(
     val standardMessDressStyle: DressUniformStyle? = null,
     val standardMessHeadgear: HeadgearStyle? = null,
     val standardAlphasGloves: Boolean? = null,
-    val standardMessGloves: Boolean? = null
+    val standardMessGloves: Boolean? = null,
+    /** Item 58: the command's one Special Forces squad (SF-qualified members only, up to 6). */
+    val isSpecialForces: Boolean = false
 ) {
     val clampedCohesionXp: Int get() = cohesionXp.coerceIn(0, MAX_SQUAD_COHESION_XP)
     val cohesionScore: Int get() = (clampedCohesionXp / 10).coerceIn(0, 100)

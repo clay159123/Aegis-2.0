@@ -155,7 +155,8 @@ data class SquadEntity(
     val standardMessDressStyleName: String? = null,
     val standardMessHeadgearName: String? = null,
     val standardAlphasGloves: Boolean? = null,
-    val standardMessGloves: Boolean? = null
+    val standardMessGloves: Boolean? = null,
+    val isSpecialForces: Boolean = false
 )
 
 @Entity(tableName = "citations")

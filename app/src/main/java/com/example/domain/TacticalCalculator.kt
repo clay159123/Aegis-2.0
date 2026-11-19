@@ -128,10 +128,7 @@ object TacticalCalculator {
         GameCatalog.campaigns.any { !it.isSpecialForces } &&
             GameCatalog.campaigns.filter { !it.isSpecialForces }.all { it.id in completedCampaignIds }
 
-    /**
-     * Item 49: the SF campaign opens once the command has an SF squad, not after Campaign IV. Until the SF
-     * squad arrives (Session 17), 3 SF-qualified soldiers stand in for it. Set from game state.
-     */
+    /** Item 49/58: the SF campaign and SF missions open once the command has an SF squad. Set from game state. */
     @Volatile
     var sfSquadEstablished: Boolean = false
 
@@ -736,17 +733,27 @@ object TacticalCalculator {
     const val PLATOON_LEADER_SURVIVAL_BONUS = 2
     /** Two-squad missions pay about this much more credit and prestige than a comparable one-squad mission. */
     const val PLATOON_REWARD_MULT = 1.6
-    const val SF_TEAM_SIZE = 4
-    const val SF_MIN_QUALIFIED = 3
-    /** SF missions stay hidden until this many soldiers are SF-qualified. */
-    const val SF_UNLOCK_QUALIFIED = 3
+    /** Item 58: SF teams are 4 to 6 SF-qualified soldiers, built around the SF squad. */
+    const val SF_MIN_TEAM = 4
+    const val SF_MAX_TEAM = 6
+    /** SF squad members a team needs; the rest can be SF-qualified soldiers on temporary reassignment. */
+    const val SF_SQUAD_CORE = 2
     const val SF_SCHOOL_ID = "msn_sf_school"
     const val MFF_BADGE_ID = "insig_mff_wings"
     const val UW_CAMPAIGN_ID = "camp_uw"
 
-    /** True once the command has enough SF-qualified soldiers to show SF missions. */
-    fun sfMissionsUnlocked(operators: List<Operator>): Boolean =
-        operators.count { it.unlocked && !it.status.isOutOfActiveService && isSfQualified(it) } >= SF_UNLOCK_QUALIFIED
+    /** Item 102: SF schools the SOF officer supports (Language school joins in Session 21). */
+    val SF_SCHOOL_IDS: Set<String> = setOf("msn_sf_school", "msn_combat_diver_school", "msn_mff_school")
+
+    /** SF missions and every stage of the SF campaign. */
+    fun isSfOperation(mission: MissionTemplate): Boolean =
+        mission.requiresSfTeam || GameCatalog.campaigns.any { it.id == mission.campaignId && it.isSpecialForces }
+
+    /** Item 58: the command's SF squad, if it has one. */
+    fun sfSquadOf(squads: List<TacticalSquad>): TacticalSquad? = squads.firstOrNull { it.isSpecialForces && it.memberIds.isNotEmpty() }
+
+    /** True once the command has an SF squad, which opens SF missions and the SF campaign. */
+    fun sfMissionsUnlocked(squads: List<TacticalSquad>): Boolean = sfSquadOf(squads) != null
 
     /** The platoon leader on a two-squad mission: the chosen officer, or the senior commissioned officer on the team. */
     fun platoonLeaderFor(mission: MissionTemplate, team: List<Operator>, chosenId: String? = null): Operator? {
@@ -761,9 +768,11 @@ object TacticalCalculator {
      */
     fun teamBlocker(mission: MissionTemplate, team: List<Operator>, squads: List<TacticalSquad>, platoonLeaderId: String? = null): String? {
         if (mission.requiresSfTeam) {
-            if (team.size != SF_TEAM_SIZE) return "SF teams are exactly $SF_TEAM_SIZE soldiers (${team.size} selected)"
-            val sf = team.count { isSfQualified(it) }
-            if (sf < SF_MIN_QUALIFIED) return "Needs $SF_MIN_QUALIFIED+ SF-qualified soldiers ($sf/$SF_MIN_QUALIFIED)"
+            if (team.size !in SF_MIN_TEAM..SF_MAX_TEAM) return "SF teams are $SF_MIN_TEAM to $SF_MAX_TEAM soldiers (${team.size} selected)"
+            team.firstOrNull { !isSfQualified(it) }?.let { return "${it.callsign} isn't SF-qualified" }
+            val sfSquad = sfSquadOf(squads) ?: return "Form an SF squad first"
+            val core = team.count { it.id in sfSquad.memberIds }
+            if (core < SF_SQUAD_CORE) return "Needs $SF_SQUAD_CORE+ from ${sfSquad.name} ($core/$SF_SQUAD_CORE)"
         }
         if (mission.requiredSquads >= 2) {
             val squadsOnTeam = squads.count { sq -> team.count { it.id in sq.memberIds } >= 2 }
@@ -1134,7 +1143,12 @@ object TacticalCalculator {
         val survivalBonusPct: Int = 0,
         val efficiencyBonusPct: Int = 0,
         val prestigeBonusPct: Int = 0,
-        val xpBonusPct: Int = 0
+        val xpBonusPct: Int = 0,
+        /** Items 102/110: billet-specific bonuses (the best seated billet counts). */
+        val sfMissionPassBonusPct: Int = 0,
+        val sfSchoolPassBonusPct: Int = 0,
+        val ncoSchoolPassBonusPct: Int = 0,
+        val cohesionGainBonusPct: Int = 0
     ) {
         val prestigeMultiplier: Double get() = 1.0 + prestigeBonusPct / 100.0
         val xpMultiplier: Double get() = 1.0 + xpBonusPct / 100.0
@@ -1184,7 +1198,11 @@ object TacticalCalculator {
             survivalBonusPct = surv.coerceAtMost(15),
             efficiencyBonusPct = eff.coerceAtMost(35),
             prestigeBonusPct = prs,
-            xpBonusPct = xp
+            xpBonusPct = xp,
+            sfMissionPassBonusPct = staff.maxOf { it.hqRole?.sfMissionPassBonusPct ?: 0 },
+            sfSchoolPassBonusPct = staff.maxOf { it.hqRole?.sfSchoolPassBonusPct ?: 0 },
+            ncoSchoolPassBonusPct = staff.maxOf { it.hqRole?.ncoSchoolPassBonusPct ?: 0 },
+            cohesionGainBonusPct = staff.maxOf { it.hqRole?.cohesionGainBonusPct ?: 0 }
         )
     }
 
@@ -1202,6 +1220,9 @@ object TacticalCalculator {
         }
         if (rankShort) {
             missing += "Requires ${role.minRank.code} (${role.minRank.payGrade})+ (currently ${operator.rank.code})"
+        }
+        if (role.requiresSfQualified && !isSfQualified(operator)) {
+            missing += "Requires Special Forces qualification"
         }
         if (role.isEnlistedOnly && !operator.rank.tier.isEnlisted) {
             missing += "Enlisted only (${role.title})"
@@ -1260,6 +1281,9 @@ object TacticalCalculator {
             OperatorStatus.READY -> Unit
         }
 
+        if (mission.requiresSfTeam && !isSfQualified(operator)) {
+            return EligibilityResult(false, listOf("SF-qualified soldiers only"))
+        }
         if (operator.isAviator && mission.scope == MissionScope.FIELD_COMBAT) {
             return EligibilityResult(false, listOf("Aviators fly insertions; they don't join ground teams"))
         }
@@ -1869,7 +1893,13 @@ object TacticalCalculator {
         // Training Range bonus still stops at the school's cap
         val rangeBonus = rangeSchoolBonusPct(mission, facilities)
         val airfieldBonus = if (mission.id == FLIGHT_SCHOOL_MISSION_ID) airfieldFlightSchoolBonus(facilityLevel(facilities, FacilityType.AIRFIELD)) else 0
-        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus + rangeBonus + airfieldBonus).coerceIn(15, maxCap)
+        // Items 102/110: the SOF officer helps SF schools; the CSM helps the NCO schools
+        val billetBonus = when (mission.id) {
+            in SF_SCHOOL_IDS -> hqStaffSummary?.sfSchoolPassBonusPct ?: 0
+            "msn_nco_school", "msn_snco_school" -> hqStaffSummary?.ncoSchoolPassBonusPct ?: 0
+            else -> 0
+        }
+        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus + rangeBonus + airfieldBonus + billetBonus).coerceIn(15, maxCap)
     }
 
     fun missionSuccessOddsPct(
@@ -1924,7 +1954,9 @@ object TacticalCalculator {
         val platoonBonus = if (platoonLeaderFor(mission, selectedOperators) != null) PLATOON_LEADER_PASS_BONUS else 0
         val theaterPerk = if (mission.scope == MissionScope.FIELD_COMBAT) campaignFieldPassBonus() else 0
         val camo = teamCamoEffect(mission, selectedOperators, squads, smartWardrobeEnabled).passDelta
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo)
+        // Item 102: the SOF officer backs SF missions and SF campaign stages
+        val sofBonus = if (isSfOperation(mission)) hqStaffSummary?.sfMissionPassBonusPct ?: 0 else 0
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus)
             .coerceIn(minOdds, maxOdds)
     }
 
@@ -2070,7 +2102,8 @@ object TacticalCalculator {
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {
         val hqLevel = facilityLevel(facilities, FacilityType.COMMAND_HQ)
-        return (2 + hqLevel).coerceAtMost(HqStaffRole.entries.size)
+        // Ladder positions; the CSM and SOF billets share a rung with the XO and S-4
+        return (2 + hqLevel).coerceAtMost(HqStaffRole.entries.maxOf { it.slotOrder })
     }
 
     /** Number of active deployments that use an HQ tasking slot. Schools (TRAINING) never do. */
@@ -3136,6 +3169,13 @@ object TacticalCalculator {
                 HqStaffRole.S4_LOGISTICS_MEDEVAC -> {
                     add("insig_logistics_crest")
                     add("medal_meritorious")
+                }
+                HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR -> {
+                    add("medal_meritorious")
+                }
+                HqStaffRole.SOF_SPECIAL_OPERATIONS -> {
+                    add("medal_meritorious")
+                    if (effectiveStaffOp.rank.tier.isOfficer) add("insig_staff_crest")
                 }
                 HqStaffRole.S1_PERSONNEL_HONORS, HqStaffRole.S3_OPS_DIRECTOR -> {
                     add("medal_meritorious")
