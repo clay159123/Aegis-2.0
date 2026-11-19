@@ -443,7 +443,10 @@ object UniformRegaliaRules {
         if (chosen != UnitPatchStyle.AUTO_MOS) return chosen
         if (operator.status == OperatorStatus.HQ_STAFF) return UnitPatchStyle.SUPREME_HQ
         // Item 100: aviators wear the Aviation Brigade patch
-        if (operator.specialty == OperatorSpecialty.AVIATION) return UnitPatchStyle.AVIATION_BRIGADE
+        if (operator.specialty == OperatorSpecialty.AVIATION) {
+            // Item 111: SF aviators wear the Special Operations Aviation patch
+            return if (TacticalCalculator.isSfAviator(operator)) UnitPatchStyle.SOA else UnitPatchStyle.AVIATION_BRIGADE
+        }
         val squad = squads.firstOrNull { operator.id in it.memberIds }
         // Item 58: the SF squad wears the SF arrowhead
         if (squad?.isSpecialForces == true) return UnitPatchStyle.SPECIAL_FORCES

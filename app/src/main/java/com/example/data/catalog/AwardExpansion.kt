@@ -83,8 +83,8 @@ internal object AwardExpansion {
         "medal_army_commendation" to 14, "medal_joint_achievement" to 15, "medal_army_achievement" to 16,
         "medal_good_conduct" to 18, "medal_national_defense" to 19, "medal_expeditionary" to 20,
         "medal_armed_forces_service" to 21, "medal_humanitarian" to 22, "medal_nco_dev" to 23,
-        "medal_night_owl" to 24, "medal_basic_training" to 25, "medal_overseas_service" to 26,
-        "medal_nato" to 27, "medal_un" to 28
+        "medal_sere" to 24, "medal_night_owl" to 25, "medal_basic_training" to 26, "medal_overseas_service" to 27,
+        "medal_nato" to 28, "medal_un" to 29
     )
 
     fun withPrecedence(m: MedalDefinition): MedalDefinition =

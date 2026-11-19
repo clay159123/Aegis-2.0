@@ -453,7 +453,8 @@ fun DressAwardsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            WardrobeKit.entries.forEach { kit ->
+                            // Item 112: pilots don't see a Field kit at all
+                            WardrobeKit.entries.filter { !(it == WardrobeKit.FIELD && selectedOp.isAviator) }.forEach { kit ->
                                 val available = kit.isAvailableFor(selectedOp)
                                 val selected = previewKit == kit
                                 FilterChip(

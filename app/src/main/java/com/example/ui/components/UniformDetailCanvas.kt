@@ -59,11 +59,14 @@ fun OperatorUniformPreview(
     val extra = LocalAegisColors.current
     val textMeasurer = rememberTextMeasurer()
     val ownedIds = awardedMedals.map { it.id }.toSet()
-    val inferredKit = kitOverride ?: when {
+    val inferredKit = (kitOverride ?: when {
         operator.uniformMode == UniformMode.FIELD_TACTICAL -> WardrobeKit.FIELD
         operator.dressStyle.isCutawayMess -> WardrobeKit.MESS
         operator.activeWardrobeKit == WardrobeKit.BRAVOS -> WardrobeKit.BRAVOS
         else -> WardrobeKit.ALPHAS
+    }).let { k ->
+        // Item 112: pilots have no field uniform; the flight suit stands in everywhere
+        if (k == WardrobeKit.FIELD && operator.isAviator) WardrobeKit.BRAVOS else k
     }
     val renderOperator = (if (kitOverride != null) {
         // An explicit kit comes from the duty resolver, which only puts HQ staff in Field at a field school
@@ -187,7 +190,10 @@ fun OperatorUniformPreview(
                     w = w,
                     h = h,
                     cx = cx,
-                    operator = renderOperator.copy(camoPattern = CamoPattern.FLIGHT_SAGE),
+                    // Item 113: SF aviators fly in black
+                    operator = renderOperator.copy(
+                        camoPattern = if (TacticalCalculator.isSfAviator(renderOperator)) CamoPattern.FLIGHT_BLACK else CamoPattern.FLIGHT_SAGE
+                    ),
                     wornRegalia = wornRegalia,
                     combatPatch = combatPatch,
                     leaderRole = LeaderRole.NONE,
@@ -2444,4 +2450,5 @@ private fun subduedPaletteFor(camo: CamoPattern): Pair<Color, Color> = when (cam
     CamoPattern.RANGER_GREEN -> Color(0xFF1C241A) to Color(0xFFA3B288)
     CamoPattern.LITTORAL_TIDE -> Color(0xFF1E262D) to Color(0xFFA9B8C2)
     CamoPattern.FLIGHT_SAGE -> Color(0xFF2E3326) to Color(0xFFBFC4A4)
+    CamoPattern.FLIGHT_BLACK -> Color(0xFF0C0D0F) to Color(0xFF7A7F86)
 }

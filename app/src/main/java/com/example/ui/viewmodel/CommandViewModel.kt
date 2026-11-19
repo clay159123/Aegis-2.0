@@ -1192,7 +1192,9 @@ class CommandViewModel(
                 // Campaign missions record the squad patch worn; the newest campaign becomes the combat patch
                 val updatedCombatPatchHistory = mission.campaignId?.let { campaignId ->
                     // Item 100: aviators' combat patch is always the Aviation Brigade
-                    val wornPatch = if (op.specialty == OperatorSpecialty.AVIATION) UnitPatchStyle.AVIATION_BRIGADE
+                    val wornPatch = if (op.specialty == OperatorSpecialty.AVIATION) {
+                        if (TacticalCalculator.isSfAviator(op)) UnitPatchStyle.SOA else UnitPatchStyle.AVIATION_BRIGADE
+                    }
                         else UniformRegaliaRules.resolveUnitPatch(op, state.squads)
                     if (wornPatch == UnitPatchStyle.NONE) {
                         op.combatPatchHistory

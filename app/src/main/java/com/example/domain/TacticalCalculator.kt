@@ -801,6 +801,11 @@ object TacticalCalculator {
     fun isFreeFallQualified(op: Operator): Boolean = MFF_SCHOOL_ID in op.completedMissionIds
     fun isCombatDiver(op: Operator): Boolean = COMBAT_DIVER_SCHOOL_ID in op.completedMissionIds
     const val AIR_ASSAULT_SCHOOL_ID = "msn_air_assault_school"
+    /** Items 111/115: SERE and the SF Aviation school; only SF aviators fly SF missions. */
+    const val SERE_SCHOOL_ID = "msn_sere_school"
+    const val SF_AVIATION_SCHOOL_ID = "msn_sf_aviation_school"
+    fun isSereQualified(op: Operator): Boolean = SERE_SCHOOL_ID in op.completedMissionIds
+    fun isSfAviator(op: Operator): Boolean = op.isAviator && SF_AVIATION_SCHOOL_ID in op.completedMissionIds
     fun isAirAssaultQualified(op: Operator): Boolean = AIR_ASSAULT_SCHOOL_ID in op.completedMissionIds
     /** Fast Rope: a little quicker than landing, and a bonus on assault and urban missions. */
     const val FAST_ROPE_DURATION_FACTOR = 0.95
@@ -824,12 +829,14 @@ object TacticalCalculator {
                 facilityLevel(facilities, FacilityType.AIRFIELD) < 1 -> "Needs an Airfield"
                 pilot == null -> "Assign a pilot from the Aviation Pool"
                 !(pilot.isAviator && pilot.isWarrantOfficer) -> "Pilot must be a warrant officer aviator"
+                isSfOperation(mission) && !isSfAviator(pilot) -> "SF missions need an SF aviator"
                 else -> null
             }
             InsertionMethod.FAST_ROPE -> when {
                 facilityLevel(facilities, FacilityType.AIRFIELD) < AIRFIELD_FAST_ROPE_LEVEL -> "Needs Airfield level $AIRFIELD_FAST_ROPE_LEVEL"
                 pilot == null -> "Assign a pilot from the Aviation Pool"
                 !(pilot.isAviator && pilot.isWarrantOfficer) -> "Pilot must be a warrant officer aviator"
+                isSfOperation(mission) && !isSfAviator(pilot) -> "SF missions need an SF aviator"
                 else -> team.firstOrNull { !isAirAssaultQualified(it) }?.let { "${it.callsign} isn't Air Assault qualified" }
             }
             InsertionMethod.AIRBORNE -> team.firstOrNull { !isAirborneQualified(it) }
@@ -1884,6 +1891,8 @@ object TacticalCalculator {
             "msn_pathfinder_school" -> 78
             "msn_night_qual" -> 76
             AIR_ASSAULT_SCHOOL_ID -> 74
+            SERE_SCHOOL_ID -> 72
+            SF_AVIATION_SCHOOL_ID -> 56
             "msn_intel_school", "msn_ocs_school" -> 80
             "msn_signals_school", "msn_medical_school", "msn_engineer_school", "msn_logistics_school" -> 84
             "msn_snco_school" -> 86
@@ -2577,6 +2586,11 @@ object TacticalCalculator {
                     missing += "Complete 1+ Field Combat Deployment (non-training)"
                 }
             }
+            "medal_sere" -> {
+                if (SERE_SCHOOL_ID !in operator.completedMissionIds) {
+                    missing += "Graduate SERE school"
+                }
+            }
             "medal_nco_dev" -> {
                 if ("msn_nco_school" !in operator.completedMissionIds && "msn_snco_school" !in operator.completedMissionIds) {
                     missing += "Graduate the NCO Academy or Senior Leader Course"
@@ -2976,6 +2990,13 @@ object TacticalCalculator {
                                 )
                                 val medalId = firstEligibleUnowned(candidates, includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} static-line jumps and night drop zones. Maroon Beret authorized."
+                            }
+                            SERE_SCHOOL_ID -> {
+                                val medalId = firstEligibleUnowned(listOf("medal_sere"), includeGeneralFallback = false)
+                                medalId to "Graduated ${mission.title}: survived, evaded the hunter force and held up under interrogation."
+                            }
+                            SF_AVIATION_SCHOOL_ID -> {
+                                null to "Graduated ${mission.title}. Cleared to fly Special Forces missions."
                             }
                             AIR_ASSAULT_SCHOOL_ID -> {
                                 val medalId = firstEligibleUnowned(listOf("insig_air_assault"), includeGeneralFallback = false)

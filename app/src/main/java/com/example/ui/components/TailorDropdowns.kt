@@ -431,16 +431,18 @@ fun UnitPatchDropdown(
     onSelect: (UnitPatchStyle) -> Unit,
     isAviator: Boolean = false,
     isSfSquad: Boolean = false,
+    isSfAviator: Boolean = false,
     modifier: Modifier = Modifier,
     testTag: String = "dropdown_unit_patch"
 ) {
     // High Command is reserved for HQ staff
-    val choices = remember(isHqStaff, isAviator, isSfSquad) {
+    val choices = remember(isHqStaff, isAviator, isSfSquad, isSfAviator) {
         buildList {
             add(UnitPatchStyle.AUTO_MOS)
             addAll(UnitPatchStyle.DIVISIONS)
             if (isHqStaff) add(UnitPatchStyle.SUPREME_HQ)
             if (isAviator) add(UnitPatchStyle.AVIATION_BRIGADE)
+            if (isSfAviator) add(UnitPatchStyle.SOA)
             if (isSfSquad) add(UnitPatchStyle.SPECIAL_FORCES)
             add(UnitPatchStyle.UNASSIGNED)
             add(UnitPatchStyle.NONE)

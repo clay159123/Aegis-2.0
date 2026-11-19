@@ -47,7 +47,9 @@ fun MissionPrepDialog(
     val opsById = uiState.operators.associateBy { it.id }
     val team = teamIds.mapNotNull { opsById[it] }
     val pilots = uiState.operators.filter {
-        it.unlocked && it.isAviator && it.isWarrantOfficer && it.status == OperatorStatus.READY && it.id !in deployedOpIds
+        it.unlocked && it.isAviator && it.isWarrantOfficer && it.status == OperatorStatus.READY && it.id !in deployedOpIds &&
+            // Item 111: only SF aviators fly SF missions
+            (!TacticalCalculator.isSfOperation(mission) || TacticalCalculator.isSfAviator(it))
     }.sortedByDescending { it.flightSkill }
     val pilot = pilots.find { it.id == pilotId }
     val squadOf: (String) -> TacticalSquad? = { id -> uiState.squads.find { id in it.memberIds } }
