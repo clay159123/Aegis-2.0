@@ -38,7 +38,8 @@ class MissionPrepTest {
         assertTrue(field.any { it.recommendedSpecialties.isNotEmpty() })
         field.forEach { m ->
             assertTrue(m.id, m.recommendedSpecialties.size <= 3)
-            assertTrue(m.id, InsertionMethod.GROUND in m.allowedInsertions)
+            // Item 98: Free Strait stages built around HALO or Maritime only allow that insertion
+            assertTrue(m.id, InsertionMethod.GROUND in m.allowedInsertions || m.signatureInsertion in m.allowedInsertions)
         }
         // Schools and diplomatic work: no MOS tags, ground only
         GameCatalog.missions.filter { it.scope != MissionScope.FIELD_COMBAT }.forEach { m ->

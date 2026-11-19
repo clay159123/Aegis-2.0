@@ -334,6 +334,7 @@ fun AegisCommandApp() {
                                     onClaimDeployment = viewModel::claimDeployment,
                                     onCancelDeployment = viewModel::cancelDeployment,
                                     onSelectPowTarget = viewModel::selectPowTarget,
+                                    onSelectLanguageRegion = viewModel::selectLanguageRegion,
                                     onTreatWounded = viewModel::treatWoundedOperator,
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
@@ -425,6 +426,33 @@ fun AegisCommandApp() {
                 }
             }
         }
+    }
+
+    // Item 62: a blown cover needs a decision right away
+    uiState.deployments.firstOrNull { it.coverBlown && !it.coverPushOn && !it.isComplete(uiState.nowMillis) }?.let { d ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            modifier = Modifier.testTag("cover_blown_dialog"),
+            title = { Text("Cover Blown!") },
+            text = {
+                Text(
+                    "${d.missionTitle ?: "The clandestine team"}: the enemy knows who they are. Abort and exfil now " +
+                        "(no rewards, half the usual abort casualty risk), or push on (the fight is ${com.example.domain.ClandestineRules.BLOWN_COVER_PASS_PENALTY}% harder and capture is far more likely)."
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { viewModel.pushOnAfterBlownCover(d.id) },
+                    modifier = Modifier.testTag("cover_push_on")
+                ) { Text("Push On") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { viewModel.exfilAfterBlownCover(d.id) },
+                    modifier = Modifier.testTag("cover_exfil")
+                ) { Text("Abort & Exfil") }
+            }
+        )
     }
 
     // Item 69: a soldier event, once the debrief, rifle results and award cards are clear

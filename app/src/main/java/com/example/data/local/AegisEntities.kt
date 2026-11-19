@@ -107,6 +107,7 @@ data class OperatorEntity(
     val powTalksFailures: Int = 0,
     val powTalksCooldownUntilMillis: Long = 0L,
     val powRescueClosed: Boolean = false,
+    val languageRegionsCsv: String = "",
     val unlocked: Boolean,
     val recruitCreditCost: Double,
     val recruitIntelCost: Double,
@@ -147,7 +148,11 @@ data class DeploymentEntity(
     val platoonLeaderId: String? = null,
     val missionTitle: String? = null,
     val flightHours: Int = 0,
-    val targetOperatorId: String? = null
+    val targetOperatorId: String? = null,
+    val languageRegionName: String? = null,
+    val coverBlownAtMillis: Long = 0L,
+    val coverBlown: Boolean = false,
+    val coverPushOn: Boolean = false
 )
 
 @Entity(tableName = "squads")

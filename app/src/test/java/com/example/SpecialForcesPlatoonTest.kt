@@ -36,15 +36,23 @@ class SpecialForcesPlatoonTest {
     fun catalogHasSfMissionsOfEveryTypeAndAUwCampaign() {
         val sfMissions = GameCatalog.missions.filter { it.requiresSfTeam }
         assertEquals(
-            setOf("Direct Action", "Special Reconnaissance", "Foreign Internal Defense", "Unconventional Warfare"),
+            setOf("Direct Action", "Special Reconnaissance", "Foreign Internal Defense", "Unconventional Warfare", "Clandestine"),
             sfMissions.mapNotNull { it.sfMissionType }.toSet()
         )
+        // Open SF missions go any way the team is qualified for; clandestine missions and Free Strait stages
+        // built around one insertion keep it (item 98), and the Free Strait takes the full SF squad of 6
         sfMissions.forEach {
             assertEquals(it.id, MissionScope.FIELD_COMBAT, it.scope)
-            assertEquals(it.id, TacticalCalculator.SF_MIN_TEAM, it.minOperators)
+            val freeStrait = it.campaignId == TacticalCalculator.UW_CAMPAIGN_ID
+            assertEquals(it.id, if (freeStrait) TacticalCalculator.SF_MAX_TEAM else TacticalCalculator.SF_MIN_TEAM, it.minOperators)
             assertEquals(it.id, TacticalCalculator.SF_MAX_TEAM, it.maxOperators)
-            assertTrue(it.id, InsertionMethod.HALO in it.allowedInsertions)
-            assertEquals(it.id, it.coastal, InsertionMethod.MARITIME in it.allowedInsertions)
+            val locked = it.isClandestine || it.allowedInsertions.size == 1
+            if (locked) {
+                assertEquals(it.id, 1, it.allowedInsertions.size)
+            } else {
+                assertTrue(it.id, InsertionMethod.HALO in it.allowedInsertions)
+                assertEquals(it.id, it.coastal, InsertionMethod.MARITIME in it.allowedInsertions)
+            }
         }
         // Direct Action is High/Extreme; Special Recon long and intel-heavy; FID prestige-heavy
         sfMissions.filter { it.sfMissionType == "Direct Action" }.forEach {

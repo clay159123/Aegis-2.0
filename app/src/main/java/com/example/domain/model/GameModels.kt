@@ -1328,6 +1328,8 @@ data class Operator(
     val powTalksFailures: Int = 0,
     val powTalksCooldownUntilMillis: Long = 0L,
     val powRescueClosed: Boolean = false,
+    /** Item 62: regions whose language and culture this soldier learned at the Language school. */
+    val languageRegions: Set<TheaterRegion> = emptySet(),
     /** Awarded rifle qualification (Marksman, Sharpshooter or Expert); null = not yet qualified */
     val marksmanshipQual: MarksmanshipBadgeTier? = null,
     /** A better qualification waiting for the player to award it */
@@ -1622,6 +1624,10 @@ data class MissionTemplate(
     val requiresSfTeam: Boolean = false,
     /** Item 36: Direct Action, Special Reconnaissance, Foreign Internal Defense or Unconventional Warfare. */
     val sfMissionType: String? = null,
+    /** Item 62: a clandestine mission (SF squad only, language-qualified, blown-cover risk) in this theater. */
+    val isClandestine: Boolean = false,
+    /** Item 98: the insertion this mission is built around (about +8% pass). */
+    val signatureInsertion: InsertionMethod? = null,
     /** Item 40: stats this mission trains through experience. Empty for schools. */
     val trainsStats: Set<StatType> = emptySet(),
     /** On the water: Maritime insertion is possible (SF missions only). */
@@ -1848,7 +1854,13 @@ data class ActiveDeployment(
     /** Item 95: hours booked for a Flight Hours session (1..10); 0 for everything else. */
     val flightHours: Int = 0,
     /** Item 63: the POW a rescue or negotiation is for. */
-    val targetOperatorId: String? = null
+    val targetOperatorId: String? = null,
+    /** Item 62: the region a Language school class studies. */
+    val languageRegion: TheaterRegion? = null,
+    /** Item 62: when cover blows on a clandestine mission (0 = it holds), whether it has, and whether the team pushed on. */
+    val coverBlownAtMillis: Long = 0L,
+    val coverBlown: Boolean = false,
+    val coverPushOn: Boolean = false
 ) {
     /** The soldiers on the ground (everyone but the pilot). */
     val groundOperatorIds: List<String> get() = operatorIds.filter { it != pilotId }

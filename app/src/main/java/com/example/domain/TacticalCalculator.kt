@@ -652,7 +652,9 @@ object TacticalCalculator {
     fun schoolRetrySurcharge(mission: MissionTemplate, team: List<Operator>, multiplier: Double): Int {
         val limit = mission.schoolRequirements?.maxAttempts ?: return 0
         return team.sumOf { op ->
-            val over = (op.schoolAttempts[mission.id] ?: 0) - limit + 1
+            // Item 62: each Language school pass learns a region, so only failed tries count toward the surcharge
+            val passes = if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID) op.languageRegions.size else 0
+            val over = (op.schoolAttempts[mission.id] ?: 0) - passes - limit + 1
             if (over > 0) mission.supplyCost * multiplier * SF_RETRY_SURCHARGE_PER_ATTEMPT * over else 0.0
         }.roundToInt()
     }
@@ -743,7 +745,8 @@ object TacticalCalculator {
     const val UW_CAMPAIGN_ID = "camp_uw"
 
     /** Item 102: SF schools the SOF officer supports (Language school joins in Session 21). */
-    val SF_SCHOOL_IDS: Set<String> = setOf("msn_sf_school", "msn_combat_diver_school", "msn_mff_school")
+    val SF_SCHOOL_IDS: Set<String> = setOf("msn_sf_school", "msn_combat_diver_school", "msn_mff_school", "msn_language_school")
+    const val MIN_MARITIME_DIVERS = 4
 
     /** SF missions and every stage of the SF campaign. */
     fun isSfOperation(mission: MissionTemplate): Boolean =
@@ -773,6 +776,8 @@ object TacticalCalculator {
             val sfSquad = sfSquadOf(squads) ?: return "Form an SF squad first"
             val core = team.count { it.id in sfSquad.memberIds }
             if (core < SF_SQUAD_CORE) return "Needs $SF_SQUAD_CORE+ from ${sfSquad.name} ($core/$SF_SQUAD_CORE)"
+            // Item 62: clandestine missions are SF squad only, with language-qualified soldiers running the cover
+            ClandestineRules.teamBlocker(mission, team, squads)?.let { return it }
         }
         if (mission.requiredSquads >= 2) {
             val squadsOnTeam = squads.count { sq -> team.count { it.id in sq.memberIds } >= 2 }
@@ -848,7 +853,10 @@ object TacticalCalculator {
             InsertionMethod.MARITIME -> when {
                 !mission.requiresSfTeam -> "SF missions only"
                 !mission.coastal -> "Coastal missions only"
-                else -> team.firstOrNull { !isCombatDiver(it) }?.let { "${it.callsign} isn't a Combat Diver" }
+                // Item 98: four divers swim; anyone else rides in with the boat team
+                team.count { isCombatDiver(it) } < MIN_MARITIME_DIVERS.coerceAtMost(team.size) ->
+                    "Needs ${MIN_MARITIME_DIVERS.coerceAtMost(team.size)}+ Combat Divers (${team.count { isCombatDiver(it) }})"
+                else -> null
             }
         }
     }
@@ -882,7 +890,8 @@ object TacticalCalculator {
                     (if (isAssaultOrUrban(mission)) FAST_ROPE_ASSAULT_PASS_BONUS else 0)
             else -> 0
         }
-        return bonus - if (scattered) SCATTER_PASS_PENALTY else 0
+        // Item 98: the insertion a stage is built around
+        return bonus + ClandestineRules.signatureBonus(mission, method) - if (scattered) SCATTER_PASS_PENALTY else 0
     }
 
     /** Survival points from the insertion for each soldier: helicopters cut risk; scattered drops raise it. */
@@ -1301,7 +1310,7 @@ object TacticalCalculator {
         }
 
         if (mission.scope == MissionScope.TRAINING) {
-            val repeatable = mission.id == RIFLE_QUAL_MISSION_ID || mission.id == FLIGHT_HOURS_MISSION_ID
+            val repeatable = mission.id == RIFLE_QUAL_MISSION_ID || mission.id == FLIGHT_HOURS_MISSION_ID || mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID
             if (mission.id in operator.completedMissionIds && !repeatable) {
                 return EligibilityResult(false, listOf("Already Graduated"))
             }
@@ -1341,6 +1350,10 @@ object TacticalCalculator {
                 }
                 // Item 101: no school washes anyone out; retries past the old limit cost more (schoolRetrySurcharge).
                 // Rifle Qual stays open until the soldier reaches Expert.
+                // Item 62: the Language school stays open until every region is learned
+                if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID && ClandestineRules.regionsToLearn(operator).isEmpty()) {
+                    missing += "Already speaks every region's language"
+                }
                 if (mission.id == RIFLE_QUAL_MISSION_ID && bestQualification(operator) == MarksmanshipBadgeTier.EXPERT) {
                     missing += "Already qualified Expert"
                 }
@@ -1896,6 +1909,7 @@ object TacticalCalculator {
             "msn_pathfinder_school" -> 78
             "msn_night_qual" -> 76
             AIR_ASSAULT_SCHOOL_ID -> 74
+            ClandestineRules.LANGUAGE_SCHOOL_ID -> 80
             SERE_SCHOOL_ID -> 72
             SF_AVIATION_SCHOOL_ID -> 56
             "msn_intel_school", "msn_ocs_school" -> 80
@@ -1974,7 +1988,9 @@ object TacticalCalculator {
         val ltPlan = if (selectedOperators.any { it.eventBuffs.leadsNextMission }) -SoldierEvents.LT_PLAN_PASS_PENALTY else 0
         // Item 63: who sits at the table for release talks, and how hard the captors have become
         val talks = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) PowRules.talksModifierPct(selectedOperators, PowRules.activeTalksFailures) else 0
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan + talks)
+        // Item 98: the guerrilla force and the Op Free Strait completion perk
+        val freeStrait = ClandestineRules.guerrillaPassBonus(mission) + ClandestineRules.freeStraitSfBonus(mission)
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan + talks + freeStrait)
             .coerceIn(minOdds, maxOdds)
     }
 
@@ -2249,7 +2265,8 @@ object TacticalCalculator {
         val staffBonus = hqStaffSummary?.survivalBonusPct ?: (hqStaffCount.coerceAtLeast(0) * 2).coerceAtMost(10)
         val resilienceFactor = (stats.resilience * 0.40 + stats.stealth * 0.25).roundToInt()
         val nightSynergy = if (mission.isNightOp && equipped.any { it.id.contains("nvg") || it.id.contains("thermal") }) 8 else 0
-        val raw = 80 - mission.risk.baseDangerPenalty + (gearSurvival * 0.75).roundToInt() + reconBonus + staffBonus + resilienceFactor / 3 + nightSynergy
+        val raw = 80 - mission.risk.baseDangerPenalty + (gearSurvival * 0.75).roundToInt() + reconBonus + staffBonus + resilienceFactor / 3 + nightSynergy +
+            ClandestineRules.guerrillaSurvivalBonus(mission)
         return raw.coerceIn(42, 96)
     }
 
@@ -3011,6 +3028,9 @@ object TacticalCalculator {
                             SERE_SCHOOL_ID -> {
                                 val medalId = firstEligibleUnowned(listOf("medal_sere"), includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title}: survived, evaded the hunter force and held up under interrogation."
+                            }
+                            ClandestineRules.LANGUAGE_SCHOOL_ID -> {
+                                null to "Graduated ${mission.title}: speaks the region's language and knows its customs."
                             }
                             SF_AVIATION_SCHOOL_ID -> {
                                 null to "Graduated ${mission.title}. Cleared to fly Special Forces missions."
