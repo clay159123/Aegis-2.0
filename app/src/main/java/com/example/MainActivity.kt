@@ -181,7 +181,9 @@ fun AegisCommandApp() {
         }
     }
 
-    val readyOpsCount = remember(uiState.deployments, uiState.nowMillis) {
+    // Item 69: the event the player chose to decide later (keyed by when it was raised)
+    var deferredEventKey by remember { mutableStateOf<Long?>(null) }
+        val readyOpsCount = remember(uiState.deployments, uiState.nowMillis) {
         uiState.deployments.count { it.isComplete(uiState.nowMillis) }
     }
     val pendingDeedsCount = uiState.pendingDeeds.size
@@ -199,6 +201,13 @@ fun AegisCommandApp() {
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets.safeDrawing,
             snackbarHost = {},
+            floatingActionButton = {
+                // Item 69: a deferred soldier event waits under the bell
+                val ev = uiState.pendingEvent
+                if (ev != null && deferredEventKey == ev.createdAtMillis) {
+                    com.example.ui.components.SoldierEventBell(onClick = { deferredEventKey = null })
+                }
+            },
             bottomBar = {
                 if (!isWideLayout) {
                     NavigationBar(
@@ -414,6 +423,21 @@ fun AegisCommandApp() {
                     }
                 }
             }
+        }
+    }
+
+    // Item 69: a soldier event, once the debrief, rifle results and award cards are clear
+    val evRifleQueue by viewModel.rifleQualQueue.collectAsStateWithLifecycle()
+    val evAwardQueue by viewModel.awardQueue.collectAsStateWithLifecycle()
+    uiState.pendingEvent?.let { ev ->
+        if (uiState.lastDebrief == null && evRifleQueue.isEmpty() && evAwardQueue.isEmpty() && deferredEventKey != ev.createdAtMillis) {
+            com.example.ui.components.SoldierEventDialog(
+                event = ev,
+                context = uiState.eventContext(),
+                resources = uiState.resources,
+                onChoose = viewModel::answerSoldierEvent,
+                onLater = { deferredEventKey = ev.createdAtMillis }
+            )
         }
     }
 

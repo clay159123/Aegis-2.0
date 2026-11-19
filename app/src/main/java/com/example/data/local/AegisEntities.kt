@@ -22,7 +22,13 @@ data class CommanderStateEntity(
     val completedCampaignIdsCsv: String = "",
     val rotatingMissionIdsCsv: String = "",
     val rotationUpdatedAtMillis: Long = 0L,
-    val saveFormatVersion: Int = 0
+    val saveFormatVersion: Int = 0,
+    /** Item 69: the waiting soldier event, the last event check, and command-wide event effects. */
+    val pendingEventCsv: String = "",
+    val lastEventCheckAtMillis: Long = 0L,
+    val heloGroundedUntilMillis: Long = 0L,
+    val recruitDiscountPct: Int = 0,
+    val sfRehearsalBonusPct: Int = 0
 )
 
 @Entity(tableName = "facilities")
@@ -93,6 +99,7 @@ data class OperatorEntity(
     val lastArcomAtAction: Int = -100,
     val lastAamAtAction: Int = -100,
     val bodyBuildName: String? = null,
+    val eventBuffsCsv: String = "",
     val unlocked: Boolean,
     val recruitCreditCost: Double,
     val recruitIntelCost: Double,

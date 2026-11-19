@@ -13,6 +13,11 @@ import com.example.domain.MissionNameGenerator
 import com.example.domain.MissionNames
 import com.example.domain.displayTitle
 import com.example.domain.TacticalCalculator
+import com.example.domain.CommandEventEffects
+import com.example.domain.PendingSoldierEvent
+import com.example.domain.PetitionAction
+import com.example.domain.SoldierEventContext
+import com.example.domain.SoldierEvents
 import com.example.domain.AwardRules
 import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
@@ -56,8 +61,14 @@ data class CommandUiState(
     val completedCampaignIds: Set<String> = emptySet(),
     val allCampaignsCleared: Boolean = false,
     val rotatingMissionIds: List<String> = emptyList(),
-    val rotationUpdatedAtMillis: Long = 0L
+    val rotationUpdatedAtMillis: Long = 0L,
+    /** Item 69: the soldier event waiting for an answer, if any. */
+    val pendingEvent: PendingSoldierEvent? = null,
+    val lastEventCheckAtMillis: Long = 0L,
+    val eventEffects: CommandEventEffects = CommandEventEffects()
 ) {
+    fun eventContext(): SoldierEventContext = SoldierEventContext(operators, squads, deployments, facilities, resources, nowMillis)
+
     /** Deployments that use an HQ tasking slot. Schools and training never take a slot. */
     val occupiedDeploymentSlots: Int
         get() = TacticalCalculator.occupiedDeploymentSlots(deployments)
@@ -166,6 +177,12 @@ class CommandViewModel(
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.squads)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
             TacticalCalculator.tdyOperatorIds = TacticalCalculator.tdyOperatorIdsFor(data.deployments)
+            val eventEffects = CommandEventEffects(
+                heloGroundedUntilMillis = data.commander.heloGroundedUntilMillis,
+                recruitDiscountPct = data.commander.recruitDiscountPct,
+                sfRehearsalBonusPct = data.commander.sfRehearsalBonusPct
+            )
+            SoldierEvents.effects = eventEffects
             TacticalCalculator.airfieldLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.AIRFIELD)
             // Item 50: generated names for the current board, from the rotation time
             MissionNames.current = MissionNameGenerator.namesFor(
@@ -209,7 +226,10 @@ class CommandViewModel(
                 completedCampaignIds = completedCampaigns,
                 allCampaignsCleared = TacticalCalculator.isAllCampaignsCleared(completedCampaigns),
                 rotatingMissionIds = rotatingIds,
-                rotationUpdatedAtMillis = data.commander.rotationUpdatedAtMillis
+                rotationUpdatedAtMillis = data.commander.rotationUpdatedAtMillis,
+                pendingEvent = PendingSoldierEvent.fromCsv(data.commander.pendingEventCsv),
+                lastEventCheckAtMillis = data.commander.lastEventCheckAtMillis,
+                eventEffects = eventEffects
             )
         }
     }.stateIn(
@@ -375,6 +395,16 @@ class CommandViewModel(
 
                 finishCompletedUpgrades(state.facilities, now)
 
+                // Item 69: soldiers back from leave or an event duty
+                val backFromLeave = state.operators.filter { it.status == OperatorStatus.ON_LEAVE && now >= it.recoveryUntilMillis }
+                if (backFromLeave.isNotEmpty()) {
+                    repository.saveOperators(backFromLeave.map {
+                        it.copy(status = if (it.hqRole != null) OperatorStatus.HQ_STAFF else OperatorStatus.READY, recoveryUntilMillis = 0L)
+                    })
+                    showBanner("${backFromLeave.joinToString { it.callsign }} back on duty.")
+                }
+                tickSoldierEvents(state, now)
+
                 val recoveredOps = state.operators.filter {
                     it.status == OperatorStatus.RECOVERING && now >= it.recoveryUntilMillis
                 }
@@ -393,6 +423,69 @@ class CommandViewModel(
                 lastTickMillis = now
             }
         }
+    }
+
+    /**
+     * Item 69: drop a waiting event that has expired or no longer fits; otherwise, at most once per interval,
+     * roll for a new one. Only one event waits at a time.
+     */
+    private suspend fun tickSoldierEvents(state: CommandUiState, now: Long) {
+        val ctx = state.eventContext().copy(now = now)
+        val pending = state.pendingEvent
+        if (pending != null) {
+            if (!SoldierEvents.stillValid(pending, ctx)) {
+                repository.updateCommanderState { it.copy(pendingEventCsv = "") }
+            }
+            return
+        }
+        // The first check waits a full interval after a fresh start
+        if (state.lastEventCheckAtMillis == 0L) {
+            repository.updateCommanderState { it.copy(lastEventCheckAtMillis = now) }
+            return
+        }
+        if (now - state.lastEventCheckAtMillis < SoldierEvents.eventIntervalMillis()) return
+        val rolled = SoldierEvents.roll(ctx)
+        repository.updateCommanderState { it.copy(lastEventCheckAtMillis = now, pendingEventCsv = rolled?.toCsv() ?: "") }
+    }
+
+    /** Item 69: answer the waiting soldier event. */
+    fun answerSoldierEvent(choiceId: String) {
+        val state = uiState.value
+        val event = state.pendingEvent ?: return
+        val ctx = state.eventContext().copy(now = System.currentTimeMillis())
+        if (!SoldierEvents.stillValid(event, ctx)) {
+            viewModelScope.launch { repository.updateCommanderState { it.copy(pendingEventCsv = "") } }
+            showBanner("That request has lapsed.")
+            return
+        }
+        val outcome = SoldierEvents.apply(event, choiceId, ctx)
+        when (outcome.petitionAction) {
+            PetitionAction.APPROVE_TRANSFER -> approveTransferOut(event.operatorId)
+            PetitionAction.DECLINE_TRANSFER -> declineTransferRequest(event.operatorId)
+            PetitionAction.APPROVE_RETIREMENT -> approveRetirement(event.operatorId)
+            PetitionAction.DENY_RETIREMENT -> denyRetirementRequest(event.operatorId)
+            null -> Unit
+        }
+        if (outcome.deeds.isNotEmpty()) enqueueAwardPrompts(outcome.deeds)
+        viewModelScope.launch {
+            repository.updateCommanderState { cur ->
+                val eff = outcome.effects
+                cur.copy(
+                    credits = (cur.credits + outcome.creditsDelta).coerceAtLeast(0.0),
+                    supplies = (cur.supplies + outcome.suppliesDelta).coerceAtLeast(0.0),
+                    intel = (cur.intel + outcome.intelDelta).coerceAtLeast(0.0),
+                    prestige = (cur.prestige + outcome.prestigeDelta).coerceAtLeast(0.0),
+                    pendingEventCsv = "",
+                    heloGroundedUntilMillis = eff?.heloGroundedUntilMillis ?: cur.heloGroundedUntilMillis,
+                    recruitDiscountPct = eff?.recruitDiscountPct ?: cur.recruitDiscountPct,
+                    sfRehearsalBonusPct = eff?.sfRehearsalBonusPct ?: cur.sfRehearsalBonusPct
+                )
+            }
+            if (outcome.operatorUpdates.isNotEmpty()) repository.saveOperators(outcome.operatorUpdates)
+            if (outcome.squadUpdates.isNotEmpty()) repository.saveSquads(outcome.squadUpdates)
+            if (outcome.deeds.isNotEmpty()) repository.addPendingDeeds(outcome.deeds)
+        }
+        if (outcome.banner.isNotBlank()) showBanner(outcome.banner)
     }
 
     fun refreshRotatingMissions() {
@@ -784,7 +877,7 @@ class CommandViewModel(
                 hqStaffSummary = state.hqStaffSummary,
                 completedCampaignIds = state.completedCampaignIds
             )
-        ) + TacticalCalculator.insertionSupplyCost(insertion, state.facilities, airOps) +
+        ) * SoldierEvents.schoolDiscountFactor(mission, chosenOps, System.currentTimeMillis()) + TacticalCalculator.insertionSupplyCost(insertion, state.facilities, airOps) +
             TacticalCalculator.schoolRetrySurcharge(
                 mission, chosenOps,
                 TacticalCalculator.supplyCostMultiplier(state.facilities, state.hqStaffSummary, state.completedCampaignIds)
@@ -989,14 +1082,15 @@ class CommandViewModel(
                     baseResilience = op.baseResilience + (gradBonus?.resilience ?: 0),
                     completedMissionIds = updatedCompletedIds,
                     schoolAttempts = updatedAttempts,
-                    status = nextStatus
+                    status = nextStatus,
+                    eventBuffs = if (isRifleQual) op.eventBuffs.copy(rifleQualBonusPct = 0) else op.eventBuffs
                 ).let { grad -> applyCareerSchoolEffects(grad, mission.id, passed, deployment.flightHours) }
                 newRank = graduatedOp.rank
                 // Rifle Qualification, and graduating Marksmanship & Tactical Basics, both shoot for a badge
                 val shootsForQual = isRifleQual || (passed && mission.id == "msn_basic_qual")
                 val (updatedOp, qualNote) = if (shootsForQual) {
                     val score = TacticalCalculator.rifleQualScore(
-                        graduatedOp, state.citations, state.facilities, Random.nextInt(TacticalCalculator.QUAL_ROLL_MAX + 1)
+                        op, state.citations, state.facilities, Random.nextInt(TacticalCalculator.QUAL_ROLL_MAX + 1)
                     )
                     val attemptsLeft = if (isRifleQual) (TacticalCalculator.MAX_REQUAL_ATTEMPTS - nextAttempts).coerceAtLeast(0) else null
                     val (qualifiedRaw, result) = TacticalCalculator.applyRifleQualification(graduatedOp, score, attemptsLeft)
@@ -1163,7 +1257,10 @@ class CommandViewModel(
                     0L
                 }
 
-                val opXp = if (missionSucceeded) xpEach else (xpEach * 0.45).roundToInt().coerceAtLeast(15)
+                // Item 69: an answered op request or the lieutenant's own plan adds XP for that soldier
+                val eventXpPct = (if (SoldierEvents.opRequestMet(op, mission, deployment.startedAtMillis)) SoldierEvents.OP_REQUEST_XP_BONUS_PCT else 0) +
+                    (if (op.eventBuffs.leadsNextMission) SoldierEvents.LT_PLAN_XP_BONUS_PCT else 0)
+                val opXp = ((if (missionSucceeded) xpEach else (xpEach * 0.45).roundToInt().coerceAtLeast(15)) * (100 + eventXpPct)) / 100
                 val prevRank = op.rank
                 val newXp = OperatorRank.clampXpToAuthorizedTier(op.xp + opXp, op.authorizedTier)
                 val newRank = op.copy(xp = newXp).rank
@@ -1263,6 +1360,10 @@ class CommandViewModel(
                     retirementRequested = if (outcome == OperatorOutcomeType.FALLEN) false else askRetirement,
                     // The pilot logs a combat sortie (Air Medal progress)
                     combatSortiesFlown = op.combatSortiesFlown + if (op.id == pilotId && isCombatOp) 1 else 0,
+                    eventBuffs = op.eventBuffs.copy(
+                        leadsNextMission = false,
+                        opRequestType = op.eventBuffs.opRequestType.takeUnless { SoldierEvents.opRequestMet(op, mission, deployment.startedAtMillis) }
+                    ),
                     flightHoursLogged = op.flightHoursLogged + if (op.id == pilotId) TacticalCalculator.FLIGHT_HOURS_PER_SORTIE else 0
                 ),
                     // Item 40: the ground team trains the mission's stats; pilots log sorties instead
@@ -1690,7 +1791,9 @@ class CommandViewModel(
                     totalMissionsCompleted = cur.totalMissionsCompleted + if (missionSucceeded) 1 else 0,
                     completedCampaignStageIdsCsv = mergedStages.sorted().joinToString(","),
                     completedCampaignIdsCsv = mergedCamps.sorted().joinToString(","),
-                    lastSimulatedAtMillis = now
+                    lastSimulatedAtMillis = now,
+                    // Item 69: the rehearsal bonus is spent on the next SF mission
+                    sfRehearsalBonusPct = if (TacticalCalculator.isSfOperation(mission)) 0 else cur.sfRehearsalBonusPct
                 )
             }
             _lastDebrief.value = DebriefSummary(
@@ -1917,7 +2020,7 @@ class CommandViewModel(
             showBanner("Field roster full (${state.maxFieldRosterSlots}/${state.maxFieldRosterSlots}). Transfer out, assign SGT+ to HQ Staff, or upgrade HQ.")
             return
         }
-        val enlistCost = source.creditCost
+        val enlistCost = SoldierEvents.discountedRecruitCost(source.creditCost)
         if (state.resources.credits < enlistCost) {
             showBanner("Need ${enlistCost.toInt()} CR to recruit a ${source.arrivalRank.code} from ${source.label}.")
             return
@@ -1939,7 +2042,8 @@ class CommandViewModel(
             repository.updateCommanderState { cur ->
                 cur.copy(
                     credits = (cur.credits - enlistCost).coerceAtLeast(0.0),
-                    lastSimulatedAtMillis = now
+                    lastSimulatedAtMillis = now,
+                    recruitDiscountPct = 0
                 )
             }
             repository.saveOperator(recruit)

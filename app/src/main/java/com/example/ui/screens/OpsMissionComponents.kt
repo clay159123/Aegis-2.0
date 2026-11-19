@@ -557,7 +557,7 @@ internal fun HqStagingSheet(
     )
     val activeSquadBonus = SquadCohesionRules.evaluateActiveBonus(selectedOps, uiState.squads, mission.requiredSquads > 1)
     // Schools charge per enrolled soldier; missions charge one fee per team
-    val supplyCost = TacticalCalculator.dispatchSupplyCost(
+    val supplyCost = (TacticalCalculator.dispatchSupplyCost(
         mission = mission,
         soldierCount = selectedOperatorIds.size,
         multiplier = TacticalCalculator.supplyCostMultiplier(
@@ -565,7 +565,7 @@ internal fun HqStagingSheet(
             hqStaffSummary = uiState.hqStaffSummary,
             completedCampaignIds = uiState.completedCampaignIds
         )
-    )
+    ) * com.example.domain.SoldierEvents.schoolDiscountFactor(mission, selectedOps, uiState.nowMillis)).roundToInt()
         // Item 96: retrying an SF school past the old limit costs more
         .plus(
             TacticalCalculator.schoolRetrySurcharge(

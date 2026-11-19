@@ -827,6 +827,7 @@ object TacticalCalculator {
             InsertionMethod.GROUND -> null
             InsertionMethod.HELICOPTER -> when {
                 facilityLevel(facilities, FacilityType.AIRFIELD) < 1 -> "Needs an Airfield"
+                SoldierEvents.effects.heloGroundedUntilMillis > System.currentTimeMillis() -> "Aircraft grounded for maintenance"
                 pilot == null -> "Assign a pilot from the Aviation Pool"
                 !(pilot.isAviator && pilot.isWarrantOfficer) -> "Pilot must be a warrant officer aviator"
                 isSfOperation(mission) && !isSfAviator(pilot) -> "SF missions need an SF aviator"
@@ -834,6 +835,7 @@ object TacticalCalculator {
             }
             InsertionMethod.FAST_ROPE -> when {
                 facilityLevel(facilities, FacilityType.AIRFIELD) < AIRFIELD_FAST_ROPE_LEVEL -> "Needs Airfield level $AIRFIELD_FAST_ROPE_LEVEL"
+                SoldierEvents.effects.heloGroundedUntilMillis > System.currentTimeMillis() -> "Aircraft grounded for maintenance"
                 pilot == null -> "Assign a pilot from the Aviation Pool"
                 !(pilot.isAviator && pilot.isWarrantOfficer) -> "Pilot must be a warrant officer aviator"
                 isSfOperation(mission) && !isSfAviator(pilot) -> "SF missions need an SF aviator"
@@ -950,7 +952,8 @@ object TacticalCalculator {
             insertionSurvivalDelta(insertion, pilot, airOps, scattered = false)).coerceIn(42, 98)
         val duration = (mission.durationSeconds * durationMultiplier(facilities, hqStaffSummary) *
             insertionDurationMultiplier(insertion, pilot)).roundToInt()
-        val supply = dispatchSupplyCost(mission, team.size, supplyCostMultiplier(facilities, hqStaffSummary, completedCampaignIds)) +
+        val supply = (dispatchSupplyCost(mission, team.size, supplyCostMultiplier(facilities, hqStaffSummary, completedCampaignIds)) *
+            SoldierEvents.schoolDiscountFactor(mission, team, System.currentTimeMillis())).roundToInt() +
             insertionSupplyCost(insertion, facilities, airOps)
         val (covered, mosBonus) = mosCoverage(mission, team)
         val cohesion = SquadCohesionRules.evaluateActiveBonus(team, squads, mission.requiredSquads > 1)
@@ -1091,9 +1094,9 @@ object TacticalCalculator {
 
     /** Score: the soldier's own firepower (no gear) + Training Range bonus + [roll]. */
     fun rifleQualScore(operator: Operator, citations: List<AwardedMedal>, facilities: List<FacilityState>, roll: Int): Int =
-        soldierStats(operator, citations).firepower +
+        ((soldierStats(operator, citations).firepower +
             facilityLevel(facilities, FacilityType.TRAINING_RANGE).coerceAtLeast(0) * RANGE_QUAL_BONUS_PER_LEVEL +
-            roll.coerceIn(0, QUAL_ROLL_MAX)
+            roll.coerceIn(0, QUAL_ROLL_MAX)) * (100 + operator.eventBuffs.rifleQualBonusPct)) / 100
 
     /** The best badge the soldier holds or has waiting. */
     fun bestQualification(operator: Operator): MarksmanshipBadgeTier? =
@@ -1276,6 +1279,7 @@ object TacticalCalculator {
             OperatorStatus.RETIRED -> return EligibilityResult(false, listOf("Honorably Retired"))
             OperatorStatus.TRANSFERRED -> return EligibilityResult(false, listOf("Transferred out"))
             OperatorStatus.RECOVERING -> return EligibilityResult(false, listOf("In Medbay"))
+            OperatorStatus.ON_LEAVE -> return EligibilityResult(false, listOf("On leave"))
             OperatorStatus.DEPLOYED -> return EligibilityResult(false, listOf("Already Deployed"))
             OperatorStatus.HQ_STAFF -> {
                 if (!mission.scope.hqStaffAllowed) {
@@ -1964,8 +1968,10 @@ object TacticalCalculator {
         val theaterPerk = if (mission.scope == MissionScope.FIELD_COMBAT) campaignFieldPassBonus() else 0
         val camo = teamCamoEffect(mission, selectedOperators, squads, smartWardrobeEnabled).passDelta
         // Item 102: the SOF officer backs SF missions and SF campaign stages
-        val sofBonus = if (isSfOperation(mission)) hqStaffSummary?.sfMissionPassBonusPct ?: 0 else 0
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus)
+        val sofBonus = if (isSfOperation(mission)) (hqStaffSummary?.sfMissionPassBonusPct ?: 0) + SoldierEvents.effects.sfRehearsalBonusPct else 0
+        // Item 69: a lieutenant running their first plan costs a little
+        val ltPlan = if (selectedOperators.any { it.eventBuffs.leadsNextMission }) -SoldierEvents.LT_PLAN_PASS_PENALTY else 0
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan)
             .coerceIn(minOdds, maxOdds)
     }
 

@@ -417,6 +417,7 @@ fun SquadArmoryScreen(
             val statusLabel = when {
                 onTdy -> "TDY"
                 isDeployed -> "DEPLOYED"
+                op.status == OperatorStatus.ON_LEAVE -> "LEAVE"
                 op.status == OperatorStatus.RECOVERING -> "MEDBAY"
                 else -> "READY"
             }
@@ -482,7 +483,7 @@ fun SquadArmoryScreen(
                             Surface(
                                 shape = MaterialTheme.shapes.extraSmall,
                                 color = when (statusLabel) {
-                                    "DEPLOYED", "TDY" -> extra.signalsContainer
+                                    "DEPLOYED", "TDY", "LEAVE" -> extra.signalsContainer
                                     "MEDBAY" -> MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
                                     else -> MaterialTheme.colorScheme.primaryContainer
                                 }
@@ -491,7 +492,7 @@ fun SquadArmoryScreen(
                                     text = statusLabel,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = when (statusLabel) {
-                                        "DEPLOYED", "TDY" -> extra.signalsCyan
+                                        "DEPLOYED", "TDY", "LEAVE" -> extra.signalsCyan
                                         "MEDBAY" -> MaterialTheme.colorScheme.error
                                         else -> MaterialTheme.colorScheme.onPrimaryContainer
                                     },
@@ -708,7 +709,7 @@ fun SquadArmoryScreen(
                 }
             )
             Spacer(modifier = Modifier.height(6.dp))
-            val recruitCost = selectedRecruitSource.creditCost
+            val recruitCost = com.example.domain.SoldierEvents.discountedRecruitCost(selectedRecruitSource.creditCost)
             val canEnlist = !fieldSlotsFull && uiState.resources.credits >= recruitCost
             val arrival = selectedRecruitSource.arrivalRank
             TacticalPanelCard(borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)) {
