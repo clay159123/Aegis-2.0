@@ -3,6 +3,7 @@ package com.example.data.catalog
 import com.example.domain.model.*
 import com.example.domain.GameTiming
 import com.example.domain.TacticalCalculator
+import com.example.domain.PowRules
 
 object GameCatalog {
 
@@ -1309,6 +1310,24 @@ object GameCatalog {
             techBonus = 2,
             resilienceBonus = 2,
             yieldBonusPct = 5
+        ),
+        MedalDefinition(
+            id = "medal_pow",
+            name = "Prisoner of War Medal",
+            shortName = "POW",
+            category = AwardCategory.RIBBON,
+            tier = MedalTier.SERVICE,
+            precedenceOrder = 17,
+            description = "Awarded to soldiers held captive by the enemy who return home.",
+            qualificationRule = "Held as a prisoner of war and returned home.",
+            ribbonStripeHexes = listOf(0xFF111111, 0xFFFFFFFF, 0xFF1E3E66, 0xFFFFFFFF, 0xFFB22234, 0xFFFFFFFF, 0xFF111111),
+            prestigeCost = 0,
+            minMissionsRequired = 0,
+            firepowerBonus = 0,
+            stealthBonus = 1,
+            techBonus = 0,
+            resilienceBonus = 3,
+            yieldBonusPct = 4
         ),
         MedalDefinition(
             id = "medal_sere",
@@ -3108,6 +3127,57 @@ object GameCatalog {
                 "Primary flight: hover, autorotation and traffic pattern work.",
                 "Instrument and night vision goggle flights graded.",
                 "Wings pinned: Army Aviator!"
+            )
+        ),
+        // Item 63: POW operations. Launched from the POW list only (never on the mission board).
+        MissionTemplate(
+            id = PowRules.RESCUE_MISSION_ID,
+            title = "POW Rescue",
+            theater = TheaterRegion.KARST_PEAKS,
+            risk = MissionRisk.HIGH,
+            scope = MissionScope.FIELD_COMBAT,
+            baseSuccessRatePct = 55,
+            briefing = "A captured soldier is being held at a guarded site. Get in, get them, get out before they're moved.",
+            durationSeconds = 40,
+            minOperators = 4,
+            maxOperators = 6,
+            recommendedPower = 130,
+            primaryFocus = "Hostage Rescue • Raid • Hard",
+            supplyCost = 30.0,
+            rewardCredits = 40.0,
+            rewardSupplies = 0.0,
+            rewardIntel = 10.0,
+            rewardPrestige = 15.0,
+            rewardXp = 140,
+            commsFeed = listOf(
+                "Holding site confirmed; guard rotation logged.",
+                "Assault element at the breach point.",
+                "Precious cargo secured. Moving to extract!"
+            )
+        ),
+        MissionTemplate(
+            id = PowRules.NEGOTIATION_MISSION_ID,
+            title = "POW Release Talks",
+            theater = TheaterRegion.DIPLOMATIC_CORPS,
+            risk = MissionRisk.LOW,
+            scope = MissionScope.STAFF_DIPLOMATIC,
+            baseSuccessRatePct = 75,
+            briefing = "Open talks through intermediaries to win a captured soldier's release. Costs ${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS up front.",
+            durationSeconds = 45,
+            minOperators = 1,
+            maxOperators = 3,
+            recommendedPower = 70,
+            primaryFocus = "Negotiation • Diplomatic",
+            supplyCost = 10.0,
+            rewardCredits = 0.0,
+            rewardSupplies = 0.0,
+            rewardIntel = 5.0,
+            rewardPrestige = 0.0,
+            rewardXp = 80,
+            commsFeed = listOf(
+                "Back channel opened through a neutral intermediary.",
+                "Terms on the table; proof of life received.",
+                "Release agreed. Handover at the border crossing."
             )
         ),
         MissionTemplate(

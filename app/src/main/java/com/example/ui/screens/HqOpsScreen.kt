@@ -31,6 +31,7 @@ import com.example.R
 import com.example.data.catalog.GameCatalog
 import com.example.domain.SquadCohesionRules
 import com.example.domain.TacticalCalculator
+import com.example.domain.PowRules
 import com.example.domain.model.*
 import com.example.ui.components.*
 import com.example.ui.theme.LocalAegisColors
@@ -67,6 +68,8 @@ fun HqOpsScreen(
     onAutoGear: () -> Unit = {},
     onClaimDeployment: (String) -> Unit,
     onCancelDeployment: (String) -> Unit = {},
+    /** Item 63: pick the POW a rescue or release talks are for, before staging. */
+    onSelectPowTarget: (String) -> Unit = {},
     onTreatWounded: (String) -> Unit,
     onNavigateToDress: () -> Unit,
     onNavigateToSquad: () -> Unit,
@@ -581,6 +584,27 @@ fun HqOpsScreen(
             }
         }
 
+        // Item 63: soldiers held by the enemy, with the ways to bring them home
+        val pows = uiState.operators.filter { it.status == OperatorStatus.CAPTURED }
+        if (pows.isNotEmpty()) {
+            item {
+                PowListPanel(
+                    pows = pows,
+                    deployments = uiState.deployments,
+                    prestige = uiState.resources.prestige,
+                    nowMillis = uiState.nowMillis,
+                    onRescue = { id ->
+                        onSelectPowTarget(id)
+                        GameCatalog.missions.find { it.id == PowRules.RESCUE_MISSION_ID }?.let(openMissionStaging)
+                    },
+                    onNegotiate = { id ->
+                        onSelectPowTarget(id)
+                        GameCatalog.missions.find { it.id == PowRules.NEGOTIATION_MISSION_ID }?.let(openMissionStaging)
+                    }
+                )
+            }
+        }
+
         // Collapsible Active Deployments
         if (uiState.deployments.isNotEmpty()) {
             item {
@@ -1038,4 +1062,77 @@ private fun OpsSectionBanner(
             )
         }
     }
+}
+
+
+/** Item 63: the POW list. Rescue while the window is open, open release talks, or wait it out. */
+@Composable
+private fun PowListPanel(
+    pows: List<Operator>,
+    deployments: List<ActiveDeployment>,
+    prestige: Double,
+    nowMillis: Long,
+    onRescue: (String) -> Unit,
+    onNegotiate: (String) -> Unit
+) {
+    val extra = LocalAegisColors.current
+    TacticalPanelCard(
+        borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+        modifier = Modifier.testTag("pow_list")
+    ) {
+        Text(
+            "PRISONERS OF WAR (${pows.size})",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.error
+        )
+        Text(
+            "Held soldiers keep their roster slot. Rescue them while the window is open, open release talks " +
+                "(${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS), or wait: they're released or lost when the time runs out.",
+            style = MaterialTheme.typography.labelSmall,
+            color = extra.textMuted
+        )
+        pows.forEach { pow ->
+            val inProgress = deployments.any { it.targetOperatorId == pow.id }
+            val rescueLeft = PowRules.rescueWindowRemainingMillis(pow, nowMillis)
+            val waitLeft = (pow.captivityResolveAtMillis - nowMillis).coerceAtLeast(0L)
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, extra.borderSubtle),
+                modifier = Modifier.fillMaxWidth().testTag("pow_${pow.id}")
+            ) {
+                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "${pow.rank.code} ${pow.callsign}" + (if (TacticalCalculator.isSereQualified(pow)) " • SERE" else ""),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        "Held in ${pow.captureTheater?.label ?: "enemy territory"} • " +
+                            (if (inProgress) "operation under way" else "release or loss in ${formatMinSec(waitLeft)}") +
+                            " • ${PowRules.releaseSurvivalPct(pow)}% survive the wait",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = extra.textMuted
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { onRescue(pow.id) },
+                            enabled = !inProgress && rescueLeft > 0L,
+                            modifier = Modifier.weight(1f).testTag("pow_rescue_${pow.id}")
+                        ) { Text(if (rescueLeft > 0L) "Rescue (${formatMinSec(rescueLeft)})" else "Rescue closed", maxLines = 1) }
+                        OutlinedButton(
+                            onClick = { onNegotiate(pow.id) },
+                            enabled = !inProgress && prestige >= PowRules.NEGOTIATION_PRESTIGE_COST,
+                            modifier = Modifier.weight(1f).testTag("pow_negotiate_${pow.id}")
+                        ) { Text("Talks (${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS)", maxLines = 1) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatMinSec(millis: Long): String {
+    val total = (millis + 999L) / 1000L
+    return "${total / 60}:${(total % 60).toString().padStart(2, '0')}"
 }

@@ -1280,6 +1280,7 @@ object TacticalCalculator {
             OperatorStatus.TRANSFERRED -> return EligibilityResult(false, listOf("Transferred out"))
             OperatorStatus.RECOVERING -> return EligibilityResult(false, listOf("In Medbay"))
             OperatorStatus.ON_LEAVE -> return EligibilityResult(false, listOf("On leave"))
+            OperatorStatus.CAPTURED -> return EligibilityResult(false, listOf("Held as a POW"))
             OperatorStatus.DEPLOYED -> return EligibilityResult(false, listOf("Already Deployed"))
             OperatorStatus.HQ_STAFF -> {
                 if (!mission.scope.hqStaffAllowed) {
@@ -2592,6 +2593,11 @@ object TacticalCalculator {
                     missing += "Complete 1+ Field Combat Deployment (non-training)"
                 }
             }
+            PowRules.POW_MEDAL_ID -> {
+                if (operator.timesCaptured < 1 || operator.status == OperatorStatus.CAPTURED) {
+                    missing += "Held as a prisoner of war and returned home"
+                }
+            }
             "medal_sere" -> {
                 if (SERE_SCHOOL_ID !in operator.completedMissionIds) {
                     missing += "Graduate SERE school"
@@ -2850,6 +2856,7 @@ object TacticalCalculator {
             status = when (outcome) {
                 OperatorOutcomeType.FALLEN -> OperatorStatus.FALLEN
                 OperatorOutcomeType.WOUNDED -> OperatorStatus.RECOVERING
+                OperatorOutcomeType.CAPTURED -> OperatorStatus.CAPTURED
                 OperatorOutcomeType.STAFF_SUPPORT -> OperatorStatus.HQ_STAFF
                 OperatorOutcomeType.SAFE,
                 OperatorOutcomeType.TRAINING_PASSED,
@@ -2904,6 +2911,8 @@ object TacticalCalculator {
         }
 
         return when (outcome) {
+            // Item 63: the POW Medal waits until they come home
+            OperatorOutcomeType.CAPTURED -> null to "Captured by the enemy during ${mission.title}."
             OperatorOutcomeType.FALLEN -> {
                 val medalId = firstEligibleUnowned(
                     listOf("medal_purple_shield"), includeGeneralFallback = false

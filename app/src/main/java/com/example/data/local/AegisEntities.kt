@@ -100,6 +100,10 @@ data class OperatorEntity(
     val lastAamAtAction: Int = -100,
     val bodyBuildName: String? = null,
     val eventBuffsCsv: String = "",
+    val capturedAtMillis: Long = 0L,
+    val captivityResolveAtMillis: Long = 0L,
+    val captureTheaterName: String? = null,
+    val timesCaptured: Int = 0,
     val unlocked: Boolean,
     val recruitCreditCost: Double,
     val recruitIntelCost: Double,
@@ -139,7 +143,8 @@ data class DeploymentEntity(
     val pilotId: String? = null,
     val platoonLeaderId: String? = null,
     val missionTitle: String? = null,
-    val flightHours: Int = 0
+    val flightHours: Int = 0,
+    val targetOperatorId: String? = null
 )
 
 @Entity(tableName = "squads")

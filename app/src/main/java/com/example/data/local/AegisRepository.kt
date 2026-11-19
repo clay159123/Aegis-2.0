@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 25
+        const val SAVE_FORMAT_VERSION = 26
     }
 
     private val commanderMutex = Mutex()
@@ -466,6 +466,10 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     lastAamAtAction = lastAamAtAction,
     bodyBuildOverride = bodyBuildName?.let { n -> BodyBuild.entries.find { it.name == n } },
     eventBuffs = SoldierEventBuffs.fromCsv(eventBuffsCsv),
+    capturedAtMillis = capturedAtMillis,
+    captivityResolveAtMillis = captivityResolveAtMillis,
+    captureTheater = captureTheaterName?.let { n -> TheaterRegion.entries.find { it.name == n } },
+    timesCaptured = timesCaptured,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -547,6 +551,10 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     lastAamAtAction = lastAamAtAction,
     bodyBuildName = bodyBuildOverride?.name,
     eventBuffsCsv = eventBuffs.toCsv(),
+    capturedAtMillis = capturedAtMillis,
+    captivityResolveAtMillis = captivityResolveAtMillis,
+    captureTheaterName = captureTheater?.name,
+    timesCaptured = timesCaptured,
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -773,7 +781,8 @@ private fun DeploymentEntity.toDomain(): ActiveDeployment = ActiveDeployment(
     pilotId = pilotId,
     platoonLeaderId = platoonLeaderId,
     missionTitle = missionTitle,
-    flightHours = flightHours
+    flightHours = flightHours,
+    targetOperatorId = targetOperatorId
 )
 
 private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
@@ -789,7 +798,8 @@ private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
     pilotId = pilotId,
     platoonLeaderId = platoonLeaderId,
     missionTitle = missionTitle,
-    flightHours = flightHours
+    flightHours = flightHours,
+    targetOperatorId = targetOperatorId
 )
 
 /** Citations stored as "missionId|title|millis|member+member;..." */
