@@ -163,7 +163,7 @@ class CommandViewModel(
             val rotatingIds = data.commander.rotatingMissionIdsCsv
                 .split(",")
                 .filter { id -> id.isNotBlank() && GameCatalog.rotatingStandalonePool.any { it.id == id } }
-            TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.operators)
+            TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.squads)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
             TacticalCalculator.tdyOperatorIds = TacticalCalculator.tdyOperatorIdsFor(data.deployments)
             TacticalCalculator.airfieldLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.AIRFIELD)
@@ -1530,7 +1530,8 @@ class CommandViewModel(
                 deployedOperators = postMissionDeployed,
                 mission = mission,
                 missionSucceeded = missionSucceeded,
-                gainMultiplier = TacticalCalculator.dfacCohesionMultiplier(state.facilities)
+                gainMultiplier = TacticalCalculator.dfacCohesionMultiplier(state.facilities) *
+                    (1.0 + state.hqStaffSummary.cohesionGainBonusPct / 100.0)
             )
         }
         val postMissionDeployed = targetOps.map { updatedOpsById[it.id] ?: it }
@@ -3074,13 +3075,21 @@ class CommandViewModel(
         memberIds: List<String>,
         leaderId: String?,
         teamLeaderId: String?,
-        standard: SquadUniformStandard
+        standard: SquadUniformStandard,
+        specialForces: Boolean = false
     ) {
         val state = uiState.value
+        // Item 58: one SF squad at a time, SF-qualified members only
+        if (specialForces && state.squads.any { it.isSpecialForces && it.id != squadId }) {
+            showBanner("The command already has an SF squad.")
+            return
+        }
         val validIds = memberIds
             .distinct()
             .filter { id ->
-                state.operators.find { it.id == id }?.let { SquadCohesionRules.isOperatorEligibleForFieldSquad(it) } == true
+                state.operators.find { it.id == id }?.let {
+                    SquadCohesionRules.isOperatorEligibleForFieldSquad(it) && (!specialForces || TacticalCalculator.isSfQualified(it))
+                } == true
             }
             .take(MAX_SQUAD_SIZE)
         if (validIds.size < MIN_SQUAD_SIZE) {
@@ -3116,7 +3125,8 @@ class CommandViewModel(
                 standardMessDressStyle = standard.messDressStyle,
                 standardMessHeadgear = standard.messHeadgear,
                 standardAlphasGloves = standard.alphasGloves,
-                standardMessGloves = standard.messGloves
+                standardMessGloves = standard.messGloves,
+                isSpecialForces = specialForces
             )
         } else {
             TacticalSquad(
@@ -3137,7 +3147,8 @@ class CommandViewModel(
                 standardMessDressStyle = standard.messDressStyle,
                 standardMessHeadgear = standard.messHeadgear,
                 standardAlphasGloves = standard.alphasGloves,
-                standardMessGloves = standard.messGloves
+                standardMessGloves = standard.messGloves,
+                isSpecialForces = specialForces
             )
         }
 

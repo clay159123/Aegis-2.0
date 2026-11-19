@@ -444,10 +444,17 @@ object UniformRegaliaRules {
         if (operator.status == OperatorStatus.HQ_STAFF) return UnitPatchStyle.SUPREME_HQ
         // Item 100: aviators wear the Aviation Brigade patch
         if (operator.specialty == OperatorSpecialty.AVIATION) return UnitPatchStyle.AVIATION_BRIGADE
-        return squads.firstOrNull { operator.id in it.memberIds }?.standardPatch
+        val squad = squads.firstOrNull { operator.id in it.memberIds }
+        // Item 58: the SF squad wears the SF arrowhead
+        if (squad?.isSpecialForces == true) return UnitPatchStyle.SPECIAL_FORCES
+        return squad?.standardPatch
             ?.takeIf { it.isDivision }
             ?: UnitPatchStyle.UNASSIGNED
     }
+
+    /** Item 58: SF squad members wear sterile field uniforms and the SF flash on the green beret. */
+    fun isSfSquadMember(operator: Operator, squads: List<TacticalSquad>): Boolean =
+        squads.any { it.isSpecialForces && operator.id in it.memberIds }
 
     /** Combat patches the soldier has earned, newest campaign first. */
     fun earnedCombatPatches(operator: Operator): List<UnitPatchStyle> =

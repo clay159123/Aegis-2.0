@@ -2175,7 +2175,11 @@ object GameCatalog {
         if (m.requiresSfTeam) {
             // SF teams can go any way they're qualified for; Maritime only on the coast
             val sfWays = listOf(G, H, AB, InsertionMethod.HALO) + if (m.coastal) listOf(InsertionMethod.MARITIME) else emptyList()
-            return m.copy(allowedInsertions = withFastRopeSf(sfWays))
+            return m.copy(
+                allowedInsertions = withFastRopeSf(sfWays),
+                minOperators = TacticalCalculator.SF_MIN_TEAM,
+                maxOperators = TacticalCalculator.SF_MAX_TEAM
+            )
         }
         // Item 59: wherever a helicopter can land, an Air Assault team can fast-rope in
         fun withFastRope(ways: List<InsertionMethod>) = if (H in ways) ways + InsertionMethod.FAST_ROPE else ways

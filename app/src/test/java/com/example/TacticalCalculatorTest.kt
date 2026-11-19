@@ -604,6 +604,7 @@ class TacticalCalculatorTest {
             listOf(
                 HqStaffRole.CO_COMMANDING_OFFICER,
                 HqStaffRole.XO_CHIEF_OF_STAFF,
+                HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR,
                 HqStaffRole.S1_PERSONNEL_HONORS
             ),
             lv1Roles
@@ -613,7 +614,8 @@ class TacticalCalculatorTest {
             if (it.type == FacilityType.COMMAND_HQ) it.copy(level = 5) else it
         }
         assertEquals(7, TacticalCalculator.maxHqStaffSlots(lv5Facilities))
-        assertEquals(7, TacticalCalculator.unlockedHqRoles(lv5Facilities).size)
+        // CSM rides with the XO and SOF with the S-4: two extra billets by HQ 5
+        assertEquals(9, TacticalCalculator.unlockedHqRoles(lv5Facilities).size)
 
         val cipher = GameCatalog.initialOperators.first { it.id == "op_cipher" }
         val vesper = GameCatalog.initialOperators.first { it.id == "op_vesper" }

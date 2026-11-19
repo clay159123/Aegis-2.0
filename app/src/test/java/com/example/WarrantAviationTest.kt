@@ -192,8 +192,8 @@ class WarrantAviationTest {
         // Slots: the two new billets open at HQ 6 and 7; the cap still matches the role count
         fun slots(hq: Int) = TacticalCalculator.maxHqStaffSlots(listOf(FacilityState(FacilityType.COMMAND_HQ, hq)))
         assertEquals(8, slots(6))
-        assertEquals(HqStaffRole.entries.size, slots(7))
-        assertEquals(HqStaffRole.entries.size, slots(10))
+        assertEquals(HqStaffRole.entries.maxOf { it.slotOrder }, slots(7))
+        assertEquals(HqStaffRole.entries.maxOf { it.slotOrder }, slots(10))
         assertEquals(6, HqStaffRole.AIR_OPS_OFFICER.requiredHqLevel)
         assertEquals(7, HqStaffRole.CCWO_COMMAND_CHIEF_WARRANT.requiredHqLevel)
     }

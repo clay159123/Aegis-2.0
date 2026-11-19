@@ -215,14 +215,20 @@ object SquadCohesionRules {
         val oddsBonus = (scale * 8.0).roundToInt() + leaderPresenceOdds
 
         // Full Strength: a squad of 4+ that deploys at least 4 of its members
-        val fullStrength = squad.memberIds.size >= FULL_STRENGTH_SQUAD_SIZE && deployedCount >= FULL_STRENGTH_SQUAD_SIZE
+        // Item 58: the SF squad is at full strength only with all six of its own members on the team
+        val fullStrength = if (squad.isSpecialForces) {
+            squad.memberIds.size >= MAX_SQUAD_SIZE && deployedCount >= MAX_SQUAD_SIZE
+        } else {
+            squad.memberIds.size >= FULL_STRENGTH_SQUAD_SIZE && deployedCount >= FULL_STRENGTH_SQUAD_SIZE
+        }
         val fullStrengthBonus = if (fullStrength) FULL_STRENGTH_BONUS_PCT else 0
 
         if (effBonus <= 0 && survBonus <= 0 && oddsBonus <= 0 && !fullStrength) return null
 
         // Item 34: anyone on the team who belongs to a different squad mixes the squads for this mission
+        // The SF squad: any soldier filled in from outside the squad counts as mixing
         val mixed = !multiSquadMission && selectedOperators.any { op ->
-            op.id !in squad.memberIds && squads.any { other -> other.id != squad.id && op.id in other.memberIds }
+            op.id !in squad.memberIds && (squad.isSpecialForces || squads.any { other -> other.id != squad.id && op.id in other.memberIds })
         }
         fun cut(v: Int): Int = if (mixed) (v * (1.0 - MIXED_SQUAD_COHESION_CUT)).roundToInt() else v
 

@@ -720,7 +720,9 @@ internal fun HqStagingSheet(
                     val leaderOp = squad.leaderId?.let { id -> uiState.operators.find { it.id == id } }
                     val isSquadSelected = selectedSquadId == squad.id ||
                         (deployableForSquad.isNotEmpty() && deployableForSquad.toSet() == selectedOperatorIds.toSet())
-                    val canDeploySquad = deployableForSquad.size >= mission.minOperators
+                    val canDeploySquad = deployableForSquad.size >= mission.minOperators ||
+                        (squad.isSpecialForces && mission.requiresSfTeam && deployableForSquad.size >= TacticalCalculator.SF_SQUAD_CORE)
+                    val sfRed = Color(SF_PATCH_RED_BRIGHT)
 
                     Surface(
                         modifier = Modifier
@@ -735,8 +737,12 @@ internal fun HqStagingSheet(
                             MaterialTheme.colorScheme.surfaceContainerHigh
                         },
                         border = BorderStroke(
-                            if (isSquadSelected) 1.5.dp else 1.dp,
-                            if (isSquadSelected) extra.brassBright else extra.borderSubtle
+                            if (isSquadSelected || squad.isSpecialForces) 1.5.dp else 1.dp,
+                            when {
+                                squad.isSpecialForces -> sfRed
+                                isSquadSelected -> extra.brassBright
+                                else -> extra.borderSubtle
+                            }
                         )
                     ) {
                         Column(
@@ -747,6 +753,7 @@ internal fun HqStagingSheet(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                if (squad.isSpecialForces) SfMarker()
                                 Icon(
                                     imageVector = Icons.Filled.Star,
                                     contentDescription = null,

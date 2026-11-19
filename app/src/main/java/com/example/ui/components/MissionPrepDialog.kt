@@ -119,7 +119,7 @@ fun MissionPrepDialog(
                 }
                 if (mission.requiresSfTeam) {
                     Text(
-                        "${mission.sfMissionType ?: "Special Forces"} • exactly ${TacticalCalculator.SF_TEAM_SIZE} soldiers, ${TacticalCalculator.SF_MIN_QUALIFIED}+ SF-qualified. Each different MOS adds +${TacticalCalculator.MOS_COVERAGE_BONUS_PCT}%.",
+                        "${mission.sfMissionType ?: "Special Forces"} • ${TacticalCalculator.SF_MIN_TEAM} to ${TacticalCalculator.SF_MAX_TEAM} SF-qualified soldiers, ${TacticalCalculator.SF_SQUAD_CORE}+ from the SF squad. Each different MOS adds +${TacticalCalculator.MOS_COVERAGE_BONUS_PCT}%.",
                         style = MaterialTheme.typography.labelSmall,
                         color = extra.textMuted
                     )
