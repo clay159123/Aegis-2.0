@@ -2974,7 +2974,7 @@ class TacticalCalculatorTest {
         fun with(t: FacilityType, lv: Int) = FacilityType.entries.map { FacilityState(it, if (it == t) lv else it.startLevel) }
         // Barracks drives the roster
         assertEquals(8, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 1)))
-        assertEquals(12, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 5)))
+        assertEquals(20, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 5)))
         // Range: +1%/lv, +2%/lv for Ranger, still capped
         val recruit = GameCatalog.createPostBasicRecruit("op_r", OperatorSpecialty.ASSAULT, emptySet(), 0)
         val signals = GameCatalog.missions.first { it.id == "msn_signals_school" }

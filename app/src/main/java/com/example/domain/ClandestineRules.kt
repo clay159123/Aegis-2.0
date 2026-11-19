@@ -29,8 +29,9 @@ object ClandestineRules {
     /** Why this team can't run a clandestine mission, or null. All must be in the SF squad. */
     fun teamBlocker(mission: MissionTemplate, team: List<Operator>, squads: List<TacticalSquad>): String? {
         if (!mission.isClandestine) return null
-        val sf = TacticalCalculator.sfSquadOf(squads) ?: return "Form an SF squad first"
-        team.firstOrNull { it.id !in sf.memberIds }?.let { return "Clandestine missions are SF squad only (${it.callsign} isn't in ${sf.name})" }
+        if (TacticalCalculator.sfSquadOf(squads) == null) return "Form an SF squad first"
+        val sfIds = CompoundRules.sfSquadMemberIds(squads)
+        team.firstOrNull { it.id !in sfIds }?.let { return "Clandestine missions are SF squad only (${it.callsign} isn't in an SF squad)" }
         val speakers = team.count { knowsLanguage(it, mission.theater) }
         if (speakers < MIN_LANGUAGE_QUALIFIED) {
             return "Needs $MIN_LANGUAGE_QUALIFIED+ soldiers who speak the ${mission.theater.label} language ($speakers/$MIN_LANGUAGE_QUALIFIED)"
@@ -59,7 +60,7 @@ object ClandestineRules {
         val statCut = ((avgStealthTech - 20).coerceAtLeast(0.0) * STAT_CUT_PER_POINT).toInt()
         val languageCut = team.count { knowsLanguage(it, mission.theater) } * LANGUAGE_CUT_PCT
         val perk = if (FREE_STRAIT_ID in clearedCampaignIds) FREE_STRAIT_CUT_PCT else 0
-        return (BASE_BLOWN_COVER_PCT - statCut - languageCut - perk).coerceIn(MIN_BLOWN_COVER_PCT, MAX_BLOWN_COVER_PCT)
+        return (BASE_BLOWN_COVER_PCT - statCut - languageCut - perk - CompoundRules.blownCoverCutPct()).coerceIn(MIN_BLOWN_COVER_PCT, MAX_BLOWN_COVER_PCT)
     }
 
     /** When cover will blow (25% to 75% of the way in), or 0 if it holds. Rolled at launch. */

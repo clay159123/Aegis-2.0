@@ -134,7 +134,11 @@ fun SquadArmoryScreen(
         it.unlocked && it.transferRequested && !it.status.isOutOfActiveService
     }
     val recruitableOps = uiState.operators.filter { !it.unlocked }
-    val fieldSlotsFull = fieldOps.size >= uiState.maxFieldRosterSlots
+    // Items 116/118: SF squad members housed in the SF Compound don't take a Barracks slot
+    val barracksUsed = com.example.domain.CompoundRules.fieldRosterUsed(uiState.operators, uiState.squads, uiState.facilities)
+    val compoundLevel = com.example.domain.TacticalCalculator.facilityLevel(uiState.facilities, FacilityType.SF_COMPOUND)
+    val compoundNote = if (compoundLevel > 0) " • Compound ${com.example.domain.CompoundRules.compoundUsed(uiState.operators, uiState.squads, uiState.facilities)}/${com.example.domain.CompoundRules.compoundCapacity(compoundLevel)}" else ""
+    val fieldSlotsFull = barracksUsed >= uiState.maxFieldRosterSlots
     val autoEquipEligibleCount = fieldOps.count {
         it.id !in deployedOpIds && it.status != OperatorStatus.DEPLOYED
     }
@@ -200,7 +204,7 @@ fun SquadArmoryScreen(
 
         item {
             SectionHeader(
-                title = "Active Field Units (${fieldOps.size}/${uiState.maxFieldRosterSlots})",
+                title = "Active Field Units (${barracksUsed}/${uiState.maxFieldRosterSlots}$compoundNote)",
                 subtitle = "Soldiers, NCOs & Officers deployable on field ops • SGT+ eligible for Staff or Transfer"
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -695,7 +699,7 @@ fun SquadArmoryScreen(
         item {
             CollapsibleRosterHeader(
                 title = "Recruiting",
-                summary = "${fieldOps.size}/${uiState.maxFieldRosterSlots} field slots used • ${recruitableOps.size} cadre transfers waiting",
+                summary = "${barracksUsed}/${uiState.maxFieldRosterSlots} Barracks slots used$compoundNote • ${recruitableOps.size} cadre transfers waiting",
                 expanded = "recruiting" in openSections,
                 onToggle = { toggleSection("recruiting") },
                 modifier = Modifier.testTag("roster_section_recruiting")
@@ -748,7 +752,7 @@ fun SquadArmoryScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         when {
-                            fieldSlotsFull -> "Field Roster Full (${fieldOps.size}/${uiState.maxFieldRosterSlots})"
+                            fieldSlotsFull -> "Barracks Full (${barracksUsed}/${uiState.maxFieldRosterSlots})"
                             uiState.resources.credits < recruitCost -> "Need ${recruitCost.toInt()} CR for a ${arrival.code}"
                             else -> "Recruit ${arrival.code} (${recruitCost.toInt()} CR)"
                         }
@@ -916,6 +920,7 @@ fun SquadArmoryScreen(
             fieldOperators = groundOps,
             onSave = onSaveSquad,
             onDisband = onDisbandSquad,
+            sfSquadLimit = com.example.domain.CompoundRules.sfSquadLimit(uiState.facilities),
             gearItems = uiState.gearItems,
             citations = uiState.citations,
             onDismiss = {

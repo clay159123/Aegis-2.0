@@ -77,7 +77,7 @@ enum class FacilityType(
         baseRatePerSec = 0.0,
         baseCreditCost = 70.0,
         baseSupplyCost = 35.0,
-        perkDescription = "Field roster: 8 soldiers at Lv 1, +1 per level"
+        perkDescription = "Field roster: 8 soldiers at Lv 1, +3 per level"
     ),
     LOGISTICS_DEPOT(
         id = "logistics_depot",
@@ -155,6 +155,18 @@ enum class FacilityType(
         baseSupplyCost = 70.0,
         perkDescription = "Base for flight training and helicopter insertion (arriving with the aviation updates)",
         unlockHqLevel = 4,
+        startLevel = 0
+    ),
+    /** Item 118: houses the SF squads apart from the Barracks; buildable once the first SF squad forms. */
+    SF_COMPOUND(
+        id = "sf_compound",
+        title = "SF Compound",
+        subtitle = "Special Forces team rooms and rehearsal yard",
+        primaryResource = ResourceType.CREDITS,
+        baseRatePerSec = 0.0,
+        baseCreditCost = 160.0,
+        baseSupplyCost = 80.0,
+        perkDescription = "Houses 6 SF soldiers at Lv 1, 12 at Lv 4, 18 at Lv 7 (up to 3 SF squads) • -1% blown cover and 4% faster SF recovery per level • SF schools +5% at Lv 10",
         startLevel = 0
     );
 
