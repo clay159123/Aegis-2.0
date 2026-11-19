@@ -62,15 +62,23 @@ internal object TheaterExpansion {
         id: String, title: String, theater: TheaterRegion, risk: MissionRisk, success: Int, briefing: String,
         seconds: Int, power: Int, focus: String, supply: Double, cr: Double, sup: Double, intel: Double,
         prs: Double, xp: Int, feed: List<String>, campaignId: String? = null, stage: Int? = null,
-        night: Boolean = false, tag: String? = null
-    ) = MissionTemplate(
-        id = id, title = title, theater = theater, risk = risk, baseSuccessRatePct = success,
-        briefing = briefing, durationSeconds = seconds, minOperators = 3, maxOperators = 6,
-        recommendedPower = power, primaryFocus = focus, isNightOp = night, supplyCost = supply,
-        rewardCredits = cr, rewardSupplies = sup, rewardIntel = intel, rewardPrestige = prs, rewardXp = xp,
-        commsFeed = feed, campaignId = campaignId, campaignStageOrder = stage,
-        isRotatingStandalone = campaignId == null, contractTag = tag
-    )
+        night: Boolean = false, tag: String? = null, platoon: Boolean = false
+    ): MissionTemplate {
+        // Item 108: platoon stages take two squads (8 to 12 soldiers) and pay about 1.6x
+        val pay = if (platoon) PLATOON_REWARD_MULT else 1.0
+        return MissionTemplate(
+            id = id, title = if (platoon) "$title (Platoon Op)" else title, theater = theater, risk = risk, baseSuccessRatePct = success,
+            briefing = briefing, durationSeconds = seconds, minOperators = if (platoon) 8 else 3, maxOperators = if (platoon) 12 else 6,
+            recommendedPower = power, primaryFocus = focus, isNightOp = night, supplyCost = if (platoon) supply * 1.4 else supply,
+            rewardCredits = cr * pay, rewardSupplies = sup * pay, rewardIntel = intel * pay, rewardPrestige = prs * pay,
+            rewardXp = (xp * pay).toInt(),
+            commsFeed = feed, campaignId = campaignId, campaignStageOrder = stage,
+            isRotatingStandalone = campaignId == null, contractTag = tag,
+            requiredSquads = if (platoon) 2 else 1
+        )
+    }
+
+    private const val PLATOON_REWARD_MULT = 1.6
 
     private fun staff(
         id: String, title: String, theater: TheaterRegion, risk: MissionRisk, success: Int, briefing: String,
@@ -158,7 +166,7 @@ internal object TheaterExpansion {
             "Assault the fortified government quarter street by street through the canyon of high-rises.",
             250, 130, "Campaign VII Finale • Assault & Trauma", 128.0, 1050.0, 310.0, 180.0, 76.0, 640,
             listOf("Squads stacked at the canyon entrance.", "Heavy fire from three sides; medics working nonstop.", "Government quarter taken. Meridian City is free."),
-            "camp_meridian", 4),
+            "camp_meridian", 4, platoon = true),
 
         // Campaign VIII: Karst Peaks (High to Extreme)
         field("camp_karst_1", "Stage 1: Thin Air Ascent", KARST, MissionRisk.HIGH, 44,
@@ -180,7 +188,7 @@ internal object TheaterExpansion {
             "Seize the fortified artillery position on the summit that dominates the whole range.",
             260, 134, "Campaign VIII Finale • Assault & Signals", 132.0, 1120.0, 330.0, 200.0, 80.0, 670,
             listOf("Teams moving up the north face in a whiteout.", "Jammers down; guns engaged at point-blank range.", "Summit taken. The Karst Peaks are secure."),
-            "camp_karst", 4, night = true),
+            "camp_karst", 4, night = true, platoon = true),
 
         // Campaign IX: Talon Archipelago (High to Extreme, five stages)
         field("camp_talon_1", "Stage 1: Island Hop Recon", TALON, MissionRisk.HIGH, 44,
@@ -207,7 +215,7 @@ internal object TheaterExpansion {
             "Storm the island fortress at the center of the chain while the air defenses are blind.",
             260, 136, "Campaign IX Finale • Task Force Assault", 134.0, 1180.0, 340.0, 210.0, 84.0, 690,
             listOf("Helicopters inbound low over the water.", "Fortress gates breached; heavy close-quarters fighting.", "Fortress taken. The chain is broken."),
-            "camp_talon", 5),
+            "camp_talon", 5, platoon = true),
 
         // Campaign X: Ironhold (High to Extreme, five stages, the final campaign)
         field("camp_ironhold_1", "Stage 1: Wall Recon", IRON, MissionRisk.HIGH, 42,
@@ -234,7 +242,7 @@ internal object TheaterExpansion {
             "Assault the citadel at the heart of Ironhold and end the war.",
             300, 140, "Campaign X Finale • Task Force Valor", 140.0, 1400.0, 380.0, 240.0, 100.0, 760,
             listOf("Every team committed. The citadel is lit up with fire.", "Breaching the inner keep under maximum pressure.", "Citadel taken. All ten campaigns cleared!"),
-            "camp_ironhold", 5, night = true)
+            "camp_ironhold", 5, night = true, platoon = true)
     )
 
     /** More single missions for the rotating board, including one-squad High and Extreme missions. */

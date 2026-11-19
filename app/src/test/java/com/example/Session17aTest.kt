@@ -42,10 +42,11 @@ class Session17aTest {
         val one = TacticalCalculator.schoolRetrySurcharge(sf, listOf(tired), 1.0)
         val two = TacticalCalculator.schoolRetrySurcharge(sf, listOf(tired.copy(schoolAttempts = mapOf(sf.id to limit + 1))), 1.0)
         assertTrue(one > 0 && two > one)
-        // Other schools keep their limit
+        // Item 101: every school now works this way
         val ranger = GameCatalog.missions.first { it.id == "msn_ranger_school" }
         val rangerOut = base.copy(schoolAttempts = mapOf(ranger.id to ranger.schoolRequirements!!.maxAttempts!!))
-        assertTrue(TacticalCalculator.canOperatorDeployOnMission(rangerOut, ranger, emptySet()).missingRequirements.any { it.startsWith("Washed out") })
+        assertFalse(TacticalCalculator.canOperatorDeployOnMission(rangerOut, ranger, emptySet()).missingRequirements.any { it.startsWith("Washed out") })
+        assertTrue(TacticalCalculator.schoolRetrySurcharge(ranger, listOf(rangerOut), 1.0) > 0)
     }
 
     @Test

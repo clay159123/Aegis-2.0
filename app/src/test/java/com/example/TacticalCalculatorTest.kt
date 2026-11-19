@@ -735,7 +735,7 @@ class TacticalCalculatorTest {
         )
         assertTrue(TacticalCalculator.canOperatorDeployOnMission(qualifiedRangerCandidate, rangerSchool, emptySet()).eligible)
 
-        // Attempt limits: Airborne & Ranger cap at 2, Signals caps at 3, Basic is unlimited
+        // Item 101: attempts past a school's old limit stay open (at extra cost); Basic is unlimited
         assertTrue(
             TacticalCalculator.canOperatorDeployOnMission(
                 cipher.copy(schoolAttempts = mapOf("msn_signals_school" to 2)),
@@ -743,14 +743,14 @@ class TacticalCalculatorTest {
                 emptySet()
             ).eligible
         )
-        assertFalse(
+        assertTrue(
             TacticalCalculator.canOperatorDeployOnMission(
                 cipher.copy(schoolAttempts = mapOf("msn_signals_school" to 3)),
                 signalsSchool,
                 emptySet()
             ).eligible
         )
-        assertFalse(
+        assertTrue(
             TacticalCalculator.canOperatorDeployOnMission(
                 qualifiedRangerCandidate.copy(schoolAttempts = mapOf("msn_ranger_school" to 2)),
                 rangerSchool,
@@ -3013,14 +3013,17 @@ class TacticalCalculatorTest {
         // Gear no longer changes the badge
         val rifle = GameCatalog.initialGear.first { it.slot == GearSlot.WEAPON }.copy(unlocked = true, tier = 5)
         assertEquals(MarksmanshipBadgeTier.SHARPSHOOTER, UniformRegaliaRules.resolveMarksmanshipTier(awarded, listOf(rifle)))
-        // Repeatable up to 3 times, then locked
+        // Item 101: requal past the old limit (at extra cost) until Expert, then closed
         val qual = GameCatalog.missions.first { it.id == TacticalCalculator.RIFLE_QUAL_MISSION_ID }
         val graduated = awarded.copy(completedMissionIds = awarded.completedMissionIds + qual.id)
         assertTrue(TacticalCalculator.canOperatorDeployOnMission(graduated, qual, emptySet()).eligible)
         val usedUp = graduated.copy(schoolAttempts = mapOf(qual.id to 3))
-        val blocked = TacticalCalculator.canOperatorDeployOnMission(usedUp, qual, emptySet())
+        assertTrue(TacticalCalculator.canOperatorDeployOnMission(usedUp, qual, emptySet()).eligible)
+        assertTrue(TacticalCalculator.schoolRetrySurcharge(qual, listOf(usedUp), 1.0) > 0)
+        val expert = usedUp.copy(marksmanshipQual = MarksmanshipBadgeTier.EXPERT)
+        val blocked = TacticalCalculator.canOperatorDeployOnMission(expert, qual, emptySet())
         assertFalse(blocked.eligible)
-        assertTrue(blocked.reasonText.contains("No requalification attempts left"))
+        assertTrue(blocked.reasonText.contains("Already qualified Expert"))
         // Needs Marksmanship & Tactical Basics first
         assertFalse(TacticalCalculator.canOperatorDeployOnMission(soldier.copy(completedMissionIds = emptySet()), qual, emptySet()).eligible)
     }
