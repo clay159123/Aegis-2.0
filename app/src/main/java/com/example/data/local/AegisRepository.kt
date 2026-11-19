@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 27
+        const val SAVE_FORMAT_VERSION = 28
     }
 
     private val commanderMutex = Mutex()
@@ -473,6 +473,7 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     powTalksFailures = powTalksFailures,
     powTalksCooldownUntilMillis = powTalksCooldownUntilMillis,
     powRescueClosed = powRescueClosed,
+    languageRegions = languageRegionsCsv.split(",").mapNotNull { n -> TheaterRegion.entries.find { it.name == n } }.toSet(),
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -561,6 +562,7 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     powTalksFailures = powTalksFailures,
     powTalksCooldownUntilMillis = powTalksCooldownUntilMillis,
     powRescueClosed = powRescueClosed,
+    languageRegionsCsv = languageRegions.joinToString(",") { it.name },
     unlocked = unlocked,
     recruitCreditCost = recruitCreditCost,
     recruitIntelCost = recruitIntelCost,
@@ -788,7 +790,11 @@ private fun DeploymentEntity.toDomain(): ActiveDeployment = ActiveDeployment(
     platoonLeaderId = platoonLeaderId,
     missionTitle = missionTitle,
     flightHours = flightHours,
-    targetOperatorId = targetOperatorId
+    targetOperatorId = targetOperatorId,
+    languageRegion = languageRegionName?.let { n -> TheaterRegion.entries.find { it.name == n } },
+    coverBlownAtMillis = coverBlownAtMillis,
+    coverBlown = coverBlown,
+    coverPushOn = coverPushOn
 )
 
 private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
@@ -805,7 +811,11 @@ private fun ActiveDeployment.toEntity(): DeploymentEntity = DeploymentEntity(
     platoonLeaderId = platoonLeaderId,
     missionTitle = missionTitle,
     flightHours = flightHours,
-    targetOperatorId = targetOperatorId
+    targetOperatorId = targetOperatorId,
+    languageRegionName = languageRegion?.name,
+    coverBlownAtMillis = coverBlownAtMillis,
+    coverBlown = coverBlown,
+    coverPushOn = coverPushOn
 )
 
 /** Citations stored as "missionId|title|millis|member+member;..." */

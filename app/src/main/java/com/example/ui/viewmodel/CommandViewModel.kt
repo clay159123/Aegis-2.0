@@ -19,6 +19,7 @@ import com.example.domain.PetitionAction
 import com.example.domain.SoldierEventContext
 import com.example.domain.SoldierEvents
 import com.example.domain.PowRules
+import com.example.domain.ClandestineRules
 import com.example.domain.AwardRules
 import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
@@ -177,6 +178,7 @@ class CommandViewModel(
                 .filter { id -> id.isNotBlank() && GameCatalog.rotatingStandalonePool.any { it.id == id } }
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.squads)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
+            ClandestineRules.clearedStageIds = completedStages
             TacticalCalculator.tdyOperatorIds = TacticalCalculator.tdyOperatorIdsFor(data.deployments)
             val eventEffects = CommandEventEffects(
                 heloGroundedUntilMillis = data.commander.heloGroundedUntilMillis,
@@ -406,6 +408,11 @@ class CommandViewModel(
                 }
                 tickSoldierEvents(state, now)
                 resolveCaptivity(state, now)
+                // Item 62: covers that blow now; the clock drops and the team must choose
+                state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
+                    repository.saveDeployment(ClandestineRules.blowCover(d, now))
+                    showBanner("Cover blown on ${d.missionTitle ?: "a clandestine mission"}!")
+                }
 
                 val recoveredOps = state.operators.filter {
                     it.status == OperatorStatus.RECOVERING && now >= it.recoveryUntilMillis
@@ -483,6 +490,24 @@ class CommandViewModel(
             if (it.status == OperatorStatus.FALLEN) "${it.callsign} died in captivity." else "${it.callsign} was released and is coming home."
         })
     }
+
+    /** Item 62: the region a Language school class will study, picked in staging. */
+    var languageRegionChoice: TheaterRegion? = null
+        private set
+
+    fun selectLanguageRegion(region: TheaterRegion) {
+        languageRegionChoice = region
+    }
+
+    /** Item 62: push on after a blown cover; the mission continues at a disadvantage. */
+    fun pushOnAfterBlownCover(deploymentId: String) {
+        val d = uiState.value.deployments.find { it.id == deploymentId } ?: return
+        viewModelScope.launch { repository.saveDeployment(d.copy(coverPushOn = true)) }
+        showBanner("Pushing on. The team fights its way to the objective.")
+    }
+
+    /** Item 62: abort and exfil after a blown cover: no rewards, halved casualty odds. */
+    fun exfilAfterBlownCover(deploymentId: String) = cancelDeployment(deploymentId, ClandestineRules.EXFIL_CASUALTY_FACTOR)
 
     /** Item 63: the POW a rescue or negotiation is being staged for. */
     var powOperationTargetId: String? = null
@@ -840,6 +865,18 @@ class CommandViewModel(
             showBanner("All HQ tasking slots occupied.")
             return
         }
+        // Item 62: a Language school class studies one region; nobody in it can already speak it
+        val languageRegion = if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID) languageRegionChoice else null
+        if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID) {
+            if (languageRegion == null) {
+                showBanner("Pick a region for the Language school.")
+                return
+            }
+            state.operators.firstOrNull { it.id in selectedOperatorIds && ClandestineRules.knowsLanguage(it, languageRegion) }?.let {
+                showBanner("${it.callsign} already speaks the ${languageRegion.label} language.")
+                return
+            }
+        }
         // Item 63: rescues and release talks need a POW and an open window (talks also cost prestige)
         val powTarget = if (PowRules.isPowOperation(mission)) state.operators.find { it.id == powOperationTargetId } else null
         if (PowRules.isPowOperation(mission)) {
@@ -1006,14 +1043,24 @@ class CommandViewModel(
             platoonLeaderId = platoonLeader?.id,
             missionTitle = when {
                 powTarget != null -> "${mission.displayTitle}: ${powTarget.rank.code} ${powTarget.callsign}"
+                languageRegion != null -> "${mission.displayTitle} (${languageRegion.label})"
                 bookedHours > 0 -> "${mission.displayTitle} (${bookedHours}h)"
                 // Item 60: temporary duty away from the unit
                 mission.isTdy -> "TDY: ${mission.displayTitle.removePrefix("School: ")}"
                 else -> mission.displayTitle
             },
             flightHours = bookedHours,
-            targetOperatorId = powTarget?.id
-        )
+            targetOperatorId = powTarget?.id,
+            languageRegion = languageRegion
+        ).let { d ->
+            // Item 62: clandestine missions roll now for whether (and when) the cover blows
+            if (!mission.isClandestine) d else d.copy(
+                coverBlownAtMillis = ClandestineRules.rollCoverBlownAt(
+                    ClandestineRules.blownCoverChancePct(mission, state.operators.filter { it.id in selectedOperatorIds }),
+                    d.startedAtMillis, d.durationMillis
+                )
+            )
+        }
         val talksCost = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) {
             PowRules.talksPrestigeCost(state.operators.filter { it.id in selectedOperatorIds })
         } else 0.0
@@ -1143,7 +1190,8 @@ class CommandViewModel(
                     completedMissionIds = updatedCompletedIds,
                     schoolAttempts = updatedAttempts,
                     status = nextStatus,
-                    eventBuffs = if (isRifleQual) op.eventBuffs.copy(rifleQualBonusPct = 0) else op.eventBuffs
+                    eventBuffs = if (isRifleQual) op.eventBuffs.copy(rifleQualBonusPct = 0) else op.eventBuffs,
+                    languageRegions = if (passed && deployment.languageRegion != null) op.languageRegions + deployment.languageRegion else op.languageRegions
                 ).let { grad -> applyCareerSchoolEffects(grad, mission.id, passed, deployment.flightHours) }
                 newRank = graduatedOp.rank
                 // Rifle Qualification, and graduating Marksmanship & Tactical Basics, both shoot for a badge
@@ -1266,7 +1314,9 @@ class CommandViewModel(
                 squads = state.squads,
                 smartWardrobeEnabled = state.smartWardrobeEnabled
             )
-            missionSucceeded = Random.nextInt(100) < successOdds
+            // Item 62: a blown cover makes the fight harder
+            val blownPenalty = if (deployment.coverBlown) ClandestineRules.BLOWN_COVER_PASS_PENALTY else 0
+            missionSucceeded = Random.nextInt(100) < (successOdds - blownPenalty).coerceAtLeast(5)
             val activeCohesionBonus = SquadCohesionRules.evaluateActiveBonus(groundOps, state.squads, mission.requiredSquads > 1)
             val cohesionSurvBonus = activeCohesionBonus?.survivalBonusPct ?: 0
             val camoSurvBonus = TacticalCalculator.teamCamoEffect(mission, groundOps, state.squads, state.smartWardrobeEnabled).survivalDelta
@@ -1303,7 +1353,7 @@ class CommandViewModel(
                 }
                 // Item 63: anyone who lives through a field mission can be captured
                 val outcome = if (rolledOutcome != OperatorOutcomeType.FALLEN &&
-                    Random.nextDouble() * 100.0 < PowRules.captureChancePct(mission, op, missionSucceeded)
+                    Random.nextDouble() * 100.0 < PowRules.captureChancePct(mission, op, missionSucceeded, blownCover = deployment.coverBlown)
                 ) OperatorOutcomeType.CAPTURED else rolledOutcome
 
                 val wasHqStaff = op.status == OperatorStatus.HQ_STAFF
@@ -1825,6 +1875,22 @@ class CommandViewModel(
             )
             if (o.recommendedMedalId == null) outcomes[i] = o.copy(deedText = text, recommendedMedalId = medalId)
         }
+        // Item 98: The Prison Camp frees every Aegis soldier held as a POW
+        if (mission.id == ClandestineRules.PRISON_CAMP_STAGE_ID && missionSucceeded) {
+            state.operators.filter { it.status == OperatorStatus.CAPTURED && it.id !in deployment.operatorIds }.forEach { pow ->
+                updatedOperators.add(PowRules.released(pow, now, TacticalCalculator.aidRecoveryMultiplier(state.facilities)))
+                newDeeds.add(
+                    PendingDeed(
+                        id = "deed_${UUID.randomUUID().toString().take(8)}",
+                        operatorId = pow.id,
+                        missionTitle = mission.title,
+                        deedSummary = "Held as a prisoner of war and freed in the raid on the prison camp.",
+                        recommendedMedalId = PowRules.POW_MEDAL_ID,
+                        createdAtMillis = now
+                    )
+                )
+            }
+        }
         // Item 63: a successful rescue or negotiation brings the POW home; failed talks have consequences
         val freedPow = deployment.targetOperatorId?.let { id -> state.operators.find { it.id == id && it.status == OperatorStatus.CAPTURED } }
         if (mission.id == PowRules.NEGOTIATION_MISSION_ID && !missionSucceeded && freedPow != null) {
@@ -1912,7 +1978,7 @@ class CommandViewModel(
      * count the attempt with no refund. Missions pay nothing, and each soldier can be wounded or killed
      * pulling out. An abort isn't a failure for awards, but it resets the Good Conduct streak.
      */
-    fun cancelDeployment(deploymentId: String) {
+    fun cancelDeployment(deploymentId: String, casualtyFactor: Double = 1.0) {
         val state = uiState.value
         val deployment = state.deployments.find { it.id == deploymentId } ?: return
         val mission = GameCatalog.missions.find { it.id == deployment.templateId } ?: return
@@ -1937,9 +2003,11 @@ class CommandViewModel(
             return
         }
 
-        val (woundPct, deathPct) = TacticalCalculator.abortCasualtyOddsPct(
+        val (rawWound, rawDeath) = TacticalCalculator.abortCasualtyOddsPct(
             mission.risk, deployment.progressFraction(now), deployment.insertion
         )
+        val woundPct = rawWound * casualtyFactor
+        val deathPct = rawDeath * casualtyFactor
         val updated = mutableListOf<Operator>()
         val newDeeds = mutableListOf<PendingDeed>()
         val outcomes = mutableListOf<OperatorDebriefOutcome>()

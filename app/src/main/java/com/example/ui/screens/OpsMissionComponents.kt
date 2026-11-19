@@ -152,6 +152,15 @@ internal fun ActiveHqDeploymentCard(
             style = MaterialTheme.typography.labelSmall,
             color = extra.textMuted
         )
+        // Item 62: a clandestine team whose cover is blown
+        if (deployment.coverBlown) {
+            Text(
+                text = if (deployment.coverPushOn) "COVER BLOWN • pushing on (-${com.example.domain.ClandestineRules.BLOWN_COVER_PASS_PENALTY}%)" else "COVER BLOWN • decision needed",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("cover_blown_${deployment.id}")
+            )
+        }
 
         if (complete) {
             Spacer(modifier = Modifier.height(10.dp))
@@ -490,6 +499,7 @@ internal fun CompactHqMissionCard(
 }
 
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 internal fun HqStagingSheet(
     mission: MissionTemplate,
     uiState: CommandUiState,
@@ -503,7 +513,10 @@ internal fun HqStagingSheet(
     onLaunch: () -> Unit,
     onCancel: () -> Unit,
     flightHours: Int = TacticalCalculator.FLIGHT_HOURS_PER_SESSION,
-    onFlightHoursChange: (Int) -> Unit = {}
+    onFlightHoursChange: (Int) -> Unit = {},
+    /** Item 62: the region a Language school class studies. */
+    languageRegion: TheaterRegion? = null,
+    onLanguageRegionChange: (TheaterRegion) -> Unit = {}
 ) {
     val extra = LocalAegisColors.current
     val unlockedOps = uiState.operators.filter { it.unlocked && !it.status.isOutOfActiveService }
@@ -629,6 +642,35 @@ internal fun HqStagingSheet(
                 "A failed session still logs about half the hours.",
                 style = MaterialTheme.typography.labelSmall,
                 color = extra.textMuted
+            )
+        }
+
+        // Item 62: pick the region this class studies
+        if (mission.id == com.example.domain.ClandestineRules.LANGUAGE_SCHOOL_ID) {
+            Text("Region to study", style = MaterialTheme.typography.labelMedium, color = extra.brassBright)
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                com.example.domain.ClandestineRules.languageRegions.forEach { region ->
+                    FilterChip(
+                        selected = languageRegion == region,
+                        onClick = { onLanguageRegionChange(region) },
+                        label = { Text(region.label, maxLines = 1) },
+                        modifier = Modifier.testTag("language_region_${region.name.lowercase()}")
+                    )
+                }
+            }
+            val already = uiState.operators.filter { it.id in selectedOperatorIds && languageRegion != null && languageRegion in it.languageRegions }
+            Text(
+                when {
+                    languageRegion == null -> "Pick a region to enroll."
+                    already.isNotEmpty() -> "Already speaks it: ${already.joinToString { it.callsign }}"
+                    else -> "Graduates can run clandestine missions in ${languageRegion.label}."
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (languageRegion == null || already.isNotEmpty()) extra.amberTelemetry else extra.textMuted
             )
         }
 

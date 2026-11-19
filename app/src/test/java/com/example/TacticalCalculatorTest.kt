@@ -1560,7 +1560,8 @@ class TacticalCalculatorTest {
                 "msn_mff_school",
                 "msn_air_assault_school",
                 "msn_sere_school",
-                "msn_sf_aviation_school"
+                "msn_sf_aviation_school",
+                "msn_language_school"
             ),
             schoolIds
         )
@@ -2717,7 +2718,7 @@ class TacticalCalculatorTest {
     @Test
     fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
         val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-        assertEquals(24, schools.size)
+        assertEquals(25, schools.size)
         schools.forEach { school ->
             assertFalse(school.id, school.hasClassCap)
             assertTrue(school.id, 15 in school.minOperators..school.maxOperators)

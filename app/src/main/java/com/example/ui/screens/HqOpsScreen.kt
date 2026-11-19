@@ -70,6 +70,8 @@ fun HqOpsScreen(
     onCancelDeployment: (String) -> Unit = {},
     /** Item 63: pick the POW a rescue or release talks are for, before staging. */
     onSelectPowTarget: (String) -> Unit = {},
+    /** Item 62: the region a Language school class studies. */
+    onSelectLanguageRegion: (TheaterRegion) -> Unit = {},
     onTreatWounded: (String) -> Unit,
     onNavigateToDress: () -> Unit,
     onNavigateToSquad: () -> Unit,
@@ -89,6 +91,7 @@ fun HqOpsScreen(
     var expandedMissionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expandedCampaignIds by remember { mutableStateOf(setOf("camp_veridian")) }
     var flightHours by remember { mutableStateOf(TacticalCalculator.FLIGHT_HOURS_PER_SESSION) }
+    var languageRegion by remember { mutableStateOf<TheaterRegion?>(null) }
     val theaterCampaignIds = remember { GameCatalog.campaigns.filter { !it.isSpecialForces }.map { it.id }.toSet() }
     val theaterTotal = theaterCampaignIds.size
     val theaterCleared = uiState.completedCampaignIds.count { it in theaterCampaignIds }
@@ -971,6 +974,8 @@ fun HqOpsScreen(
                 onSwitchOperatorsToKit = onSwitchOperatorsToKit,
                 flightHours = flightHours,
                 onFlightHoursChange = { flightHours = it },
+                languageRegion = languageRegion,
+                onLanguageRegionChange = { languageRegion = it; onSelectLanguageRegion(it) },
                 onEditKits = {
                     stagingMission = null
                     selectedOperatorIds = emptyList()

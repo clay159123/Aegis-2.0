@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.domain.displayTitle
 import com.example.domain.TacticalCalculator
+import com.example.domain.ClandestineRules
 import com.example.domain.model.*
 import com.example.ui.theme.LocalAegisColors
 import com.example.ui.viewmodel.CommandUiState
@@ -115,6 +116,25 @@ fun MissionPrepDialog(
                     }
                 }
 
+                // Item 62: clandestine cover risk, and Item 98: the Free Strait's guerrilla force and signature insertion
+                if (mission.isClandestine) {
+                    Text(
+                        "Clandestine • SF squad only, ${ClandestineRules.MIN_LANGUAGE_QUALIFIED}+ speaking the ${mission.theater.label} language • " +
+                            "Blown-cover risk ${ClandestineRules.blownCoverChancePct(mission, team)}%: the clock drops and the fight gets harder (-${ClandestineRules.BLOWN_COVER_PASS_PENALTY}%).",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = extra.amberTelemetry,
+                        modifier = Modifier.testTag("prep_clandestine")
+                    )
+                }
+                if (mission.campaignId == ClandestineRules.FREE_STRAIT_ID) {
+                    Text(
+                        "Guerrilla force: ${ClandestineRules.guerrillaStrength()} companies (+${ClandestineRules.guerrillaPassBonus(mission)}% pass, +${ClandestineRules.guerrillaSurvivalBonus(mission)} survival)" +
+                            (mission.signatureInsertion?.let { " • ${it.shortLabel} is this stage's signature insertion (+${ClandestineRules.SIGNATURE_INSERTION_BONUS_PCT}%)" } ?: ""),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = extra.brassBright,
+                        modifier = Modifier.testTag("prep_free_strait")
+                    )
+                }
                 // Items 35/36: team makeup problems (SF team, two squads, platoon leader)
                 preview.teamBlocker?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = extra.amberTelemetry, modifier = Modifier.testTag("prep_team_blocker"))
