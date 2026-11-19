@@ -424,7 +424,9 @@ enum class OperatorStatus(val label: String) {
     /** Item 46: transferred to another command; kept on file so names and callsigns aren't reused. */
     TRANSFERRED("TRANSFERRED"),
     /** Item 69: away on leave or a short duty from an event; back at recoveryUntilMillis. */
-    ON_LEAVE("LEAVE");
+    ON_LEAVE("LEAVE"),
+    /** Item 63: held by the enemy. Keeps a roster slot until they come home. */
+    CAPTURED("POW");
 
     val isOutOfActiveService: Boolean get() = this == FALLEN || this == RETIRED || this == TRANSFERRED
 }
@@ -1317,6 +1319,11 @@ data class Operator(
     val bodyBuildOverride: BodyBuild? = null,
     /** Item 69: what answered soldier events left on this soldier. */
     val eventBuffs: SoldierEventBuffs = SoldierEventBuffs(),
+    /** Item 63: when they were captured, when captivity resolves on its own, where, and how often. */
+    val capturedAtMillis: Long = 0L,
+    val captivityResolveAtMillis: Long = 0L,
+    val captureTheater: TheaterRegion? = null,
+    val timesCaptured: Int = 0,
     /** Awarded rifle qualification (Marksman, Sharpshooter or Expert); null = not yet qualified */
     val marksmanshipQual: MarksmanshipBadgeTier? = null,
     /** A better qualification waiting for the player to award it */
@@ -1835,7 +1842,9 @@ data class ActiveDeployment(
     /** Item 50: the mission's name when it launched, kept until it's claimed even if the board rotates. */
     val missionTitle: String? = null,
     /** Item 95: hours booked for a Flight Hours session (1..10); 0 for everything else. */
-    val flightHours: Int = 0
+    val flightHours: Int = 0,
+    /** Item 63: the POW a rescue or negotiation is for. */
+    val targetOperatorId: String? = null
 ) {
     /** The soldiers on the ground (everyone but the pilot). */
     val groundOperatorIds: List<String> get() = operatorIds.filter { it != pilotId }
@@ -1871,7 +1880,9 @@ enum class OperatorOutcomeType(val label: String) {
     TRAINING_FAILED("Course Failed"),
     WOUNDED("Medevaced (Recovering)"),
     FALLEN("Fallen in Action"),
-    STAFF_SUPPORT("HQ Staff Support")
+    STAFF_SUPPORT("HQ Staff Support"),
+    /** Item 63 */
+    CAPTURED("Captured (POW)")
 }
 
 data class OfflineReport(

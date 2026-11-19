@@ -80,7 +80,7 @@ internal object AwardExpansion {
         "medal_silver_vanguard" to 4, "medal_defense_superior" to 5, "medal_legion_merit" to 6,
         "medal_flying_cross" to 7, "medal_soldiers" to 8, "medal_bronze_valor" to 9, "medal_purple_shield" to 10,
         "medal_meritorious" to 11, "medal_air_medal" to 12, "medal_joint_commendation" to 13,
-        "medal_army_commendation" to 14, "medal_joint_achievement" to 15, "medal_army_achievement" to 16,
+        "medal_army_commendation" to 14, "medal_joint_achievement" to 15, "medal_army_achievement" to 16, "medal_pow" to 17,
         "medal_good_conduct" to 18, "medal_national_defense" to 19, "medal_expeditionary" to 20,
         "medal_armed_forces_service" to 21, "medal_humanitarian" to 22, "medal_nco_dev" to 23,
         "medal_sere" to 24, "medal_night_owl" to 25, "medal_basic_training" to 26, "medal_overseas_service" to 27,

@@ -418,6 +418,7 @@ fun SquadArmoryScreen(
                 onTdy -> "TDY"
                 isDeployed -> "DEPLOYED"
                 op.status == OperatorStatus.ON_LEAVE -> "LEAVE"
+                op.status == OperatorStatus.CAPTURED -> "POW"
                 op.status == OperatorStatus.RECOVERING -> "MEDBAY"
                 else -> "READY"
             }
@@ -484,6 +485,7 @@ fun SquadArmoryScreen(
                                 shape = MaterialTheme.shapes.extraSmall,
                                 color = when (statusLabel) {
                                     "DEPLOYED", "TDY", "LEAVE" -> extra.signalsContainer
+                                    "POW" -> MaterialTheme.colorScheme.errorContainer
                                     "MEDBAY" -> MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
                                     else -> MaterialTheme.colorScheme.primaryContainer
                                 }
@@ -493,6 +495,7 @@ fun SquadArmoryScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = when (statusLabel) {
                                         "DEPLOYED", "TDY", "LEAVE" -> extra.signalsCyan
+                                        "POW" -> MaterialTheme.colorScheme.error
                                         "MEDBAY" -> MaterialTheme.colorScheme.error
                                         else -> MaterialTheme.colorScheme.onPrimaryContainer
                                     },

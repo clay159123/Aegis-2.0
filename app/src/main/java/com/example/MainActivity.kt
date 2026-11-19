@@ -333,6 +333,7 @@ fun AegisCommandApp() {
                                     onAutoGear = viewModel::autoDistributeFieldGear,
                                     onClaimDeployment = viewModel::claimDeployment,
                                     onCancelDeployment = viewModel::cancelDeployment,
+                                    onSelectPowTarget = viewModel::selectPowTarget,
                                     onTreatWounded = viewModel::treatWoundedOperator,
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
@@ -685,7 +686,7 @@ private fun DebriefSummaryDialog(
                     val statusColor = when (opOut.outcome) {
                         OperatorOutcomeType.SAFE, OperatorOutcomeType.TRAINING_PASSED -> MaterialTheme.colorScheme.primary
                         OperatorOutcomeType.WOUNDED -> extra.amberTelemetry
-                        OperatorOutcomeType.FALLEN, OperatorOutcomeType.TRAINING_FAILED -> MaterialTheme.colorScheme.error
+                        OperatorOutcomeType.FALLEN, OperatorOutcomeType.TRAINING_FAILED, OperatorOutcomeType.CAPTURED -> MaterialTheme.colorScheme.error
                         OperatorOutcomeType.STAFF_SUPPORT -> extra.signalsCyan
                     }
                     Surface(

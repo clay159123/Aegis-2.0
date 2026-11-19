@@ -18,6 +18,7 @@ import com.example.domain.PendingSoldierEvent
 import com.example.domain.PetitionAction
 import com.example.domain.SoldierEventContext
 import com.example.domain.SoldierEvents
+import com.example.domain.PowRules
 import com.example.domain.AwardRules
 import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
@@ -404,6 +405,7 @@ class CommandViewModel(
                     showBanner("${backFromLeave.joinToString { it.callsign }} back on duty.")
                 }
                 tickSoldierEvents(state, now)
+                resolveCaptivity(state, now)
 
                 val recoveredOps = state.operators.filter {
                     it.status == OperatorStatus.RECOVERING && now >= it.recoveryUntilMillis
@@ -446,6 +448,48 @@ class CommandViewModel(
         if (now - state.lastEventCheckAtMillis < SoldierEvents.eventIntervalMillis()) return
         val rolled = SoldierEvents.roll(ctx)
         repository.updateCommanderState { it.copy(lastEventCheckAtMillis = now, pendingEventCsv = rolled?.toCsv() ?: "") }
+    }
+
+    /** Item 63: held soldiers whose wait has run out are released or die in captivity. */
+    private suspend fun resolveCaptivity(state: CommandUiState, now: Long) {
+        val due = state.operators.filter {
+            it.status == OperatorStatus.CAPTURED && it.captivityResolveAtMillis in 1..now &&
+                state.deployments.none { d -> d.targetOperatorId == it.id }
+        }
+        if (due.isEmpty()) return
+        val deeds = mutableListOf<PendingDeed>()
+        val updated = due.map { op ->
+            if (Random.nextInt(100) < PowRules.releaseSurvivalPct(op)) {
+                deeds += PendingDeed(
+                    id = "deed_${UUID.randomUUID().toString().take(8)}",
+                    operatorId = op.id,
+                    missionTitle = "Released from Captivity",
+                    deedSummary = "Held as a prisoner of war and released by the captors.",
+                    recommendedMedalId = PowRules.POW_MEDAL_ID,
+                    createdAtMillis = now
+                )
+                PowRules.released(op, now, TacticalCalculator.aidRecoveryMultiplier(state.facilities))
+            } else PowRules.diedInCaptivity(op)
+        }
+        repository.saveOperators(updated)
+        val effective = state.operators.map { o -> updated.find { it.id == o.id } ?: o }
+        val squads = SquadCohesionRules.pruneUnavailableMembers(state.squads, effective).filter { sq -> state.squads.find { it.id == sq.id } != sq }
+        if (squads.isNotEmpty()) repository.saveSquads(squads)
+        if (deeds.isNotEmpty()) {
+            repository.addPendingDeeds(deeds)
+            enqueueAwardPrompts(deeds)
+        }
+        showBanner(updated.joinToString(" ") {
+            if (it.status == OperatorStatus.FALLEN) "${it.callsign} died in captivity." else "${it.callsign} was released and is coming home."
+        })
+    }
+
+    /** Item 63: the POW a rescue or negotiation is being staged for. */
+    var powOperationTargetId: String? = null
+        private set
+
+    fun selectPowTarget(operatorId: String) {
+        powOperationTargetId = operatorId
     }
 
     /** Item 69: answer the waiting soldier event. */
@@ -795,6 +839,14 @@ class CommandViewModel(
             showBanner("All HQ tasking slots occupied.")
             return
         }
+        // Item 63: rescues and release talks need a POW and an open window (talks also cost prestige)
+        val powTarget = if (PowRules.isPowOperation(mission)) state.operators.find { it.id == powOperationTargetId } else null
+        if (PowRules.isPowOperation(mission)) {
+            PowRules.operationBlocker(mission, powTarget, state.deployments, state.resources.prestige, System.currentTimeMillis())?.let {
+                showBanner(it)
+                return
+            }
+        }
         if (selectedOperatorIds.size !in mission.minOperators..mission.maxOperators) {
             showBanner("Select ${mission.teamSizeLabel} soldiers for ${mission.title}.")
             return
@@ -951,18 +1003,22 @@ class CommandViewModel(
             pilotId = pilot?.id,
             platoonLeaderId = platoonLeader?.id,
             missionTitle = when {
+                powTarget != null -> "${mission.displayTitle}: ${powTarget.rank.code} ${powTarget.callsign}"
                 bookedHours > 0 -> "${mission.displayTitle} (${bookedHours}h)"
                 // Item 60: temporary duty away from the unit
                 mission.isTdy -> "TDY: ${mission.displayTitle.removePrefix("School: ")}"
                 else -> mission.displayTitle
             },
-            flightHours = bookedHours
+            flightHours = bookedHours,
+            targetOperatorId = powTarget?.id
         )
+        val talksCost = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) PowRules.NEGOTIATION_PRESTIGE_COST else 0.0
 
         viewModelScope.launch {
             repository.updateCommanderState { cur ->
                 cur.copy(
                     supplies = (cur.supplies - effectiveSupplyCost).coerceAtLeast(0.0),
+                    prestige = (cur.prestige - talksCost).coerceAtLeast(0.0),
                     lastSimulatedAtMillis = now
                 )
             }
@@ -1227,7 +1283,7 @@ class CommandViewModel(
                 ) + (if (op.id == pilotId) 0 else cohesionSurvBonus + platoonSurvBonus + camoSurvBonus) + insertionSurvival).coerceIn(38, 98)
                 val survivalPct = if (missionSucceeded) baseSurvivalPct else (baseSurvivalPct - 8).coerceAtLeast(38)
                 val roll = Random.nextInt(100)
-                val outcome = when {
+                val rolledOutcome = when {
                     roll < survivalPct -> {
                         if (mission.risk.baseDangerPenalty >= 14 && roll > survivalPct - 10) {
                             OperatorOutcomeType.WOUNDED
@@ -1240,6 +1296,10 @@ class CommandViewModel(
                     Random.nextInt(100) < TacticalCalculator.aidSaveChancePct(state.facilities) -> OperatorOutcomeType.WOUNDED
                     else -> OperatorOutcomeType.FALLEN
                 }
+                // Item 63: anyone who lives through a field mission can be captured
+                val outcome = if (rolledOutcome != OperatorOutcomeType.FALLEN &&
+                    Random.nextDouble() * 100.0 < PowRules.captureChancePct(mission, op, missionSucceeded)
+                ) OperatorOutcomeType.CAPTURED else rolledOutcome
 
                 val wasHqStaff = op.status == OperatorStatus.HQ_STAFF
                 val nextStatus = when (outcome) {
@@ -1250,6 +1310,7 @@ class CommandViewModel(
                         if (wasHqStaff) OperatorStatus.HQ_STAFF else OperatorStatus.READY
                     OperatorOutcomeType.WOUNDED -> OperatorStatus.RECOVERING
                     OperatorOutcomeType.FALLEN -> OperatorStatus.FALLEN
+                    OperatorOutcomeType.CAPTURED -> OperatorStatus.CAPTURED
                 }
                 val recoveryAt = if (outcome == OperatorOutcomeType.WOUNDED) {
                     now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities)).roundToLong())
@@ -1370,7 +1431,7 @@ class CommandViewModel(
                     stats = if (op.id == pilotId) emptySet() else mission.trainsStats,
                     points = TacticalCalculator.missionExperiencePoints(mission, outcome, missionSucceeded)
                 )
-                updatedOperators.add(updatedOp)
+                updatedOperators.add(if (outcome == OperatorOutcomeType.CAPTURED) PowRules.capture(updatedOp, mission, now) else updatedOp)
                 val leadsTeam = op.id == TacticalCalculator.platoonLeaderFor(mission, groundOps, deployment.platoonLeaderId)?.id ||
                     state.squads.any { it.leaderId == op.id && groundOps.count { g -> g.id in it.memberIds } >= 2 }
                 if (op.id != pilotId) addServiceAwards(updatedOp, outcome, missionSucceeded, leadsTeam)
@@ -1758,6 +1819,22 @@ class CommandViewModel(
                 )
             )
             if (o.recommendedMedalId == null) outcomes[i] = o.copy(deedText = text, recommendedMedalId = medalId)
+        }
+        // Item 63: a successful rescue or negotiation brings the POW home
+        val freedPow = deployment.targetOperatorId?.let { id -> state.operators.find { it.id == id && it.status == OperatorStatus.CAPTURED } }
+        if (PowRules.isPowOperation(mission) && missionSucceeded && freedPow != null) {
+            updatedOperators.add(PowRules.released(freedPow, now, TacticalCalculator.aidRecoveryMultiplier(state.facilities)))
+            newDeeds.add(
+                PendingDeed(
+                    id = "deed_${UUID.randomUUID().toString().take(8)}",
+                    operatorId = freedPow.id,
+                    missionTitle = mission.title,
+                    deedSummary = "Held as a prisoner of war and brought home by ${if (mission.id == PowRules.RESCUE_MISSION_ID) "a rescue raid" else "negotiated release"}.",
+                    recommendedMedalId = PowRules.POW_MEDAL_ID,
+                    createdAtMillis = now
+                )
+            )
+            showBanner("${freedPow.rank.code} ${freedPow.callsign} is coming home.")
         }
         // Item 76: one pending award per soldier per award; skip anything already waiting
         val alreadyPending = state.pendingDeeds.map { it.operatorId to it.recommendedMedalId }.toSet()
