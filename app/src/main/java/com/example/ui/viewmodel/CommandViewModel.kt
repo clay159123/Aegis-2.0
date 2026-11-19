@@ -242,6 +242,10 @@ class CommandViewModel(
 
     init {
         viewModelScope.launch { uiState.collect { disbandEmptySquads(it) } }
+        // Item 99: drop award cards made unnecessary (e.g. a cord that came free with its badge)
+        viewModelScope.launch { uiState.collect { pruneAwardQueue(it) } }
+        // Item 107: the S-3 is enlisted only; an officer or warrant seated there returns to field duty
+        viewModelScope.launch { uiState.collect { enforceEnlistedBillets(it) } }
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val loadResult = repository.loadOrResetSave(now)
@@ -1022,8 +1026,8 @@ class CommandViewModel(
                 )
                 val maxAttempts = mission.schoolRequirements?.maxAttempts
                 val attemptNote = if (!passed && maxAttempts != null) {
-                    val left = (maxAttempts - nextAttempts).coerceAtLeast(0)
-                    if (left == 0) " Washed out (0 attempts left)." else " Attempts used: $nextAttempts/$maxAttempts."
+                    val left = maxAttempts - nextAttempts
+                    if (left <= 0) " Past the attempt limit: the next try costs extra supplies." else " Attempts used: $nextAttempts/$maxAttempts."
                 } else {
                     ""
                 }
@@ -2799,7 +2803,42 @@ class CommandViewModel(
     fun awardFromQueue() {
         val deed = _awardQueue.value.firstOrNull() ?: return
         val ok = awardMedal(deed.operatorId, deed.recommendedMedalId, deed.deedSummary, deed.missionTitle)
-        if (ok) popAwardQueue()
+        // A one-time award the soldier already holds can never be granted; close the card instead of looping
+        if (ok || isHeldOneTime(uiState.value, deed)) popAwardQueue()
+    }
+
+    private fun isHeldOneTime(state: CommandUiState, deed: PendingDeed): Boolean {
+        val medal = GameCatalog.medals.find { it.id == deed.recommendedMedalId } ?: return true
+        if (TacticalCalculator.isRepeatableAward(medal)) return TacticalCalculator.isAtAwardLimit(deed.operatorId, medal.id, state.citations)
+        return state.citations.any { it.operatorId == deed.operatorId && it.medalId == medal.id }
+    }
+
+    private var enforcingBillets = false
+
+    private fun enforceEnlistedBillets(state: CommandUiState) {
+        if (state.isLoading || enforcingBillets) return
+        val misplaced = state.operators.filter {
+            it.status == OperatorStatus.HQ_STAFF && it.hqRole?.isEnlistedOnly == true && !it.rank.tier.isEnlisted
+        }
+        if (misplaced.isEmpty()) return
+        enforcingBillets = true
+        viewModelScope.launch {
+            repository.saveOperators(misplaced.map {
+                it.copy(status = OperatorStatus.READY, hqRole = null, uniformMode = UniformMode.FIELD_TACTICAL, activeWardrobeKit = WardrobeKit.FIELD)
+            })
+            showBanner("The S-3 is now an enlisted billet: ${misplaced.joinToString { "${it.rank.code} ${it.callsign}" }} returned to field duty.")
+            enforcingBillets = false
+        }
+    }
+
+    /** Item 99: remove queued cards for one-time awards now held (or repeat awards at their limit). */
+    private fun pruneAwardQueue(state: CommandUiState) {
+        val queue = _awardQueue.value
+        if (queue.isEmpty()) return
+        val kept = queue.filterNot { isHeldOneTime(state, it) }
+        if (kept.size == queue.size) return
+        _awardQueue.value = kept
+        if (kept.isEmpty()) _awardQueueTotal.value = 0
     }
 
     /** Skip on the award pop-up: the award stays in Pending Awards on the Honors screen. */

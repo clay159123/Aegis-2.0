@@ -394,6 +394,26 @@ enum class OperatorStatus(val label: String) {
     val isOutOfActiveService: Boolean get() = this == FALLEN || this == RETIRED || this == TRANSFERRED
 }
 
+/**
+ * Item 107: each HQ billet's top rank, so staffers stop coming up for promotion there.
+ * CO, Deputy Commander and Command Chief Warrant Officer have no cap. The S-3 is the Operations Sergeant
+ * Major (enlisted only) and stops at SGM.
+ */
+fun HqStaffRole.rankCapFor(rank: OperatorRank): OperatorRank? = when (this) {
+    HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.DEPUTY_COMMANDER, HqStaffRole.CCWO_COMMAND_CHIEF_WARRANT -> null
+    HqStaffRole.XO_CHIEF_OF_STAFF -> OperatorRank.COL
+    HqStaffRole.S3_OPS_DIRECTOR -> if (rank.tier.isEnlisted) OperatorRank.SGM else null
+    HqStaffRole.AIR_OPS_OFFICER -> if (rank.isWarrant) OperatorRank.CW4 else OperatorRank.MAJ
+    else -> when {
+        rank.isWarrant -> OperatorRank.CW4
+        rank.tier.isEnlisted -> OperatorRank.MSG
+        else -> OperatorRank.MAJ
+    }
+}
+
+/** Item 107: billets enlisted soldiers only can hold. */
+val HqStaffRole.isEnlistedOnly: Boolean get() = this == HqStaffRole.S3_OPS_DIRECTOR
+
 enum class HqStaffRole(
     val slotOrder: Int,
     val requiredHqLevel: Int,
@@ -1259,13 +1279,30 @@ data class Operator(
     val bodyBuild: BodyBuild
         get() = bodyBuildOverride ?: BodyBuild.entries[Math.floorMod("$id#build".hashCode(), BodyBuild.entries.size)]
 
-    val rank: OperatorRank
+    /** The rank this soldier's XP and boards have earned, before any HQ billet cap. */
+    val earnedRank: OperatorRank
         get() = when {
             authorizedTier == RankTier.WARRANT -> OperatorRank.forWarrantGrade(warrantGrade)
             // Item 61: generals hold their grade until the next board
             authorizedTier == RankTier.FLAG_OFFICER && flagGrade > 0 -> OperatorRank.forFlagGrade(flagGrade)
             else -> OperatorRank.forXp(xp, authorizedTier)
         }
+
+    /** Item 107: the HQ billet's top rank for this soldier, if seated in one that has a cap. */
+    val hqRankCap: OperatorRank?
+        get() = if (status == OperatorStatus.HQ_STAFF) hqRole?.rankCapFor(earnedRank) else null
+
+    /** Displayed rank: what they've earned, held at their HQ billet's top rank while seated there. */
+    val rank: OperatorRank
+        get() {
+            val earned = earnedRank
+            val cap = hqRankCap ?: return earned
+            return if (earned.seniorityIndex > cap.seniorityIndex) cap else earned
+        }
+
+    /** True when an HQ billet's cap stops this soldier from rising further. */
+    val isAtHqRankCap: Boolean
+        get() = hqRankCap?.let { rank.seniorityIndex >= it.seniorityIndex } == true
 
     val isAtCategoryPromotionGate: Boolean
         get() {
@@ -1275,6 +1312,7 @@ data class Operator(
 
     val isReadyForNextCategoryPromotion: Boolean
         get() {
+            if (isAtHqRankCap) return false
             val next = OperatorRank.nextRank(rank) ?: return false
             return OperatorRank.isBoardGate(rank, next) && xp >= next.xpRequired
         }

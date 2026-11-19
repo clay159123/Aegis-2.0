@@ -524,7 +524,8 @@ object TacticalCalculator {
         return lv * perLevel
     }
 
-    val RANGE_DOUBLE_BONUS_SCHOOLS = setOf("msn_sf_school", "msn_ranger_school", "msn_eib_testing")
+    /** Item 106: the Range trains shooters, so EIB and Ranger gain double; SF assessment gains the normal +1. */
+    val RANGE_DOUBLE_BONUS_SCHOOLS = setOf("msn_ranger_school", "msn_eib_testing")
 
     /** Aid Station: medbay recovery time multiplier, -7% per level (floor 37%). */
     fun aidRecoveryMultiplier(facilities: List<FacilityState>): Double =
@@ -624,10 +625,9 @@ object TacticalCalculator {
     /** Each retry past the old limit adds this share of the school's supply cost for that soldier. */
     const val SF_RETRY_SURCHARGE_PER_ATTEMPT = 0.5
 
-    /** Extra supply for soldiers retrying an SF school past its old attempt limit. */
+    /** Item 101: extra supply for soldiers retrying any school past its old attempt limit. */
     fun schoolRetrySurcharge(mission: MissionTemplate, team: List<Operator>, multiplier: Double): Int {
         val limit = mission.schoolRequirements?.maxAttempts ?: return 0
-        if (mission.id !in SF_RETRY_SCHOOL_IDS) return 0
         return team.sumOf { op ->
             val over = (op.schoolAttempts[mission.id] ?: 0) - limit + 1
             if (over > 0) mission.supplyCost * multiplier * SF_RETRY_SURCHARGE_PER_ATTEMPT * over else 0.0
@@ -1159,6 +1159,9 @@ object TacticalCalculator {
         if (rankShort) {
             missing += "Requires ${role.minRank.code} (${role.minRank.payGrade})+ (currently ${operator.rank.code})"
         }
+        if (role.isEnlistedOnly && !operator.rank.tier.isEnlisted) {
+            missing += "Enlisted only (${role.title})"
+        }
         if (role.requiresAviator && !(operator.isWarrantOfficer && operator.isAviator)) {
             missing += "Requires a warrant officer aviator (153A)"
         }
@@ -1256,13 +1259,10 @@ object TacticalCalculator {
                     if (facilityLevel(facilities, FacilityType.AIRFIELD) < 1) missing += "Needs an Airfield"
                     if (operator.flightSkill >= MAX_FLIGHT_SKILL) missing += "Flight skill maxed ($MAX_FLIGHT_SKILL)"
                 }
-                val attemptsUsed = operator.schoolAttempts[mission.id] ?: 0
-                if (req.maxAttempts != null && attemptsUsed >= req.maxAttempts && mission.id !in SF_RETRY_SCHOOL_IDS) {
-                    missing += if (mission.id == RIFLE_QUAL_MISSION_ID) {
-                        "No requalification attempts left"
-                    } else {
-                        "Washed out ($attemptsUsed/${req.maxAttempts} attempts used)"
-                    }
+                // Item 101: no school washes anyone out; retries past the old limit cost more (schoolRetrySurcharge).
+                // Rifle Qual stays open until the soldier reaches Expert.
+                if (mission.id == RIFLE_QUAL_MISSION_ID && bestQualification(operator) == MarksmanshipBadgeTier.EXPERT) {
+                    missing += "Already qualified Expert"
                 }
 
                 if (req.minRankTier.order > RankTier.SOLDIER.order && operator.rank.tier.order < req.minRankTier.order) {
@@ -1804,12 +1804,16 @@ object TacticalCalculator {
         // Flat +4 keeps overall pass rates where they were when Bravos gave +4; the uniform
         // itself no longer matters.
         val baselineBonus = SCHOOL_BASELINE_PASS_BONUS
+        // Item 106: caps follow the real difficulty ladder, hardest last:
+        // Night Qual > Pathfinder > MFF > Sapper > EIB > Ranger > Combat Diver > SF
         val maxCap = when (mission.id) {
-            "msn_sf_school" -> 52
-            "msn_ranger_school" -> 68
-            "msn_sapper_school" -> 72
-            "msn_eib_testing" -> 50
-            "msn_pathfinder_school" -> 80
+            "msn_sf_school" -> 45
+            "msn_combat_diver_school" -> 52
+            "msn_ranger_school" -> 56
+            "msn_eib_testing" -> 62
+            "msn_sapper_school" -> 68
+            "msn_mff_school" -> 70
+            "msn_pathfinder_school" -> 78
             "msn_night_qual" -> 76
             "msn_intel_school", "msn_ocs_school" -> 80
             "msn_signals_school", "msn_medical_school", "msn_engineer_school", "msn_logistics_school" -> 84

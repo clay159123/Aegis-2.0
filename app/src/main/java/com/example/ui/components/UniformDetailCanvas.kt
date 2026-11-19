@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -2016,10 +2017,9 @@ private fun DrawScope.drawFieldTacticalFigure(
     flightSuit: Boolean = false
 ) {
     val primaryCamo = Color(operator.camoPattern.primaryHex)
-    // Sewn-on items are subdued: tan thread on dark olive, readable on every camo and on the darker tapes
-    val threadCol = Color(0xFFC2B38A)
-    val subduedLow = Color(0xFF2B2E27)
-    val subduedHigh = Color(0xFFCDBD93)
+    // Item 105: sewn-on items are subdued in the colors of the camo they're sewn onto
+    val (subduedLow, subduedHigh) = subduedPaletteFor(operator.camoPattern)
+    val threadCol = lerp(subduedLow, subduedHigh, 0.88f)
     val secondaryCamo = Color(operator.camoPattern.secondaryHex)
     val accentCamo = Color(operator.camoPattern.accentHex)
 
@@ -2418,4 +2418,15 @@ private fun DrawScope.drawFieldVelcroBox(
             endX = maxOf(inTop, outTop)
         )
     )
+}
+
+/** Item 105: dark backing and light thread for subdued patches, tabs and tapes on each camo. */
+private fun subduedPaletteFor(camo: CamoPattern): Pair<Color, Color> = when (camo) {
+    CamoPattern.WOODLAND_OLIVE -> Color(0xFF2B2E27) to Color(0xFFCDBD93)
+    CamoPattern.NIGHT_CHARCOAL -> Color(0xFF111419) to Color(0xFF8E97A4)
+    CamoPattern.ALPINE_FROST -> Color(0xFF39414A) to Color(0xFFDCE3EA)
+    CamoPattern.ARID_SAND -> Color(0xFF4A3D2A) to Color(0xFFE2D2AE)
+    CamoPattern.RANGER_GREEN -> Color(0xFF1C241A) to Color(0xFFA3B288)
+    CamoPattern.LITTORAL_TIDE -> Color(0xFF1E262D) to Color(0xFFA9B8C2)
+    CamoPattern.FLIGHT_SAGE -> Color(0xFF2E3326) to Color(0xFFBFC4A4)
 }

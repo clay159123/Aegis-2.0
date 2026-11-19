@@ -86,7 +86,8 @@ object PromotionBoardEvaluator {
         val creditCost = currentRank.promotionCreditCost() * (100 - warrantDiscountPct) / 100.0
         val prestigeCost = currentRank.promotionPrestigeCost() * (100 - warrantDiscountPct) / 100
 
-        if (nextRank == null) {
+        // Item 107: an HQ billet's top rank ends promotions there (treated like having no next rank)
+        if (nextRank == null || operator.isAtHqRankCap) {
             return PromotionBoardEvaluation(
                 currentRank = currentRank,
                 nextRank = null,

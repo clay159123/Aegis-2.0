@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.catalog.GameCatalog
@@ -319,11 +320,18 @@ fun HqOpsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // Item 104: the status chip shrinks and wraps as stats are added, so it can never
+                            // push the Settings and Guide buttons off the screen
                             Surface(
                                 shape = MaterialTheme.shapes.small,
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f),
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .padding(end = 6.dp)
                             ) {
                                 Text(
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
                                     text = buildString {
                                         append("AEGIS HQ • ${uiState.occupiedDeploymentSlots}/${uiState.maxDeploymentSlots} OPS")
                                         if (uiState.hqStaffCount > 0) {
