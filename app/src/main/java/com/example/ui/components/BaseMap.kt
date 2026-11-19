@@ -32,14 +32,17 @@ import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.theme.LocalAegisColors
 
-/** Map units: the base is drawn in a 200 x 292 grid scaled to the card width. */
+/** Map units: the base is drawn in a 200 x 360 grid scaled to the card width (Session 22 added a fifth row). */
 private const val MAP_W = 200f
-private const val MAP_H = 292f
+private const val MAP_H = 360f
 
 /** A fixed plot on the base map. */
 internal data class BasePlot(val type: FacilityType?, val label: String, val x: Float, val y: Float, val w: Float, val h: Float)
 
-/** Agreed layout: Airfield across the top; Range, HQ, Intel; Barracks, DFAC, Aid Station; Armory, Quartermaster, gate. */
+/**
+ * Agreed layout: Airfield across the top; Range, HQ, Intel; Barracks, DFAC, Aid Station; Armory, Quartermaster and an
+ * open lot (held for the morale session); then the SF Compound (two plots, its own fence) and the Main Gate on the wall.
+ */
 internal val BASE_PLOTS = listOf(
     BasePlot(FacilityType.AIRFIELD, "Airfield", 10f, 32f, 180f, 54f),
     BasePlot(FacilityType.TRAINING_RANGE, "Range", 10f, 94f, 58f, 60f),
@@ -50,8 +53,12 @@ internal val BASE_PLOTS = listOf(
     BasePlot(FacilityType.AID_STATION, "Aid Station", 132f, 162f, 58f, 60f),
     BasePlot(FacilityType.ARMORY_WORKSHOP, "Armory", 10f, 230f, 58f, 56f),
     BasePlot(FacilityType.LOGISTICS_DEPOT, "Quartermaster", 71f, 230f, 58f, 56f),
-    BasePlot(null, "Gate", 132f, 230f, 58f, 56f)
+    BasePlot(null, OPEN_LOT_LABEL, 132f, 230f, 58f, 56f),
+    BasePlot(FacilityType.SF_COMPOUND, "SF Compound", 10f, 294f, 119f, 56f),
+    BasePlot(null, "Gate", 132f, 294f, 58f, 56f)
 )
+
+internal const val OPEN_LOT_LABEL = "Open Lot"
 
 /** Art stage for a level: 1 tent (Lv 1-3), 2 wood frame (4-6), 3 block (7-9), 4 compound (10). */
 internal fun buildingArtStage(level: Int): Int = when {
@@ -76,10 +83,11 @@ fun facilityPerkSummary(type: FacilityType, level: Int): String {
     return rateText + when (type) {
         FacilityType.COMMAND_HQ -> {
             val staff = (2 + level).coerceAtMost(HqStaffRole.entries.size)
-            val missions = 2 + (if (level >= 3) 1 else 0) + (if (level >= 6) 1 else 0)
+            val missions = 2 + (if (level >= 3) 1 else 0) + (if (level >= 6) 1 else 0) + (if (level >= 9) 1 else 0)
             "$staff staff slots • $missions mission slots • ${if (level >= 5) 2 else 1} construction crew${if (level >= 5) "s" else ""}"
         }
-        FacilityType.BARRACKS -> "Field roster ${8 + level - 1}"
+        FacilityType.BARRACKS -> "Field roster ${com.example.domain.CompoundRules.barracksSlots(level)}"
+        FacilityType.SF_COMPOUND -> com.example.domain.CompoundRules.perkSummary(level)
         FacilityType.LOGISTICS_DEPOT -> "Supply costs -${3 * (level - 1)}%"
         FacilityType.ARMORY_WORKSHOP -> "Gear stats +${5 * (level - 1)}%"
         FacilityType.RECON_ARRAY -> "Missions -${4 * (level - 1)}% time • +${2 * (level - 1)}% survival"
@@ -280,7 +288,10 @@ private fun DrawScope.drawBase(facilities: List<FacilityState>, hqLevel: Int, no
 
     // Roads: dirt, gravel, paved
     val roadCol = when (band) { 1 -> Color(0xFF8C7A55); 2 -> Color(0xFF9A988F); else -> Color(0xFF55585A) }
-    listOf(r(68f, 88f, 3f, 200f), r(129f, 88f, 3f, 200f), r(10f, 155f, 180f, 6f), r(10f, 223f, 180f, 6f), r(10f, 88f, 180f, 5f), r(129f, 286f, 61f, 6f)).forEach {
+    listOf(
+        r(68f, 88f, 3f, 200f), r(129f, 88f, 3f, 264f), r(10f, 155f, 180f, 6f), r(10f, 223f, 180f, 6f), r(10f, 88f, 180f, 5f),
+        r(10f, 287f, 180f, 6f), r(129f, 350f, 61f, 5f)
+    ).forEach {
         drawRect(roadCol, it.topLeft, it.size)
     }
     if (band == 3) {
@@ -288,7 +299,7 @@ private fun DrawScope.drawBase(facilities: List<FacilityState>, hqLevel: Int, no
     }
 
     // Perimeter: concertina wire, HESCO, concrete with guard towers
-    val wall = r(3f, 26f, 194f, 262f)
+    val wall = r(3f, 26f, 194f, 330f)
     when (band) {
         1 -> {
             drawRect(Color(0xFF9DA39A), wall.topLeft, wall.size, style = Stroke(width = 1.2f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(1.5f * u, 1.5f * u))))
@@ -308,17 +319,18 @@ private fun DrawScope.drawBase(facilities: List<FacilityState>, hqLevel: Int, no
         val rect = r(plot.x, plot.y, plot.w, plot.h)
         val type = plot.type
         if (type == null) {
-            drawGate(rect, u, band)
+            if (plot.label == OPEN_LOT_LABEL) drawOpenLot(rect, u) else drawGate(rect, u, band)
             drawPlotLabel(tm, plot.label, rect, u, Label)
             return@forEach
         }
         val state = facilities.find { it.type == type } ?: FacilityState(type, type.startLevel)
-        val unlocked = hqLevel >= type.unlockHqLevel
+        val unlocked = TacticalCalculator.isFacilityUnlocked(type, facilities)
         when {
             !unlocked -> {
                 drawRect(Color(0xFFC8C3B3), Offset(rect.left + 3 * u, rect.top + 3 * u), Size(rect.width - 6 * u, rect.height - 14 * u),
                     style = Stroke(width = 0.8f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f * u, 2f * u))))
-                drawCentered(tm, "HQ ${type.unlockHqLevel}", Offset(rect.center.x, rect.center.y - 5 * u), 9f, Color(0xFFE6E0CC))
+                drawCentered(tm, if (type == FacilityType.SF_COMPOUND) "Form an SF squad" else "HQ ${type.unlockHqLevel}",
+                    Offset(rect.center.x, rect.center.y - 5 * u), 9f, Color(0xFFE6E0CC))
                 drawPlotLabel(tm, plot.label, rect, u, Color(0xFFC8C3B3))
             }
             state.level <= 0 && !state.isUpgrading -> {
@@ -441,6 +453,28 @@ private fun DrawScope.drawBuildingSignature(type: FacilityType, rect: Rect, u: F
             drawRect(Color(0xFFC0322B), Offset(cx - 1 * u, cy - 3 * u), Size(2 * u, 6 * u))
             drawRect(Color(0xFFC0322B), Offset(cx - 3 * u, cy - 1 * u), Size(6 * u, 2 * u))
         }
+        // Item 118: the SF Compound's own fence, then team rooms, a jump tower and a dive tank as it grows
+        FacilityType.SF_COMPOUND -> {
+            val fence = Rect(Offset(rect.left + 2 * u, rect.top + 4 * u), Size(rect.width - 4 * u, rect.height - 16 * u))
+            drawRect(if (stage >= 3) Concrete else Color(0xFF9DA39A), fence.topLeft, fence.size,
+                style = Stroke(width = (if (stage >= 3) 1.6f else 0.8f) * u, pathEffect = if (stage >= 3) null else PathEffect.dashPathEffect(floatArrayOf(1.5f * u, 1.5f * u))))
+            // Black and red SF pennant
+            drawLine(Color(0xFFDADADA), Offset(rect.left + 8 * u, base), Offset(rect.left + 8 * u, base - 26 * u), strokeWidth = 0.8f * u)
+            drawRect(Color(SF_PATCH_BLACK), Offset(rect.left + 8 * u, base - 26 * u), Size(9 * u, 5 * u))
+            drawRect(Color(SF_PATCH_RED), Offset(rect.left + 8 * u, base - 23.5f * u), Size(9 * u, 1.4f * u))
+            if (stage >= 3) {
+                // Jump tower
+                val tx = rect.right - 16 * u
+                drawLine(Color(0xFF8A8F94), Offset(tx, base), Offset(tx, base - 30 * u), strokeWidth = 1f * u)
+                drawLine(Color(0xFF8A8F94), Offset(tx + 8 * u, base), Offset(tx + 8 * u, base - 30 * u), strokeWidth = 1f * u)
+                drawRect(Color(0xFF6E7378), Offset(tx - 1 * u, base - 32 * u), Size(10 * u, 3 * u))
+            }
+            if (stage == 4) {
+                // Dive tank
+                drawRect(Color(0xFF2F6F8F), Offset(rect.left + 22 * u, base - 8 * u), Size(16 * u, 7 * u))
+                drawRect(Color(0xFFBFD9E6), Offset(rect.left + 22 * u, base - 8 * u), Size(16 * u, 7 * u), style = Stroke(0.5f * u))
+            }
+        }
         else -> Unit
     }
 }
@@ -473,6 +507,13 @@ private fun DrawScope.drawAirfield(rect: Rect, u: Float, stage: Int) {
         drawArc(BlockRoof, 180f, 180f, true, Offset(hx, hy - 6 * u), Size(26 * u, 12 * u))
     }
     if (stage == 4) drawRect(Concrete, Offset(rect.left + 3 * u, rect.top + 3 * u), Size(rect.width - 6 * u, rect.height - 14 * u), style = Stroke(1.2f * u))
+}
+
+/** Item 118 layout: the lot held for a future building (the morale session). */
+private fun DrawScope.drawOpenLot(rect: Rect, u: Float) {
+    drawRect(GroundDark, Offset(rect.left + 6 * u, rect.top + 8 * u), Size(rect.width - 12 * u, rect.height - 22 * u))
+    drawRect(Color(0xFFC8C3B3), Offset(rect.left + 6 * u, rect.top + 8 * u), Size(rect.width - 12 * u, rect.height - 22 * u),
+        style = Stroke(width = 0.5f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f * u, 2f * u))))
 }
 
 private fun DrawScope.drawGate(rect: Rect, u: Float, band: Int) {

@@ -255,7 +255,9 @@ fun HqOpsScreen(
         }
         val readyIds = readyOps.map { it.id }.toSet()
         // Item 58: SF missions are SF-squad-first; other SF-qualified soldiers fill out a short team
-        val sfSquad = TacticalCalculator.sfSquadOf(uiState.squads)
+        // Item 119: the SF squad with the most soldiers ready goes first
+        val sfSquad = uiState.squads.filter { it.isSpecialForces }
+            .maxByOrNull { sq -> SquadCohesionRules.orderedMembersForDeployment(sq, readyIds, mission.maxOperators).size }
         val matchingSquad = if (mission.requiresSfTeam) null else uiState.squads.firstOrNull { sq ->
             SquadCohesionRules.orderedMembersForDeployment(
                 squad = sq,
@@ -265,7 +267,10 @@ fun HqOpsScreen(
         }
         if (mission.requiresSfTeam && sfSquad != null) {
             val core = SquadCohesionRules.orderedMembersForDeployment(sfSquad, readyIds, mission.maxOperators)
-            val fill = readyOps.map { it.id }.filter { it !in core }.take((mission.minOperators - core.size).coerceAtLeast(0))
+            // Clandestine teams fill only from other SF squads
+            val sfIds = com.example.domain.CompoundRules.sfSquadMemberIds(uiState.squads)
+            val fill = readyOps.map { it.id }.filter { it !in core && (!mission.isClandestine || it in sfIds) }
+                .take((mission.minOperators - core.size).coerceAtLeast(0))
             selectedSquadId = sfSquad.id
             selectedOperatorIds = core + fill
         } else if (matchingSquad != null && !mission.risk.isTraining) {

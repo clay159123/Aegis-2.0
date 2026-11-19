@@ -20,6 +20,7 @@ import com.example.domain.SoldierEventContext
 import com.example.domain.SoldierEvents
 import com.example.domain.PowRules
 import com.example.domain.ClandestineRules
+import com.example.domain.CompoundRules
 import com.example.domain.AwardRules
 import com.example.domain.UniformRegaliaRules
 import com.example.domain.model.*
@@ -179,6 +180,7 @@ class CommandViewModel(
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.squads)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
             ClandestineRules.clearedStageIds = completedStages
+            CompoundRules.compoundLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.SF_COMPOUND)
             TacticalCalculator.tdyOperatorIds = TacticalCalculator.tdyOperatorIdsFor(data.deployments)
             val eventEffects = CommandEventEffects(
                 heloGroundedUntilMillis = data.commander.heloGroundedUntilMillis,
@@ -1368,7 +1370,9 @@ class CommandViewModel(
                     OperatorOutcomeType.CAPTURED -> OperatorStatus.CAPTURED
                 }
                 val recoveryAt = if (outcome == OperatorOutcomeType.WOUNDED) {
-                    now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities)).roundToLong())
+                    now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities) *
+                        // Item 118: the SF Compound's own medics speed SF soldiers' recovery
+                        (if (op.id in CompoundRules.sfSquadMemberIds(state.squads)) CompoundRules.sfRecoveryMultiplier() else 1.0)).roundToLong())
                 } else {
                     0L
                 }
@@ -2025,7 +2029,9 @@ class CommandViewModel(
                     else -> homeStatus(op)
                 },
                 recoveryUntilMillis = if (outcome == OperatorOutcomeType.WOUNDED) {
-                    now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities)).roundToLong())
+                    now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities) *
+                        // Item 118: the SF Compound's own medics speed SF soldiers' recovery
+                        (if (op.id in CompoundRules.sfSquadMemberIds(state.squads)) CompoundRules.sfRecoveryMultiplier() else 1.0)).roundToLong())
                 } else {
                     op.recoveryUntilMillis
                 },
@@ -2124,9 +2130,7 @@ class CommandViewModel(
     fun recruitOperator(operatorId: String) {
         val state = uiState.value
         val op = state.operators.find { it.id == operatorId && !it.unlocked } ?: return
-        val activeFieldCount = state.operators.count {
-            it.unlocked && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService
-        }
+        val activeFieldCount = CompoundRules.fieldRosterUsed(state.operators, state.squads, state.facilities)
         if (activeFieldCount >= state.maxFieldRosterSlots) {
             showBanner("Field roster full (${state.maxFieldRosterSlots} max). Transfer/assign SGT+ to HQ Staff or upgrade Command HQ.")
             return
@@ -2168,9 +2172,7 @@ class CommandViewModel(
     /** Item 31: recruit from Reception Station or a leadership school at that school's rank and record. */
     fun enlistRecruit(specialty: OperatorSpecialty, source: RecruitSource) {
         val state = uiState.value
-        val activeFieldCount = state.operators.count {
-            it.unlocked && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService
-        }
+        val activeFieldCount = CompoundRules.fieldRosterUsed(state.operators, state.squads, state.facilities)
         if (activeFieldCount >= state.maxFieldRosterSlots) {
             showBanner("Field roster full (${state.maxFieldRosterSlots}/${state.maxFieldRosterSlots}). Transfer out, assign SGT+ to HQ Staff, or upgrade HQ.")
             return
@@ -2319,9 +2321,7 @@ class CommandViewModel(
         val op = state.operators.find {
             it.id == operatorId && it.unlocked && it.status == OperatorStatus.HQ_STAFF
         } ?: return
-        val activeFieldCount = state.operators.count {
-            it.unlocked && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService
-        }
+        val activeFieldCount = CompoundRules.fieldRosterUsed(state.operators, state.squads, state.facilities)
         if (activeFieldCount >= state.maxFieldRosterSlots) {
             showBanner("Field roster full (${state.maxFieldRosterSlots}/${state.maxFieldRosterSlots}). Free a field slot before releasing ${op.callsign}.")
             return
@@ -3340,9 +3340,10 @@ class CommandViewModel(
         specialForces: Boolean = false
     ) {
         val state = uiState.value
-        // Item 58: one SF squad at a time, SF-qualified members only
-        if (specialForces && state.squads.any { it.isSpecialForces && it.id != squadId }) {
-            showBanner("The command already has an SF squad.")
+        // Items 58/119: SF squads up to the SF Compound's limit, SF-qualified members only
+        val sfLimit = CompoundRules.sfSquadLimit(state.facilities)
+        if (specialForces && state.squads.count { it.isSpecialForces && it.id != squadId } >= sfLimit) {
+            showBanner(if (sfLimit == 1) "One SF squad until the SF Compound is built." else "The SF Compound houses $sfLimit SF squads at its level.")
             return
         }
         val validIds = memberIds

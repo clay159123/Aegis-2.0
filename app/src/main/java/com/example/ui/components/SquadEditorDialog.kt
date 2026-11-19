@@ -48,6 +48,8 @@ fun SquadEditorDialog(
     ) -> Unit,
     onDisband: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Item 119: how many SF squads the SF Compound allows. */
+    sfSquadLimit: Int = 1,
     gearItems: List<GearItem> = emptyList(),
     citations: List<AwardedMedal> = emptyList()
 ) {
@@ -59,7 +61,12 @@ fun SquadEditorDialog(
     var leaderId by remember(key) { mutableStateOf(editingSquad?.leaderId) }
     var teamLeaderId by remember(key) { mutableStateOf(editingSquad?.teamLeaderId) }
     // Item 58/87: normal or SF squad, chosen when forming it; only one SF squad at a time
-    val otherSfSquad = allSquads.firstOrNull { it.isSpecialForces && it.id != key }
+    // Item 119: as many SF squads as the SF Compound allows (one without it)
+    val otherSfSquads = allSquads.filter { it.isSpecialForces && it.id != key }
+    val sfLockReason = if (otherSfSquads.size >= sfSquadLimit) {
+        if (sfSquadLimit == 1) "${otherSfSquads.first().name} is the SF squad. Build the SF Compound for more."
+        else "The SF Compound houses $sfSquadLimit SF squads at its level."
+    } else null
     var specialForces by remember(key) { mutableStateOf(editingSquad?.isSpecialForces == true) }
     var standardPatch by remember(key) {
         mutableStateOf(editingSquad?.standardPatch?.takeIf { it.isDivision } ?: UnitPatchStyle.firstUnusedDivision(allSquads, excludingSquadId = key))
@@ -176,7 +183,7 @@ fun SquadEditorDialog(
                             fieldOperators = fieldOperators,
                             otherSquads = otherSquads,
                             specialForces = specialForces,
-                            sfLockedBy = otherSfSquad?.name,
+                            sfLockedBy = sfLockReason,
                             onSpecialForcesChange = { sf ->
                                 specialForces = sf
                                 // An SF squad keeps SF-qualified soldiers only
@@ -677,7 +684,7 @@ private fun SquadTypeSelector(specialForces: Boolean, sfLockedBy: String?, onCha
     }
     Text(
         text = when {
-            sfLockedBy != null && !specialForces -> "$sfLockedBy is already the SF squad (one at a time)."
+            sfLockedBy != null && !specialForces -> sfLockedBy
             specialForces -> "SF-qualified soldiers only, up to $MAX_SQUAD_SIZE. Sterile field uniforms and the SF arrowhead patch."
             else -> "Any field soldiers, $MIN_SQUAD_SIZE to $MAX_SQUAD_SIZE."
         },

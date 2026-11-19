@@ -500,7 +500,9 @@ object TacticalCalculator {
 
     /** A building can be built or upgraded once Command HQ reaches its unlock level. */
     fun isFacilityUnlocked(type: FacilityType, facilities: List<FacilityState>): Boolean =
-        facilityLevel(facilities, FacilityType.COMMAND_HQ) >= type.unlockHqLevel
+        facilityLevel(facilities, FacilityType.COMMAND_HQ) >= type.unlockHqLevel &&
+            // Item 118: the SF Compound opens once the first SF squad forms (or once it's built)
+            (type != FacilityType.SF_COMPOUND || sfSquadEstablished || facilityLevel(facilities, type) > 0)
 
     /** Construction crews: one to start, a second at Command HQ Lv 5. */
     fun constructionCrews(facilities: List<FacilityState>): Int =
@@ -511,7 +513,8 @@ object TacticalCalculator {
         val state = facilities.find { it.type == type }
         val level = state?.level ?: type.startLevel
         return when {
-            !isFacilityUnlocked(type, facilities) -> "Requires Command HQ Lv ${type.unlockHqLevel}"
+            !isFacilityUnlocked(type, facilities) ->
+                if (type == FacilityType.SF_COMPOUND) "Form an SF squad first" else "Requires Command HQ Lv ${type.unlockHqLevel}"
             level >= MAX_FACILITY_LEVEL -> "Max level"
             state?.isUpgrading == true -> "Already under construction"
             facilities.count { it.isUpgrading } >= constructionCrews(facilities) ->
@@ -773,9 +776,11 @@ object TacticalCalculator {
         if (mission.requiresSfTeam) {
             if (team.size !in SF_MIN_TEAM..SF_MAX_TEAM) return "SF teams are $SF_MIN_TEAM to $SF_MAX_TEAM soldiers (${team.size} selected)"
             team.firstOrNull { !isSfQualified(it) }?.let { return "${it.callsign} isn't SF-qualified" }
-            val sfSquad = sfSquadOf(squads) ?: return "Form an SF squad first"
+            // Item 119: up to 3 SF squads; the team is built around whichever one brings the most soldiers
+            if (sfSquadOf(squads) == null) return "Form an SF squad first"
+            val sfSquad = squads.filter { it.isSpecialForces }.maxBy { sq -> team.count { it.id in sq.memberIds } }
             val core = team.count { it.id in sfSquad.memberIds }
-            if (core < SF_SQUAD_CORE) return "Needs $SF_SQUAD_CORE+ from ${sfSquad.name} ($core/$SF_SQUAD_CORE)"
+            if (core < SF_SQUAD_CORE) return "Needs $SF_SQUAD_CORE+ from one SF squad ($core/$SF_SQUAD_CORE)"
             // Item 62: clandestine missions are SF squad only, with language-qualified soldiers running the cover
             ClandestineRules.teamBlocker(mission, team, squads)?.let { return it }
         }
@@ -1923,7 +1928,7 @@ object TacticalCalculator {
         val airfieldBonus = if (mission.id == FLIGHT_SCHOOL_MISSION_ID) airfieldFlightSchoolBonus(facilityLevel(facilities, FacilityType.AIRFIELD)) else 0
         // Items 102/110: the SOF officer helps SF schools; the CSM helps the NCO schools
         val billetBonus = when (mission.id) {
-            in SF_SCHOOL_IDS -> hqStaffSummary?.sfSchoolPassBonusPct ?: 0
+            in SF_SCHOOL_IDS -> (hqStaffSummary?.sfSchoolPassBonusPct ?: 0) + CompoundRules.sfSchoolBonusPct()
             "msn_nco_school", "msn_snco_school" -> hqStaffSummary?.ncoSchoolPassBonusPct ?: 0
             else -> 0
         }
@@ -2130,8 +2135,8 @@ object TacticalCalculator {
 
     /** Field roster comes from the Barracks: 8 at Lv 1, +1 per level after. */
     fun maxFieldRosterSlots(facilities: List<FacilityState>): Int {
-        val barracksLevel = facilityLevel(facilities, FacilityType.BARRACKS)
-        return 8 + (barracksLevel - 1).coerceAtLeast(0)
+        // Item 116: +3 soldiers per Barracks level (35 at level 10); SF squads live in the SF Compound
+        return CompoundRules.barracksSlots(facilityLevel(facilities, FacilityType.BARRACKS))
     }
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {
@@ -2148,7 +2153,8 @@ object TacticalCalculator {
 
     fun maxDeploymentSlots(facilities: List<FacilityState>): Int {
         val hqLevel = facilityLevel(facilities, FacilityType.COMMAND_HQ)
-        return 2 + (if (hqLevel >= 3) 1 else 0) + (if (hqLevel >= 6) 1 else 0)
+        // Item 116: a fifth mission slot at HQ level 9 for the larger force
+        return 2 + (if (hqLevel >= 3) 1 else 0) + (if (hqLevel >= 6) 1 else 0) + (if (hqLevel >= 9) 1 else 0)
     }
 
     fun offlineCapSeconds(facilities: List<FacilityState>): Long {
