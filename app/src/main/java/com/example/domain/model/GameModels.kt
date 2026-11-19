@@ -1324,6 +1324,10 @@ data class Operator(
     val captivityResolveAtMillis: Long = 0L,
     val captureTheater: TheaterRegion? = null,
     val timesCaptured: Int = 0,
+    /** Item 63: failed talks so far, when talks can reopen, and whether the prisoner was moved (no rescue). */
+    val powTalksFailures: Int = 0,
+    val powTalksCooldownUntilMillis: Long = 0L,
+    val powRescueClosed: Boolean = false,
     /** Awarded rifle qualification (Marksman, Sharpshooter or Expert); null = not yet qualified */
     val marksmanshipQual: MarksmanshipBadgeTier? = null,
     /** A better qualification waiting for the player to award it */

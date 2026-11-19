@@ -1972,7 +1972,9 @@ object TacticalCalculator {
         val sofBonus = if (isSfOperation(mission)) (hqStaffSummary?.sfMissionPassBonusPct ?: 0) + SoldierEvents.effects.sfRehearsalBonusPct else 0
         // Item 69: a lieutenant running their first plan costs a little
         val ltPlan = if (selectedOperators.any { it.eventBuffs.leadsNextMission }) -SoldierEvents.LT_PLAN_PASS_PENALTY else 0
-        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan)
+        // Item 63: who sits at the table for release talks, and how hard the captors have become
+        val talks = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) PowRules.talksModifierPct(selectedOperators, PowRules.activeTalksFailures) else 0
+        return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan + talks)
             .coerceIn(minOdds, maxOdds)
     }
 
