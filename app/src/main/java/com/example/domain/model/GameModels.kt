@@ -387,6 +387,33 @@ enum class RecruitSource(
     val summary: String get() = "${arrivalRank.code} (${arrivalRank.payGrade}) • ${creditCost.toInt()} CR"
 }
 
+/** Item 69: per-soldier effects from soldier events. */
+data class SoldierEventBuffs(
+    val schoolDiscountUntilMillis: Long = 0L,
+    val opRequestType: com.example.domain.OpRequestType? = null,
+    val opRequestUntilMillis: Long = 0L,
+    val rifleQualBonusPct: Int = 0,
+    val leadsNextMission: Boolean = false
+) {
+    fun toCsv(): String = listOf(
+        schoolDiscountUntilMillis, opRequestType?.name ?: "", opRequestUntilMillis, rifleQualBonusPct, leadsNextMission
+    ).joinToString("|")
+
+    companion object {
+        fun fromCsv(csv: String): SoldierEventBuffs {
+            val p = csv.split("|")
+            if (p.size < 5) return SoldierEventBuffs()
+            return SoldierEventBuffs(
+                schoolDiscountUntilMillis = p[0].toLongOrNull() ?: 0L,
+                opRequestType = com.example.domain.OpRequestType.entries.find { it.name == p[1] },
+                opRequestUntilMillis = p[2].toLongOrNull() ?: 0L,
+                rifleQualBonusPct = p[3].toIntOrNull() ?: 0,
+                leadsNextMission = p[4] == "true"
+            )
+        }
+    }
+}
+
 enum class OperatorStatus(val label: String) {
     READY("READY"),
     DEPLOYED("DEPLOYED"),
@@ -395,7 +422,9 @@ enum class OperatorStatus(val label: String) {
     RETIRED("RETIRED"),
     FALLEN("MEMORIAL"),
     /** Item 46: transferred to another command; kept on file so names and callsigns aren't reused. */
-    TRANSFERRED("TRANSFERRED");
+    TRANSFERRED("TRANSFERRED"),
+    /** Item 69: away on leave or a short duty from an event; back at recoveryUntilMillis. */
+    ON_LEAVE("LEAVE");
 
     val isOutOfActiveService: Boolean get() = this == FALLEN || this == RETIRED || this == TRANSFERRED
 }
@@ -1286,6 +1315,8 @@ data class Operator(
     val skinToneOverride: SkinTone? = null,
     /** Player-chosen build; null = derived from the soldier id */
     val bodyBuildOverride: BodyBuild? = null,
+    /** Item 69: what answered soldier events left on this soldier. */
+    val eventBuffs: SoldierEventBuffs = SoldierEventBuffs(),
     /** Awarded rifle qualification (Marksman, Sharpshooter or Expert); null = not yet qualified */
     val marksmanshipQual: MarksmanshipBadgeTier? = null,
     /** A better qualification waiting for the player to award it */
