@@ -2132,6 +2132,9 @@ object GameCatalog {
      * Every field mission can go by ground; most allow helicopters; open terrain allows Airborne drops.
      * HALO and Maritime arrive with Special Forces missions (Session 11).
      */
+    private fun withFastRopeSf(ways: List<InsertionMethod>) =
+        if (InsertionMethod.HELICOPTER in ways) ways + InsertionMethod.FAST_ROPE else ways
+
     private fun tagMission(raw: MissionTemplate): MissionTemplate {
         if (raw.scope == MissionScope.TRAINING) return raw
         val m = raw.copy(trainsStats = trainedStatsFor(raw))
@@ -2172,11 +2175,13 @@ object GameCatalog {
         if (m.requiresSfTeam) {
             // SF teams can go any way they're qualified for; Maritime only on the coast
             val sfWays = listOf(G, H, AB, InsertionMethod.HALO) + if (m.coastal) listOf(InsertionMethod.MARITIME) else emptyList()
-            return m.copy(allowedInsertions = sfWays)
+            return m.copy(allowedInsertions = withFastRopeSf(sfWays))
         }
-        if (m.requiredSquads > 1) return m.copy(allowedInsertions = listOf(G, H, AB))
-        val (mos, insertions) = tags[m.id] ?: return m.copy(allowedInsertions = listOf(G, H))
-        return m.copy(recommendedSpecialties = mos, allowedInsertions = insertions)
+        // Item 59: wherever a helicopter can land, an Air Assault team can fast-rope in
+        fun withFastRope(ways: List<InsertionMethod>) = if (H in ways) ways + InsertionMethod.FAST_ROPE else ways
+        if (m.requiredSquads > 1) return m.copy(allowedInsertions = withFastRope(listOf(G, H, AB)))
+        val (mos, insertions) = tags[m.id] ?: return m.copy(allowedInsertions = withFastRope(listOf(G, H)))
+        return m.copy(recommendedSpecialties = mos, allowedInsertions = withFastRope(insertions))
     }
 
     /**
@@ -2496,7 +2501,7 @@ object GameCatalog {
                 graduationRewardsSummary = "Grants +1 FP, +2 ST, +1 RS • Awards Airborne Tab, Jump Wings & Crimson Cord • Unlocks Maroon Beret"
             ),
             baseSuccessRatePct = 50,
-            briefing = "Demanding static-line parachute qualification, air-assault fast-roping & night-vision navigation. Strictly 2 attempts.",
+            briefing = "Demanding static-line parachute qualification and night-vision navigation to the drop zone.",
             durationSeconds = 25,
             minOperators = 1,
             maxOperators = MissionTemplate.NO_CLASS_CAP,
@@ -2510,9 +2515,54 @@ object GameCatalog {
             rewardPrestige = 8.0,
             rewardXp = 95,
             commsFeed = listOf(
-                "NVGs down; static-line & fast-rope jump check complete.",
+                "NVGs down; static-line jump check complete.",
                 "DZ beacon lit cleanly under zero illumination.",
                 "Airborne jump master scores logged — Maroon Beret authorized!"
+            )
+        ),
+        // Item 59: Air Assault is its own school and badge (it used to come with Airborne)
+        MissionTemplate(
+            id = "msn_air_assault_school",
+            title = "School: Army Air Assault School",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 52,
+                uniformKit = WardrobeKit.FIELD,
+                maxAttempts = 2,
+                prerequisiteAnyIds = setOf(
+                    "msn_basic_qual",
+                    "msn_medical_school",
+                    "msn_engineer_school",
+                    "msn_logistics_school",
+                    "msn_signals_school"
+                ),
+                minFirepower = 12,
+                minResilience = 14,
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
+                naturalFitSpecialties = setOf(OperatorSpecialty.ASSAULT, OperatorSpecialty.BREACHER),
+                suitabilitySummary = "All ground MOS • 1 Entry School • 12+ FP & 14+ Res • Max 2 attempts",
+                graduationStatBonus = StatProfile(1, 0, 0, 2),
+                graduationRewardsSummary = "Grants +1 FP, +2 RS • Awards Air Assault Wings • Unlocks the Fast Rope insertion"
+            ),
+            baseSuccessRatePct = 52,
+            briefing = "Ten days of sling-load inspection, rappelling and fast-roping from helicopters, ending in a 12-mile ruck march.",
+            durationSeconds = 25,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 86,
+            primaryFocus = "Air Assault • Hard",
+            supplyCost = 12.0,
+            rewardCredits = 60.0,
+            rewardSupplies = 16.0,
+            rewardIntel = 10.0,
+            rewardPrestige = 8.0,
+            rewardXp = 90,
+            commsFeed = listOf(
+                "Zero Day obstacle course complete.",
+                "Sling-load lanes inspected; rappel tower cleared.",
+                "Fast-rope qualification logged. Air Assault!"
             )
         ),
         MissionTemplate(
@@ -2749,11 +2799,12 @@ object GameCatalog {
                 naturalFitSpecialties = setOf(OperatorSpecialty.RECON, OperatorSpecialty.ASSAULT),
                 suitabilitySummary = "SF-qualified only • SPC+ • 18 ST/18 RS • Max 2 attempts",
                 graduationStatBonus = StatProfile(0, 2, 1, 2),
-                graduationRewardsSummary = "Grants +2 ST, +1 TC, +2 RS • Awards Special Operations Diver Badge • Opens Maritime insertion"
+                graduationRewardsSummary = "TDY away from the unit • Grants +2 ST, +1 TC, +2 RS • Awards Special Operations Diver Badge • Opens Maritime insertion with Navy boat and submarine support"
             ),
             baseSuccessRatePct = 45,
-            briefing = "Closed-circuit diving, waterborne navigation and surf passage for Special Forces teams.",
-            durationSeconds = 34,
+            briefing = "Temporary duty away from the unit: weeks of closed-circuit diving, waterborne navigation and surf passage at the dive school. Divers are unavailable until they return.",
+            durationSeconds = 120,
+            isTdy = true,
             minOperators = 1,
             maxOperators = MissionTemplate.NO_CLASS_CAP,
             recommendedPower = 150,
@@ -2765,8 +2816,10 @@ object GameCatalog {
             rewardPrestige = 14.0,
             rewardXp = 150,
             commsFeed = listOf(
+                "TDY orders cut: divers report to the dive school.",
                 "Pool week: drownproofing and equipment recovery.",
                 "Night closed-circuit navigation swim under way.",
+                "Navy boat crews run the over-the-horizon infil drills.",
                 "Divers qualified: Special Operations Diver Badge!"
             )
         ),

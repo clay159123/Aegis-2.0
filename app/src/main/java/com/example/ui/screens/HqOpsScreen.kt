@@ -66,6 +66,7 @@ fun HqOpsScreen(
     onLaunchPrepared: ((MissionTemplate, List<String>, String?, InsertionMethod, String?, String?) -> Unit)? = null,
     onAutoGear: () -> Unit = {},
     onClaimDeployment: (String) -> Unit,
+    onCancelDeployment: (String) -> Unit = {},
     onTreatWounded: (String) -> Unit,
     onNavigateToDress: () -> Unit,
     onNavigateToSquad: () -> Unit,
@@ -592,7 +593,8 @@ fun HqOpsScreen(
                         operators = uiState.operators,
                         squads = uiState.squads,
                         nowMillis = uiState.nowMillis,
-                        onClaim = { onClaimDeployment(deployment.id) }
+                        onClaim = { onClaimDeployment(deployment.id) },
+                        onCancel = { onCancelDeployment(deployment.id) }
                     )
                 }
             }

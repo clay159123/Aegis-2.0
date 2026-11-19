@@ -426,6 +426,7 @@ fun UniformTailorStudioCard(
                     onSelect = { patch ->
                         updateOverrides(forceDressMode = false) { it.copy(unitPatch = patch) }
                     },
+                    isAviator = operator.specialty == OperatorSpecialty.AVIATION,
                     testTag = "dropdown_unit_patch"
                 )
                 CombatPatchDropdown(

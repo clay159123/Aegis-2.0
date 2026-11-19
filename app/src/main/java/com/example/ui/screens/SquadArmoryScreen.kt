@@ -412,7 +412,9 @@ fun SquadArmoryScreen(
                 op, uiState.gearItems, uiState.citations, uiState.facilities
             )
             val isDeployed = op.id in deployedOpIds
+            val onTdy = isDeployed && op.id in TacticalCalculator.tdyOperatorIdsFor(uiState.deployments)
             val statusLabel = when {
+                onTdy -> "TDY"
                 isDeployed -> "DEPLOYED"
                 op.status == OperatorStatus.RECOVERING -> "MEDBAY"
                 else -> "READY"
@@ -479,7 +481,7 @@ fun SquadArmoryScreen(
                             Surface(
                                 shape = MaterialTheme.shapes.extraSmall,
                                 color = when (statusLabel) {
-                                    "DEPLOYED" -> extra.signalsContainer
+                                    "DEPLOYED", "TDY" -> extra.signalsContainer
                                     "MEDBAY" -> MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
                                     else -> MaterialTheme.colorScheme.primaryContainer
                                 }
@@ -488,7 +490,7 @@ fun SquadArmoryScreen(
                                     text = statusLabel,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = when (statusLabel) {
-                                        "DEPLOYED" -> extra.signalsCyan
+                                        "DEPLOYED", "TDY" -> extra.signalsCyan
                                         "MEDBAY" -> MaterialTheme.colorScheme.error
                                         else -> MaterialTheme.colorScheme.onPrimaryContainer
                                     },

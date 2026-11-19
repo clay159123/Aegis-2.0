@@ -701,7 +701,7 @@ enum class UnitPatchStyle(
     val accentHex: Long
 ) {
     /** Tailor setting only: wear the squad patch, High Command for HQ staff, or Unassigned. */
-    AUTO_MOS("Auto (Squad Patch)", "Squad patch; High Command for HQ staff; Unassigned without a squad", 0xFF3A4556, 0xFFD8B24C),
+    AUTO_MOS("Auto (Squad Patch)", "Squad patch; High Command for HQ staff; Aviation Brigade for aviators; Unassigned without a squad", 0xFF3A4556, 0xFFD8B24C),
     DIVISION_1("1st Aegis Division", "Cobalt and gold shield with a single star", 0xFF1D4E89, 0xFFD8B24C),
     DIVISION_2("2nd Aegis Division", "Crimson and silver shield with crossed sabers", 0xFF8A1F2B, 0xFFD9DEE6),
     DIVISION_3("3rd Aegis Division", "Black and gold shield with a lion head", 0xFF15171C, 0xFFD8B24C),
@@ -709,6 +709,8 @@ enum class UnitPatchStyle(
     DIVISION_5("5th Aegis Division", "Slate gray and orange shield with a tower", 0xFF4A5563, 0xFFE8862A),
     DIVISION_6("6th Aegis Division", "Navy and silver shield with an eagle", 0xFF13213F, 0xFFC9D1DC),
     SUPREME_HQ("Aegis High Command", "Worn by HQ staff only", 0xFF141E33, 0xFFF5D576),
+    /** Item 100: the aviators' own unit patch. */
+    AVIATION_BRIGADE("Aegis Aviation Brigade", "Sky blue and gold shield with winged rotor; worn by aviators", 0xFF1E3550, 0xFF8EC3EA),
     UNASSIGNED("Unassigned", "Generic Aegis patch for field soldiers without a squad", 0xFF5B6472, 0xFFB8C0CC),
     NONE("None Worn", "Plain sleeve with no unit shoulder patch", 0xFF1C222D, 0xFF4A5568);
 
@@ -1502,6 +1504,8 @@ data class MissionTemplate(
     val allowedInsertions: List<InsertionMethod> = listOf(InsertionMethod.GROUND),
     /** Item 35: 1 for normal missions, 2 for platoon missions (two squads plus a platoon leader). */
     val requiredSquads: Int = 1,
+    /** Item 60: a school run away from the unit (temporary duty); soldiers show as TDY while there. */
+    val isTdy: Boolean = false,
     /** Item 36: Special Forces team mission (exactly 4 soldiers, 3+ SF-qualified). */
     val requiresSfTeam: Boolean = false,
     /** Item 36: Direct Action, Special Reconnaissance, Foreign Internal Defense or Unconventional Warfare. */
@@ -1537,7 +1541,12 @@ enum class InsertionMethod(val label: String, val shortLabel: String) {
     HELICOPTER("Helicopter", "Helo"),
     AIRBORNE("Airborne (static line)", "Airborne"),
     HALO("HALO free fall", "HALO"),
-    MARITIME("Maritime (combat divers)", "Maritime")
+    MARITIME("Maritime (combat divers)", "Maritime"),
+    /** Item 59: helicopter with the team roping in; Air Assault-qualified teams, Airfield level 3. */
+    FAST_ROPE("Fast Rope (Air Assault)", "Fast Rope");
+
+    /** Flown in by an Aegis pilot: uses a pilot, the Airfield and its helicopter limit. */
+    val isHelicopter: Boolean get() = this == HELICOPTER || this == FAST_ROPE
 }
 
 /** Leadership a soldier's uniform shows: a pin above the nameplate on dress uniforms, a chest tab in the field. */

@@ -669,6 +669,31 @@ internal fun DrawScope.drawUnitPatchEmblem(
             )
         }
 
+        // Aviation Brigade: spread wings around a three-blade rotor hub
+        UnitPatchStyle.AVIATION_BRIGADE -> {
+            val gold = Color(0xFFD8B24C)
+            for (side in listOf(-1f, 1f)) {
+                val wing = Path().apply {
+                    moveTo(center.x + side * rx * 0.25f, center.y)
+                    quadraticTo(center.x + side * rx * 0.8f, center.y - ry * 0.75f, center.x + side * rx * 1.15f, center.y - ry * 0.55f)
+                    quadraticTo(center.x + side * rx * 0.8f, center.y + ry * 0.05f, center.x + side * rx * 0.25f, center.y + ry * 0.3f)
+                    close()
+                }
+                drawPath(wing, color = accent)
+            }
+            for (k in 0 until 3) {
+                val a = Math.toRadians(-90.0 + k * 120.0)
+                drawLine(
+                    gold,
+                    center,
+                    Offset(center.x + (rx * 0.62f * kotlin.math.cos(a)).toFloat(), center.y + (ry * 0.62f * kotlin.math.sin(a)).toFloat()),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+            }
+            drawCircle(gold, radius = rx * 0.2f, center = center)
+        }
+
         // Unassigned: plain ring
         UnitPatchStyle.UNASSIGNED -> drawCircle(accent, radius = rx * 0.75f, center = center, style = Stroke(width = stroke))
 
