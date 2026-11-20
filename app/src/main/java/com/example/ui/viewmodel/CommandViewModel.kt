@@ -409,6 +409,7 @@ class CommandViewModel(
                     showBanner("${backFromLeave.joinToString { it.callsign }} back on duty.")
                 }
                 tickSoldierEvents(state, now)
+                repairPowRecords(state, now)
                 resolveCaptivity(state, now)
                 // Item 62: covers that blow now; the clock drops and the team must choose
                 state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
@@ -457,6 +458,13 @@ class CommandViewModel(
         if (now - state.lastEventCheckAtMillis < SoldierEvents.eventIntervalMillis()) return
         val rolled = SoldierEvents.roll(ctx)
         repository.updateCommanderState { it.copy(lastEventCheckAtMillis = now, pendingEventCsv = rolled?.toCsv() ?: "") }
+    }
+
+    /** Fix: saves from before the capture-record fix; see [PowRules.repairedRecord]. */
+    private suspend fun repairPowRecords(state: CommandUiState, now: Long) {
+        val powDeedIds = state.pendingDeeds.filter { it.recommendedMedalId == PowRules.POW_MEDAL_ID }.map { it.operatorId }.toSet()
+        val fixed = state.operators.mapNotNull { op -> PowRules.repairedRecord(op, op.id in powDeedIds, now) }
+        if (fixed.isNotEmpty()) repository.saveOperators(fixed)
     }
 
     /** Item 63: held soldiers whose wait has run out are released or die in captivity. */
@@ -1490,10 +1498,12 @@ class CommandViewModel(
                     stats = if (op.id == pilotId) emptySet() else mission.trainsStats,
                     points = TacticalCalculator.missionExperiencePoints(mission, outcome, missionSucceeded)
                 )
-                updatedOperators.add(if (outcome == OperatorOutcomeType.CAPTURED) PowRules.capture(updatedOp, mission, now) else updatedOp)
+                // Item 63: record the capture first, so the service-award step builds on it instead of erasing it
+                val recordedOp = if (outcome == OperatorOutcomeType.CAPTURED) PowRules.capture(updatedOp, mission, now) else updatedOp
+                updatedOperators.add(recordedOp)
                 val leadsTeam = op.id == TacticalCalculator.platoonLeaderFor(mission, groundOps, deployment.platoonLeaderId)?.id ||
                     state.squads.any { it.leaderId == op.id && groundOps.count { g -> g.id in it.memberIds } >= 2 }
-                if (op.id != pilotId) addServiceAwards(updatedOp, outcome, missionSucceeded, leadsTeam)
+                if (op.id != pilotId) addServiceAwards(recordedOp, outcome, missionSucceeded, leadsTeam)
                 if (op.id == pilotId && isCombatOp && outcome != OperatorOutcomeType.FALLEN) {
                     val airMedal = GameCatalog.medals.first { it.id == TacticalCalculator.AIR_MEDAL_ID }
                     val owned = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet()
