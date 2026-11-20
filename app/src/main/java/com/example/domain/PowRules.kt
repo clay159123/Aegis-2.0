@@ -140,6 +140,21 @@ object PowRules {
         hqRole = null
     )
 
+    /**
+     * Fix for saves made before the capture record was kept: a held soldier with no capture time gets one now
+     * (a fresh rescue window and wait), and a soldier home with a POW Medal waiting gets their capture counted.
+     * Returns null when nothing needs fixing.
+     */
+    fun repairedRecord(op: Operator, hasPendingPowMedal: Boolean, now: Long): Operator? = when {
+        op.status == OperatorStatus.CAPTURED && op.capturedAtMillis == 0L -> op.copy(
+            capturedAtMillis = now,
+            captivityResolveAtMillis = now + captivityMillis(op),
+            timesCaptured = op.timesCaptured.coerceAtLeast(1)
+        )
+        op.status != OperatorStatus.CAPTURED && hasPendingPowMedal && op.timesCaptured == 0 -> op.copy(timesCaptured = 1)
+        else -> null
+    }
+
     fun rescueWindowOpen(operator: Operator, now: Long): Boolean =
         operator.status == OperatorStatus.CAPTURED && !operator.powRescueClosed &&
             now < operator.capturedAtMillis + GameTiming.millis(RESCUE_WINDOW_MILLIS)

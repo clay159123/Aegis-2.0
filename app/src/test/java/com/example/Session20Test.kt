@@ -153,3 +153,38 @@ class Session20TalksTest {
         assertFalse(again.powRescueClosed)
     }
 }
+
+/** Fix: the capture record survives, and older saves are repaired. */
+class PowRecordFixTest {
+    private val now = 9_000_000L
+    private val m = GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT }
+    private fun soldier() = GameCatalog.createPostBasicRecruit("a", OperatorSpecialty.ASSAULT, emptySet(), 0).copy(id = "a", unlocked = true)
+
+    @Test
+    fun serviceAwardsKeepTheCaptureRecord() {
+        val captured = PowRules.capture(soldier().copy(status = OperatorStatus.CAPTURED), m, now)
+        val after = AwardRules.serviceAwardsFor(captured, m, OperatorOutcomeType.CAPTURED, false, emptyMap(), emptySet(), kotlin.random.Random(1)).operator
+        assertEquals(1, after.timesCaptured)
+        assertEquals(now, after.capturedAtMillis)
+        assertTrue(after.captivityResolveAtMillis > now)
+    }
+
+    @Test
+    fun brokenRecordsAreRepaired() {
+        // Held with no capture time: gets a fresh window and wait
+        val stuck = soldier().copy(status = OperatorStatus.CAPTURED)
+        val fixed = PowRules.repairedRecord(stuck, false, now)!!
+        assertEquals(1, fixed.timesCaptured)
+        assertTrue(PowRules.rescueWindowOpen(fixed, now + 1000L))
+        assertEquals(now + PowRules.captivityMillis(stuck), fixed.captivityResolveAtMillis)
+        // Home with a POW Medal waiting: the capture now counts, so the medal can be conferred
+        val home = soldier().copy(status = OperatorStatus.RECOVERING)
+        val medal = GameCatalog.medals.first { it.id == PowRules.POW_MEDAL_ID }
+        assertFalse(TacticalCalculator.evaluateAwardEligibility(medal, home, emptySet(), emptyList()).eligible)
+        val counted = PowRules.repairedRecord(home, true, now)!!
+        assertTrue(TacticalCalculator.evaluateAwardEligibility(medal, counted, emptySet(), emptyList()).eligible)
+        // Healthy records are left alone
+        assertNull(PowRules.repairedRecord(PowRules.capture(soldier(), m, now), false, now))
+        assertNull(PowRules.repairedRecord(home, false, now))
+    }
+}
