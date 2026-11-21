@@ -10,8 +10,38 @@ object GameCatalog {
     // Lazy: the seed lists below are declared after this property
     val initialOperators: List<Operator> by lazy {
         seedOperators.map { op ->
-            op.copy(equippedGearIds = starterLoadouts[op.id].orEmpty(), marksmanshipQual = startingRifleQualification(op))
+            op.copy(
+                equippedGearIds = starterLoadouts[op.id].orEmpty(),
+                marksmanshipQual = startingRifleQualification(op),
+                completedMissionIds = op.completedMissionIds + starterRecordSchools(op)
+            )
         }
+    }
+
+    val starterOperatorIds: Set<String> by lazy { seedOperators.map { it.id }.toSet() }
+
+    /**
+     * Item 121: schools a founding soldier's rank and record imply but their seed record left out: basic
+     * qualification, the MOS school, BLC for NCOs (plus SLC for senior NCOs), OCS for officers and generals,
+     * WOCS for warrants, and every prerequisite of what they hold. Empty for a fresh post-Basic soldier.
+     */
+    fun starterRecordSchools(op: Operator): Set<String> {
+        if (op.completedMissionIds.isEmpty()) return emptySet()
+        val ids = mutableSetOf<String>()
+        fun add(id: String) {
+            if (!ids.add(id)) return
+            missions.find { it.id == id }?.schoolRequirements?.prerequisiteAllIds?.forEach { add(it) }
+        }
+        (op.completedMissionIds + "msn_basic_qual").forEach { add(it) }
+        mosSchoolPackage(op.specialty).schoolId?.let { add(it) }
+        when (op.rank.tier) {
+            RankTier.NCO -> add("msn_nco_school")
+            RankTier.SNCO -> { add("msn_nco_school"); add("msn_snco_school") }
+            RankTier.OFFICER, RankTier.FLAG_OFFICER -> add("msn_ocs_school")
+            RankTier.WARRANT -> add("msn_wocs")
+            RankTier.SOLDIER -> Unit
+        }
+        return ids - op.completedMissionIds
     }
 
     /** Starting kit for the founding soldiers */
