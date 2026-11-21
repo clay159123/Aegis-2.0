@@ -568,6 +568,9 @@ object TacticalCalculator {
     const val RIFLE_QUAL_MISSION_ID = "msn_rifle_qual"
 
     // ---- Warrant officers and aviation (Session 9) ----
+    /** Item 126: share of each claimed mission's XP that seated HQ staff earn, and the floor. */
+    const val HQ_STAFF_XP_SHARE = 0.60
+    const val HQ_STAFF_MIN_XP = 20
     const val OCS_MISSION_ID = "msn_ocs_school"
     const val WOCS_MISSION_ID = "msn_wocs"
     const val FLIGHT_SCHOOL_MISSION_ID = "msn_flight_school"
@@ -1304,7 +1307,12 @@ object TacticalCalculator {
                     )
                 }
             }
-            OperatorStatus.READY -> Unit
+            OperatorStatus.READY -> {
+                // Item 135: generals serve on HQ staff, never in the field
+                if (operator.rank.tier == RankTier.FLAG_OFFICER && !mission.scope.hqStaffAllowed) {
+                    return EligibilityResult(false, listOf("Generals serve on HQ staff only"))
+                }
+            }
         }
 
         if (mission.requiresSfTeam && !isSfQualified(operator)) {
@@ -1348,8 +1356,16 @@ object TacticalCalculator {
                     if (!operator.isWarrantOfficer) missing += "Warrant officers only (graduate WOCS first)"
                     if (facilityLevel(facilities, FacilityType.AIRFIELD) < 1) missing += "Build an Airfield first"
                 }
+                // Item 125: the S-3 and CSM are enlisted billets; leave them before applying for a commission
+                if ((mission.id == OCS_MISSION_ID || mission.id == WOCS_MISSION_ID) &&
+                    operator.status == OperatorStatus.HQ_STAFF && operator.hqRole?.isEnlistedOnly == true
+                ) {
+                    missing += "Seated in an enlisted billet (${operator.hqRole?.shortCode}): return to the field first"
+                }
                 if (mission.id == FLIGHT_HOURS_MISSION_ID) {
                     if (!operator.isAviator) missing += "Aviators only (graduate Flight School first)"
+                    // Item 129: pilots seated on HQ staff fly a desk, not a helicopter
+                    if (operator.status == OperatorStatus.HQ_STAFF) missing += "HQ staff don't log flight hours"
                     if (facilityLevel(facilities, FacilityType.AIRFIELD) < 1) missing += "Needs an Airfield"
                     if (operator.flightSkill >= MAX_FLIGHT_SKILL) missing += "Flight skill maxed ($MAX_FLIGHT_SKILL)"
                 }
@@ -2137,6 +2153,21 @@ object TacticalCalculator {
     fun maxFieldRosterSlots(facilities: List<FacilityState>): Int {
         // Item 116: +3 soldiers per Barracks level (35 at level 10); SF squads live in the SF Compound
         return CompoundRules.barracksSlots(facilityLevel(facilities, FacilityType.BARRACKS))
+    }
+
+    /** Item 144: how many soldiers HQ can seat, one per unlocked billet (several billets share a ladder rung). */
+    fun hqSeatCount(facilities: List<FacilityState>): Int = unlockedHqRoles(facilities).size
+
+    /** Item 135: billets a general can hold (no rank cap below the flag grades). */
+    val GENERAL_BILLETS = setOf(HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.DEPUTY_COMMANDER)
+
+    /** Item 135: the general billet a COL's star would fill, or null when none is open to them. */
+    fun openGeneralBillet(candidate: Operator, allOperators: List<Operator>, facilities: List<FacilityState>): HqStaffRole? {
+        if (candidate.status == OperatorStatus.HQ_STAFF && candidate.hqRole in GENERAL_BILLETS) return candidate.hqRole
+        val unlocked = unlockedHqRoles(facilities)
+        val taken = allOperators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.id != candidate.id }
+            .mapNotNull { it.hqRole }.toSet()
+        return GENERAL_BILLETS.sortedBy { it.slotOrder }.firstOrNull { it in unlocked && it !in taken }
     }
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {

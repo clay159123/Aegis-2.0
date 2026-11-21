@@ -48,7 +48,7 @@ data class CommandUiState(
     val maxDeploymentSlots: Int = 2,
     val hqStaffCount: Int = 0,
     val maxFieldRosterSlots: Int = 5,
-    val maxHqStaffSlots: Int = 3,
+    val maxHqStaffSlots: Int = 4,
     val hqStaffSummary: TacticalCalculator.HqStaffSummary = TacticalCalculator.HqStaffSummary(),
     val veteranLegacyBps: Int = 0,
     val retiredVeteransCount: Int = 0,
@@ -215,7 +215,7 @@ class CommandViewModel(
                 maxDeploymentSlots = TacticalCalculator.maxDeploymentSlots(data.facilities),
                 hqStaffCount = hqStaffSummary.staffCount,
                 maxFieldRosterSlots = TacticalCalculator.maxFieldRosterSlots(data.facilities),
-                maxHqStaffSlots = TacticalCalculator.maxHqStaffSlots(data.facilities),
+                maxHqStaffSlots = TacticalCalculator.hqSeatCount(data.facilities),
                 hqStaffSummary = hqStaffSummary,
                 veteranLegacyBps = data.commander.veteranLegacyBps,
                 retiredVeteransCount = data.commander.retiredVeteransCount,
@@ -698,7 +698,7 @@ class CommandViewModel(
             facilities = state.facilities
         )
         val nextRank = boardEval.nextRank ?: run {
-            showBanner("${op.callsign} already holds the highest Army rank (GEN).")
+            showBanner(boardEval.blockedReason?.let { "${op.callsign}: $it" } ?: "${op.callsign} already holds the highest Army rank (GEN).")
             return
         }
         if (boardEval.isCrossTierGate && !boardEval.allMeritsMet) {
@@ -726,7 +726,22 @@ class CommandViewModel(
             op.authorizedTier
         }
         val bonus = if (tierChanged) endorsementFocus?.statBonus else null
-        val promoted = op.promotedTo(nextRank)
+        // Item 135: a new general takes the open general billet (CO first, then Deputy Commander)
+        val generalBillet = if (nextRank.tier == RankTier.FLAG_OFFICER) {
+            TacticalCalculator.openGeneralBillet(op, state.operators, state.facilities)
+        } else null
+        val seatedForStar = if (generalBillet != null && op.hqRole != generalBillet) {
+            op.copy(
+                equippedGearIds = emptyMap(),
+                status = OperatorStatus.HQ_STAFF,
+                hqRole = generalBillet,
+                transferRequested = false,
+                retirementRequested = false,
+                uniformMode = UniformMode.DRESS_UNIFORM,
+                activeWardrobeKit = WardrobeKit.ALPHAS
+            )
+        } else op
+        val promoted = seatedForStar.promotedTo(nextRank)
         val progressedOp = applyTierProgressionOnRankUp(
             op = promoted.copy(
                 authorizedTier = if (nextRank.isWarrant) RankTier.WARRANT else nextAuthorizedTier,
@@ -749,6 +764,13 @@ class CommandViewModel(
                 )
             }
             repository.saveOperator(progressedOp)
+            if (seatedForStar !== op) {
+                val prunedSquads = SquadCohesionRules.pruneUnavailableMembers(
+                    squads = state.squads,
+                    operators = state.operators.map { if (it.id == op.id) progressedOp else it }
+                ).filter { updated -> state.squads.find { it.id == updated.id } != updated }
+                if (prunedSquads.isNotEmpty()) repository.saveSquads(prunedSquads)
+            }
             val promotionDeeds = newlyEligibleAwardDeeds(
                 before = op,
                 after = progressedOp,
@@ -762,7 +784,8 @@ class CommandViewModel(
             }
             val msg = if (tierChanged) {
                 val focusNote = endorsementFocus?.let { " • Endorsed: ${it.title}" } ?: ""
-                "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!"
+                val seatNote = if (seatedForStar !== op) " Now seated as ${generalBillet?.shortCode}." else ""
+                "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!$seatNote"
             } else {
                 "${op.callsign} promoted to ${nextRank.title} (${nextRank.code} / ${nextRank.payGrade})."
             }
@@ -1619,7 +1642,8 @@ class CommandViewModel(
             it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.id !in deployment.operatorIds
         }
         for (staff in staffOps) {
-            val staffXp = (xpEach * 0.30).roundToInt().coerceAtLeast(12)
+            // Item 126: staff work earns real experience (was 30%, which left seated staff looking frozen)
+            val staffXp = (xpEach * TacticalCalculator.HQ_STAFF_XP_SHARE).roundToInt().coerceAtLeast(TacticalCalculator.HQ_STAFF_MIN_XP)
             val nextSupportCount = staff.staffOpsSupported + 1
             val prevStaffRank = staff.rank
             val nextStaffXp = OperatorRank.clampXpToAuthorizedTier(staff.xp + staffXp, staff.authorizedTier)

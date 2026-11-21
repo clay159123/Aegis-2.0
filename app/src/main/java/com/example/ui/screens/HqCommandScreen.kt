@@ -266,7 +266,11 @@ fun HqCommandScreen(
                 val isDeployed = occupant.id in deployedOpIds
 
                 val canRetire = TacticalCalculator.evaluateRetirementEligibility(occupant).eligible
-                val crossesTier = OperatorRank.nextRank(occupant.rank)?.let { OperatorRank.isBoardGate(occupant.rank, it) } == true
+                // Items 126 and 135: the board knows the billet cap, enlisted billets and general seats
+                val occupantBoard = TacticalCalculator.evaluatePromotionBoard(
+                    occupant, uiState.operators, uiState.citations, uiState.gearItems, uiState.facilities
+                )
+                val crossesTier = occupantBoard.nextRank?.let { OperatorRank.isBoardGate(occupant.rank, it) } == true
                 HqOccupiedBilletCard(
                     role = role,
                     operator = occupant,
@@ -281,6 +285,8 @@ fun HqCommandScreen(
                     },
                     canTransfer = canTransfer,
                     canRetire = canRetire,
+                    boardNextRank = occupantBoard.nextRank,
+                    promotionBlockedReason = occupantBoard.blockedReason,
                     onPromote = {
                         if (crossesTier) {
                             promotionBoardOpId = occupant.id
@@ -702,6 +708,8 @@ private fun HqOccupiedBilletCard(
     hasOtherOpenBillet: Boolean,
     canTransfer: Boolean,
     canRetire: Boolean,
+    boardNextRank: OperatorRank? = OperatorRank.nextRank(operator.rank),
+    promotionBlockedReason: String? = null,
     onPromote: () -> Unit,
     onDispatchTasking: () -> Unit,
     onNavigateToAwards: () -> Unit,
@@ -711,7 +719,7 @@ private fun HqOccupiedBilletCard(
     onTransferOut: () -> Unit
 ) {
     val extra = LocalAegisColors.current
-    val nextRank = OperatorRank.nextRank(operator.rank)
+    val nextRank = boardNextRank
     val crCost = operator.rank.promotionCreditCost()
     val prsCost = operator.rank.promotionPrestigeCost()
     val crossesTierCard = nextRank != null && OperatorRank.isBoardGate(operator.rank, nextRank)
@@ -818,6 +826,7 @@ private fun HqOccupiedBilletCard(
                 val readyAtGate = crossesTier && operator.xp >= nextRank!!.xpRequired
                 Text(
                     text = when {
+                        nextRank == null && promotionBlockedReason != null -> promotionBlockedReason
                         nextRank == null -> "Max Army Rank (${operator.xp} XP)"
                         readyAtGate -> "Category Gate Ready: ${operator.rank.code} → ${nextRank.code} (${nextRank.tier.shortLabel})"
                         crossesTier -> "Gate XP: ${operator.xp}/${nextRank.xpRequired} → ${nextRank.code} (Player)"
@@ -865,6 +874,7 @@ private fun HqOccupiedBilletCard(
                 ) {
                     Text(
                         text = when {
+                            nextRank == null && promotionBlockedReason != null -> "Billet Top Rank"
                             nextRank == null -> "Max Rank (GEN)"
                             crossesTierCard -> "${nextRank.tier.shortLabel} Board (${nextRank.code})"
                             else -> "Promote ${nextRank.code} (${crCost.toInt()}C/${prsCost}P)"

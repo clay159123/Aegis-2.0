@@ -64,7 +64,9 @@ data class PromotionBoardEvaluation(
     val opinions: List<BoardMemberOpinion>,
     val consensus: BoardConsensus,
     val requiredSchoolId: String? = null,
-    val requiredSchoolTitle: String? = null
+    val requiredSchoolTitle: String? = null,
+    /** Items 126 and 135: why no board can sit (billet cap, enlisted billet), shown on the HQ card. */
+    val blockedReason: String? = null
 )
 
 object PromotionBoardEvaluator {
@@ -92,8 +94,21 @@ object PromotionBoardEvaluator {
         val creditCost = currentRank.promotionCreditCost() * (100 - discountPct) / 100.0
         val prestigeCost = currentRank.promotionPrestigeCost() * (100 - discountPct) / 100
 
-        // Item 107: an HQ billet's top rank ends promotions there (treated like having no next rank)
-        if (nextRank == null || operator.isAtHqRankCap) {
+        // Item 107: an HQ billet's top rank ends promotions there (treated like having no next rank).
+        // Item 135: a COL capped as XO can still go before the general board when a general billet is open.
+        val seatedRole = operator.hqRole.takeIf { operator.status == OperatorStatus.HQ_STAFF }
+        val generalBilletOpen = nextRank == OperatorRank.BG &&
+            TacticalCalculator.openGeneralBillet(operator, allOperators, facilities) != null
+        val blockedReason = when {
+            nextRank == null -> null
+            operator.isAtHqRankCap && !generalBilletOpen ->
+                "${seatedRole?.shortCode ?: "Billet"} tops out at ${operator.hqRankCap?.code}. Move to a senior billet or the field to rise further."
+            // Item 126: the S-3 and CSM are enlisted billets; a commission means leaving them
+            seatedRole?.isEnlistedOnly == true && !nextRank.tier.isEnlisted ->
+                "${seatedRole.shortCode} is an enlisted billet. Return to the field to pursue a commission."
+            else -> null
+        }
+        if (nextRank == null || blockedReason != null) {
             return PromotionBoardEvaluation(
                 currentRank = currentRank,
                 nextRank = null,
@@ -103,7 +118,8 @@ object PromotionBoardEvaluator {
                 meritChecks = emptyList(),
                 allMeritsMet = false,
                 opinions = emptyList(),
-                consensus = BoardConsensus.BLOCKED
+                consensus = BoardConsensus.BLOCKED,
+                blockedReason = blockedReason
             )
         }
 
@@ -304,6 +320,14 @@ object PromotionBoardEvaluator {
                         "${opMedalDefs.size}/$honorsNeeded Honors (incl. Valor/Merit)"
                     },
                     satisfied = honorsFlagOk
+                )
+                // Item 135: generals serve only on HQ staff, so a star needs a general billet to fill
+                val generalBillet = TacticalCalculator.openGeneralBillet(operator, allOperators, facilities)
+                meritChecks += PromotionMeritCheck(
+                    id = "billet_flag",
+                    label = "General Officer Billet",
+                    statusText = generalBillet?.let { "${it.shortCode} billet available" } ?: "Needs an open CO or Deputy Commander billet",
+                    satisfied = generalBillet != null
                 )
             }
             RankTier.SOLDIER -> Unit
