@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -555,13 +557,27 @@ fun AegisCommandApp() {
         )
     }
 
-    // Banners live in their own popup window, created only while one is showing, so it sits above dialogs
+    // Banners live in their own popup window, created only while one is showing, so it sits above dialogs.
+    // Item 130 follow-up: the window took every touch in its bounds, and its bottom padding sat over the nav
+    // buttons. It now shows at the top with no outer padding, and any tap or swipe on it closes it.
     snackbarHostState.currentSnackbarData?.let {
         androidx.compose.ui.window.Popup(
-            alignment = Alignment.BottomCenter,
+            alignment = Alignment.TopCenter,
             properties = androidx.compose.ui.window.PopupProperties(focusable = false)
         ) {
-            SnackbarHost(hostState = snackbarHostState, modifier = Modifier.padding(bottom = 96.dp))
+            SnackbarHost(hostState = snackbarHostState, modifier = Modifier.statusBarsPadding()) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    modifier = Modifier
+                        .testTag("status_banner")
+                        .pointerInput(data) {
+                            awaitPointerEventScope {
+                                awaitFirstDown()
+                                data.dismiss()
+                            }
+                        }
+                )
+            }
         }
     }
 
