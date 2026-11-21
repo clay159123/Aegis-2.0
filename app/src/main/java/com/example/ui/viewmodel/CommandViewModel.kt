@@ -48,7 +48,7 @@ data class CommandUiState(
     val maxDeploymentSlots: Int = 2,
     val hqStaffCount: Int = 0,
     val maxFieldRosterSlots: Int = 5,
-    val maxHqStaffSlots: Int = 3,
+    val maxHqStaffSlots: Int = 4,
     val hqStaffSummary: TacticalCalculator.HqStaffSummary = TacticalCalculator.HqStaffSummary(),
     val veteranLegacyBps: Int = 0,
     val retiredVeteransCount: Int = 0,
@@ -215,7 +215,7 @@ class CommandViewModel(
                 maxDeploymentSlots = TacticalCalculator.maxDeploymentSlots(data.facilities),
                 hqStaffCount = hqStaffSummary.staffCount,
                 maxFieldRosterSlots = TacticalCalculator.maxFieldRosterSlots(data.facilities),
-                maxHqStaffSlots = TacticalCalculator.maxHqStaffSlots(data.facilities),
+                maxHqStaffSlots = TacticalCalculator.hqSeatCount(data.facilities),
                 hqStaffSummary = hqStaffSummary,
                 veteranLegacyBps = data.commander.veteranLegacyBps,
                 retiredVeteransCount = data.commander.retiredVeteransCount,
@@ -410,6 +410,7 @@ class CommandViewModel(
                 }
                 tickSoldierEvents(state, now)
                 repairPowRecords(state, now)
+                repairOcsCommissions(state)
                 resolveCaptivity(state, now)
                 // Item 62: covers that blow now; the clock drops and the team must choose
                 state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
@@ -698,7 +699,7 @@ class CommandViewModel(
             facilities = state.facilities
         )
         val nextRank = boardEval.nextRank ?: run {
-            showBanner("${op.callsign} already holds the highest Army rank (GEN).")
+            showBanner(boardEval.blockedReason?.let { "${op.callsign}: $it" } ?: "${op.callsign} already holds the highest Army rank (GEN).")
             return
         }
         if (boardEval.isCrossTierGate && !boardEval.allMeritsMet) {
@@ -726,7 +727,22 @@ class CommandViewModel(
             op.authorizedTier
         }
         val bonus = if (tierChanged) endorsementFocus?.statBonus else null
-        val promoted = op.promotedTo(nextRank)
+        // Item 135: a new general takes the open general billet (CO first, then Deputy Commander)
+        val generalBillet = if (nextRank.tier == RankTier.FLAG_OFFICER) {
+            TacticalCalculator.openGeneralBillet(op, state.operators, state.facilities)
+        } else null
+        val seatedForStar = if (generalBillet != null && op.hqRole != generalBillet) {
+            op.copy(
+                equippedGearIds = emptyMap(),
+                status = OperatorStatus.HQ_STAFF,
+                hqRole = generalBillet,
+                transferRequested = false,
+                retirementRequested = false,
+                uniformMode = UniformMode.DRESS_UNIFORM,
+                activeWardrobeKit = WardrobeKit.ALPHAS
+            )
+        } else op
+        val promoted = seatedForStar.promotedTo(nextRank)
         val progressedOp = applyTierProgressionOnRankUp(
             op = promoted.copy(
                 authorizedTier = if (nextRank.isWarrant) RankTier.WARRANT else nextAuthorizedTier,
@@ -749,6 +765,13 @@ class CommandViewModel(
                 )
             }
             repository.saveOperator(progressedOp)
+            if (seatedForStar !== op) {
+                val prunedSquads = SquadCohesionRules.pruneUnavailableMembers(
+                    squads = state.squads,
+                    operators = state.operators.map { if (it.id == op.id) progressedOp else it }
+                ).filter { updated -> state.squads.find { it.id == updated.id } != updated }
+                if (prunedSquads.isNotEmpty()) repository.saveSquads(prunedSquads)
+            }
             val promotionDeeds = newlyEligibleAwardDeeds(
                 before = op,
                 after = progressedOp,
@@ -762,7 +785,8 @@ class CommandViewModel(
             }
             val msg = if (tierChanged) {
                 val focusNote = endorsementFocus?.let { " • Endorsed: ${it.title}" } ?: ""
-                "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!"
+                val seatNote = if (seatedForStar !== op) " Now seated as ${generalBillet?.shortCode}." else ""
+                "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!$seatNote"
             } else {
                 "${op.callsign} promoted to ${nextRank.title} (${nextRank.code} / ${nextRank.payGrade})."
             }
@@ -777,6 +801,8 @@ class CommandViewModel(
         passed: Boolean,
         flightHours: Int = TacticalCalculator.FLIGHT_HOURS_PER_SESSION
     ): Operator = when {
+        // Session 23: an OCS graduate commissions as a 2LT on the spot, the way WOCS makes a WO1
+        passed && missionId == TacticalCalculator.OCS_MISSION_ID && op.rank.tier.isEnlisted -> commissionFromOcs(op)
         passed && missionId == TacticalCalculator.WOCS_MISSION_ID -> {
             val prevRank = op.rank
             applyTierProgressionOnRankUp(op.promotedTo(OperatorRank.WO1), prevRank, OperatorRank.WO1)
@@ -791,6 +817,20 @@ class CommandViewModel(
         missionId == TacticalCalculator.FLIGHT_HOURS_MISSION_ID ->
             TacticalCalculator.applyFlightHours(op, flightHours.takeIf { it > 0 } ?: TacticalCalculator.FLIGHT_HOURS_PER_SESSION, passed)
         else -> op
+    }
+
+    private fun commissionFromOcs(op: Operator): Operator {
+        val prevRank = op.rank
+        return applyTierProgressionOnRankUp(op.promotedTo(OperatorRank.LT2), prevRank, OperatorRank.LT2)
+    }
+
+    /** Session 23: soldiers who passed OCS before it commissioned directly get their 2LT now. */
+    private suspend fun repairOcsCommissions(state: CommandUiState) {
+        val fixed = state.operators.filter { TacticalCalculator.awaitingOcsCommission(it) }.map { commissionFromOcs(it) }
+        if (fixed.isNotEmpty()) {
+            repository.saveOperators(fixed)
+            showBanner("${fixed.joinToString { it.callsign }} commissioned as 2LT (OCS graduate).")
+        }
     }
 
     private fun applyTierProgressionOnRankUp(
@@ -1619,7 +1659,8 @@ class CommandViewModel(
             it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.id !in deployment.operatorIds
         }
         for (staff in staffOps) {
-            val staffXp = (xpEach * 0.30).roundToInt().coerceAtLeast(12)
+            // Item 126: staff work earns real experience (was 30%, which left seated staff looking frozen)
+            val staffXp = (xpEach * TacticalCalculator.HQ_STAFF_XP_SHARE).roundToInt().coerceAtLeast(TacticalCalculator.HQ_STAFF_MIN_XP)
             val nextSupportCount = staff.staffOpsSupported + 1
             val prevStaffRank = staff.rank
             val nextStaffXp = OperatorRank.clampXpToAuthorizedTier(staff.xp + staffXp, staff.authorizedTier)
