@@ -74,6 +74,18 @@ class Session23HqStaffTest {
     }
 
     @Test
+    fun ocsGraduatesAwaitingCommissionAreFound() {
+        val sgm = seated(HqStaffRole.XO_CHIEF_OF_STAFF, OperatorRank.SGM).copy(
+            completedMissionIds = base.completedMissionIds + TacticalCalculator.OCS_MISSION_ID
+        )
+        assertTrue(TacticalCalculator.awaitingOcsCommission(sgm))
+        assertEquals(OperatorRank.LT2, sgm.promotedTo(OperatorRank.LT2).rank)
+        // Not while seated in an enlisted billet, and not once commissioned
+        assertTrue(!TacticalCalculator.awaitingOcsCommission(sgm.copy(hqRole = HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR)))
+        assertTrue(!TacticalCalculator.awaitingOcsCommission(sgm.promotedTo(OperatorRank.LT2)))
+    }
+
+    @Test
     fun hqPilotsDontLogFlightHours() {
         // Item 129
         val pilot = seated(HqStaffRole.AIR_OPS_OFFICER, OperatorRank.CW2).copy(specialty = OperatorSpecialty.AVIATION, flightSkill = 30)

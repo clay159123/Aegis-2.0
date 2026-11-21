@@ -2155,6 +2155,12 @@ object TacticalCalculator {
         return CompoundRules.barracksSlots(facilityLevel(facilities, FacilityType.BARRACKS))
     }
 
+    /** Session 23: an enlisted OCS graduate still waiting on the commission OCS now grants at graduation. */
+    fun awaitingOcsCommission(op: Operator): Boolean =
+        op.unlocked && !op.status.isOutOfActiveService && op.status != OperatorStatus.CAPTURED &&
+            op.rank.tier.isEnlisted && OCS_MISSION_ID in op.completedMissionIds &&
+            !(op.status == OperatorStatus.HQ_STAFF && op.hqRole?.isEnlistedOnly == true)
+
     /** Item 144: how many soldiers HQ can seat, one per unlocked billet (several billets share a ladder rung). */
     fun hqSeatCount(facilities: List<FacilityState>): Int = unlockedHqRoles(facilities).size
 

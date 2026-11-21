@@ -410,6 +410,7 @@ class CommandViewModel(
                 }
                 tickSoldierEvents(state, now)
                 repairPowRecords(state, now)
+                repairOcsCommissions(state)
                 resolveCaptivity(state, now)
                 // Item 62: covers that blow now; the clock drops and the team must choose
                 state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
@@ -800,6 +801,8 @@ class CommandViewModel(
         passed: Boolean,
         flightHours: Int = TacticalCalculator.FLIGHT_HOURS_PER_SESSION
     ): Operator = when {
+        // Session 23: an OCS graduate commissions as a 2LT on the spot, the way WOCS makes a WO1
+        passed && missionId == TacticalCalculator.OCS_MISSION_ID && op.rank.tier.isEnlisted -> commissionFromOcs(op)
         passed && missionId == TacticalCalculator.WOCS_MISSION_ID -> {
             val prevRank = op.rank
             applyTierProgressionOnRankUp(op.promotedTo(OperatorRank.WO1), prevRank, OperatorRank.WO1)
@@ -814,6 +817,20 @@ class CommandViewModel(
         missionId == TacticalCalculator.FLIGHT_HOURS_MISSION_ID ->
             TacticalCalculator.applyFlightHours(op, flightHours.takeIf { it > 0 } ?: TacticalCalculator.FLIGHT_HOURS_PER_SESSION, passed)
         else -> op
+    }
+
+    private fun commissionFromOcs(op: Operator): Operator {
+        val prevRank = op.rank
+        return applyTierProgressionOnRankUp(op.promotedTo(OperatorRank.LT2), prevRank, OperatorRank.LT2)
+    }
+
+    /** Session 23: soldiers who passed OCS before it commissioned directly get their 2LT now. */
+    private suspend fun repairOcsCommissions(state: CommandUiState) {
+        val fixed = state.operators.filter { TacticalCalculator.awaitingOcsCommission(it) }.map { commissionFromOcs(it) }
+        if (fixed.isNotEmpty()) {
+            repository.saveOperators(fixed)
+            showBanner("${fixed.joinToString { it.callsign }} commissioned as 2LT (OCS graduate).")
+        }
     }
 
     private fun applyTierProgressionOnRankUp(
