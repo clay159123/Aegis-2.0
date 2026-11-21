@@ -634,7 +634,8 @@ class TacticalCalculatorTest {
         val s3Candidate = vesper.copy(xp = OperatorRank.SSG.xpRequired, completedMissionIds = setOf("msn_ranger_school"))
         assertTrue(TacticalCalculator.evaluateHqRoleEligibility(HqStaffRole.S3_OPS_DIRECTOR, s3Candidate).eligible)
 
-        assertFalse(TacticalCalculator.evaluateHqRoleEligibility(HqStaffRole.S2_INTEL_OVERWATCH, vesper).eligible)
+        // Item 121: Vesper (19D) now starts with the Intel school, so test S-2 gating without it
+        assertFalse(TacticalCalculator.evaluateHqRoleEligibility(HqStaffRole.S2_INTEL_OVERWATCH, vesper.copy(completedMissionIds = emptySet())).eligible)
         val s2SignalsCandidate = vesper.copy(completedMissionIds = setOf("msn_signals_school"))
         val s2IntelCandidate = vesper.copy(completedMissionIds = setOf("msn_intel_school"))
         assertTrue(TacticalCalculator.evaluateHqRoleEligibility(HqStaffRole.S2_INTEL_OVERWATCH, s2SignalsCandidate).eligible)
@@ -675,7 +676,12 @@ class TacticalCalculatorTest {
         val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
         val kestrelCo = kestrel.copy(status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.CO_COMMANDING_OFFICER)
 
-        val schoolMission = GameCatalog.missions.first { it.id == "msn_logistics_school" }
+        // Item 121: Kestrel (Staff & Command) now starts with the Logistics school, so use an open school
+        val schoolMission = GameCatalog.missions.first { it.id == "msn_logistics_school" }.let { m ->
+            if (m.id in kestrelCo.completedMissionIds) GameCatalog.missions.first {
+                it.scope == MissionScope.TRAINING && TacticalCalculator.canOperatorDeployOnMission(kestrelCo, it, emptySet()).eligible
+            } else m
+        }
         val signalsOnlySchool = GameCatalog.missions.first { it.id == "msn_signals_school" }
         val diploMission = GameCatalog.missions.first { it.id == "msn_diplo_summit" }
         val fieldCombatMission = GameCatalog.missions.first { it.id == "msn_ridge_patrol" }

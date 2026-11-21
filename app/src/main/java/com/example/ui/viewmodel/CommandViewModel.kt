@@ -411,6 +411,7 @@ class CommandViewModel(
                 tickSoldierEvents(state, now)
                 repairPowRecords(state, now)
                 repairOcsCommissions(state)
+                repairStarterSchools(state)
                 resolveCaptivity(state, now)
                 // Item 62: covers that blow now; the clock drops and the team must choose
                 state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
@@ -833,6 +834,36 @@ class CommandViewModel(
         }
     }
 
+    /**
+     * Item 121: founding soldiers in older saves get the schools their rank implies (KESTREL's OCS), plus any
+     * award those schools now earn. Runs once in effect: after the fix nothing is missing.
+     */
+    private suspend fun repairStarterSchools(state: CommandUiState) {
+        val now = System.currentTimeMillis()
+        state.operators.filter { it.id in GameCatalog.starterOperatorIds && !it.status.isOutOfActiveService }.forEach { op ->
+            // Only the schools the founding record implies, never ones the soldier should earn in play
+            val seed = GameCatalog.initialOperators.find { it.id == op.id } ?: return@forEach
+            val missing = seed.completedMissionIds - op.completedMissionIds
+            if (missing.isEmpty()) return@forEach
+            val fixed = op.copy(completedMissionIds = op.completedMissionIds + missing)
+            repository.saveOperator(fixed)
+            val held = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet()
+            val before = TacticalCalculator.earnedStartingAwards(op, held).toSet()
+            TacticalCalculator.earnedStartingAwards(fixed, held).filter { it !in before }.forEachIndexed { i, medalId ->
+                repository.addCitation(
+                    AwardedMedal(
+                        id = "cit_${UUID.randomUUID().toString().take(8)}",
+                        operatorId = op.id,
+                        medalId = medalId,
+                        citationNote = "Earned before reporting to Aegis HQ.",
+                        missionTitle = "Prior Service Record",
+                        awardedAtMillis = now + i
+                    )
+                )
+            }
+        }
+    }
+
     private fun applyTierProgressionOnRankUp(
         op: Operator,
         prevRank: OperatorRank,
@@ -862,8 +893,12 @@ class CommandViewModel(
         } else {
             updatedServiceCap
         }
+        // Item 127: a tier change resets the coat to Auto instead of saving it as a hand pick (a hand pick
+        // outranks the squad standard, so promoted soldiers stopped following it). Keep real special picks.
         val nextAlphas = op.wardrobe.alphas.copy(
-            dressStyle = updatedAlphasDress,
+            dressStyle = op.wardrobe.alphas.dressStyle?.takeIf {
+                !TacticalCalculator.isTierDefaultCoat(it) && it.requiredTier.order <= newRank.tier.order
+            },
             // Keep a still-valid manual pick; otherwise Auto shows the new rank's cap
             headgearStyle = op.wardrobe.alphas.headgearStyle?.takeIf {
                 it.kind != HeadgearKind.BERET && it.requiredTier.order >= newRank.tier.order
@@ -871,15 +906,17 @@ class CommandViewModel(
         )
         val nextMess = op.wardrobe.mess.copy(
             dressStyle = op.wardrobe.mess.dressStyle?.takeIf {
-                it.isCutawayMess && it.requiredTier.order >= newRank.tier.order
-            } ?: updatedMessDress,
+                it.isCutawayMess && !TacticalCalculator.isTierDefaultCoat(it) && it.requiredTier.order <= newRank.tier.order
+            },
             // Keep a still-valid manual pick; otherwise Auto shows the new rank's cap
             headgearStyle = op.wardrobe.mess.headgearStyle?.takeIf {
                 it.kind != HeadgearKind.BERET && it.requiredTier.order >= newRank.tier.order
             }
         )
         val nextBravos = op.wardrobe.bravos.copy(
-            dressStyle = updatedAlphasDress
+            dressStyle = op.wardrobe.bravos.dressStyle?.takeIf {
+                !TacticalCalculator.isTierDefaultCoat(it) && it.requiredTier.order <= newRank.tier.order
+            }
         )
         return op.copy(
             dressStyle = updatedDress,
@@ -2243,8 +2280,9 @@ class CommandViewModel(
         )
         // Officers and warrant officers arrive in their tier's uniforms
         val recruit = applyTierProgressionOnRankUp(raw, OperatorRank.PV2, raw.rank)
-        val awardIds = GameCatalog.recruitAwardPackage(source, recruit.specialty)
-            .filter { id -> GameCatalog.medals.any { it.id == id } }
+        // Item 128: the package, then everything else the recruit's record already earns (badges, tabs, cords),
+        // so nothing waits in the awards queue to be handed out by hand
+        val awardIds = TacticalCalculator.recruitArrivalAwards(recruit, source)
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             repository.updateCommanderState { cur ->
@@ -3476,8 +3514,13 @@ class CommandViewModel(
                 trimmed.copy(teamLeaderId = SquadCohesionRules.validTeamLeaderId(trimmed, state.operators))
             }
 
+        // Item 127: saving a standard clears members' own picks for the items it sets, so they wear it
+        val followers = state.operators.filter { it.id in validIds }.mapNotNull { op ->
+            TacticalCalculator.followSquadStandard(op, targetSquad).takeIf { it != op }
+        }
         viewModelScope.launch {
             repository.saveSquads(otherUpdatedSquads + targetSquad)
+            if (followers.isNotEmpty()) repository.saveOperators(followers)
             val leaderCallsign = resolvedLeaderId?.let { id -> state.operators.find { it.id == id }?.callsign }
             val leaderSuffix = if (leaderCallsign != null) " • Leader: $leaderCallsign" else ""
             showBanner("Saved ${targetSquad.name} (${validIds.size}/$MAX_SQUAD_SIZE$leaderSuffix)")

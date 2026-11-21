@@ -1616,6 +1616,31 @@ object TacticalCalculator {
     fun standardSquadFor(operator: Operator, squads: List<TacticalSquad>): TacticalSquad? =
         if (operator.status == OperatorStatus.HQ_STAFF) null else squads.firstOrNull { operator.id in it.memberIds }
 
+    /** Item 127: the coats a tier change used to save automatically (each tier's Alphas and Mess default). */
+    fun isTierDefaultCoat(style: DressUniformStyle): Boolean = style in setOf(
+        DressUniformStyle.ARMY_SERVICE_GREEN, DressUniformStyle.NCO_PARADE_BLUES, DressUniformStyle.OFFICER_SERVICE_BLUES,
+        DressUniformStyle.FLAG_STAFF_FORMAL, DressUniformStyle.ENLISTED_MESS_BLUES, DressUniformStyle.OFFICER_MESS_BLUES,
+        DressUniformStyle.FLAG_MESS_FORMAL
+    )
+
+    /** Item 127: clear a member's own picks for every item the squad standard sets, so the standard shows. */
+    fun followSquadStandard(op: Operator, squad: TacticalSquad): Operator {
+        if (op.status == OperatorStatus.HQ_STAFF) return op
+        var wardrobe = op.wardrobe
+        for (kit in WardrobeKit.entries) {
+            val std = rawKitStandard(squad, kit)
+            val cur = wardrobe.forKit(kit)
+            val next = cur.copy(
+                camoPattern = if (std.camo != null) null else cur.camoPattern,
+                dressStyle = if (std.dressStyle != null) null else cur.dressStyle,
+                headgearStyle = if (std.headgear != null) null else cur.headgearStyle,
+                hasWhiteGloves = if (std.gloves != null) null else cur.hasWhiteGloves
+            )
+            if (next != cur) wardrobe = wardrobe.withKit(kit, next)
+        }
+        return if (wardrobe == op.wardrobe) op else op.copy(wardrobe = wardrobe)
+    }
+
     /** The squad standard for [kit] as written, ignoring whether the soldier qualifies. */
     fun rawKitStandard(squad: TacticalSquad?, kit: WardrobeKit): KitStandard = when {
         squad == null -> KitStandard()
@@ -2341,11 +2366,18 @@ object TacticalCalculator {
             medal.id != "medal_sovereign_star" &&
             medal.id !in ONE_TIME_RIBBON_IDS
 
+    /** Item 128: every award a new recruit arrives holding: the source's package plus all their record earns. */
+    fun recruitArrivalAwards(recruit: Operator, source: RecruitSource): List<String> {
+        val pkg = GameCatalog.recruitAwardPackage(source, recruit.specialty).filter { id -> GameCatalog.medals.any { it.id == id } }
+        return pkg + earnedStartingAwards(recruit, pkg.toSet())
+    }
+
     /**
      * Item 43: every non-repeatable award, badge, tab and cord this soldier's record already earns, plus the
      * National Defense Service ribbon. Runs until nothing new qualifies, so awards that need another award
      * first (Master Parachutist after jump wings) come through. Used for starting soldiers and cadre transfers.
      */
+
     fun earnedStartingAwards(op: Operator, alreadyHeld: Set<String> = emptySet()): List<String> {
         val owned = alreadyHeld.toMutableSet()
         val granted = mutableListOf<String>()
@@ -2658,6 +2690,11 @@ object TacticalCalculator {
             PowRules.POW_MEDAL_ID -> {
                 if (operator.timesCaptured < 1 || operator.status == OperatorStatus.CAPTURED) {
                     missing += "Held as a prisoner of war and returned home"
+                } else {
+                    // Item 124: one POW Medal per captivity; a second needs a second capture and return
+                    val held = allCitations.count { it.operatorId == operator.id && it.medalId == PowRules.POW_MEDAL_ID }
+                        .coerceAtLeast(if (PowRules.POW_MEDAL_ID in ownedMedalIds) 1 else 0)
+                    if (held >= operator.timesCaptured) missing += "One per captivity (already awarded)"
                 }
             }
             "medal_sere" -> {

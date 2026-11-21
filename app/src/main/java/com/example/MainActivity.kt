@@ -156,19 +156,22 @@ fun AegisCommandApp() {
     val currentRoute = backStackEntry?.destination?.route ?: ROUTE_OPS
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Item 79: banners show for about 5 seconds, above any open dialog (see the popup host below)
+    // Item 79: banners show for about 5 seconds, above any open dialog (see the popup host below).
+    // Item 130: copy the message out before clearing it. Clearing changes statusBanner, which restarted this
+    // effect and cancelled the snackbar before it could draw, so no banner ever showed.
+    var pendingBanner by remember { mutableStateOf<Pair<Int, String>?>(null) }
     LaunchedEffect(uiState.statusBanner) {
-        val msg = uiState.statusBanner
-        if (msg != null) {
-            viewModel.clearBanner()
-            if (showBanners) {
-                snackbarHostState.currentSnackbarData?.dismiss()
-                val job = launch { snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Indefinite) }
-                kotlinx.coroutines.delay(5_000)
-                snackbarHostState.currentSnackbarData?.dismiss()
-                job.cancel()
-            }
-        }
+        val msg = uiState.statusBanner ?: return@LaunchedEffect
+        if (showBanners) pendingBanner = ((pendingBanner?.first ?: 0) + 1) to msg
+        viewModel.clearBanner()
+    }
+    LaunchedEffect(pendingBanner) {
+        val msg = pendingBanner?.second ?: return@LaunchedEffect
+        snackbarHostState.currentSnackbarData?.dismiss()
+        val job = launch { snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Indefinite) }
+        kotlinx.coroutines.delay(5_000)
+        snackbarHostState.currentSnackbarData?.dismiss()
+        job.cancel()
     }
 
     val navigateTo: (String) -> Unit = { route ->
