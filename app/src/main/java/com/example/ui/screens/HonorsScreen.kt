@@ -40,6 +40,9 @@ import java.util.Locale
 @Composable
 fun HonorsScreen(
     uiState: CommandUiState,
+    /** Item 151: present a fallen soldier's pending award from the Memorial (operatorId, medalId, note, missionTitle). */
+    onAwardMedal: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+    onDismissDeed: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val extra = LocalAegisColors.current
@@ -305,8 +308,8 @@ fun HonorsScreen(
         if (fallenOps.isNotEmpty()) {
             item {
                 SectionHeader(
-                    title = "HQ Memorial Honor Roll",
-                    subtitle = "Remembering soldiers who gave all — posthumous honors remain pinned in perpetuity"
+                    title = "Memorial (${fallenOps.size})",
+                    subtitle = "Remembering soldiers who gave all. Posthumous honors are presented here."
                 )
             }
             items(fallenOps, key = { it.id }) { fallen ->
@@ -344,9 +347,15 @@ fun HonorsScreen(
                                 color = extra.brassBright
                             )
                             Text(
-                                text = "Callsign \"${fallen.callsign}\" • ${fallen.missionsCompleted} Ops Served",
+                                text = "Callsign \"${fallen.callsign}\" • ${fallen.missionsCompleted} Ops Served • ${opMedals.size} Honors",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = fallen.fallenNote.ifBlank { "Killed in action" },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.testTag("fallen_note_${fallen.id}")
                             )
                             Text(
                                 text = "Tap to inspect full dress honors",
@@ -363,6 +372,33 @@ fun HonorsScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                    // Item 151: awards still waiting for this soldier are presented posthumously here
+                    val deeds = uiState.pendingDeeds.filter { it.operatorId == fallen.id }
+                    deeds.forEach { deed ->
+                        val medal = GameCatalog.medals.find { it.id == deed.recommendedMedalId } ?: return@forEach
+                        val afford = uiState.resources.prestige >= medal.prestigeCost
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(medal.name, style = MaterialTheme.typography.labelLarge, color = extra.brassBright)
+                                Text(deed.missionTitle, style = MaterialTheme.typography.labelSmall, color = extra.textMuted)
+                            }
+                            TextButton(
+                                onClick = { onDismissDeed(deed.id) },
+                                modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("memorial_file_${deed.id}")
+                            ) { Text("File") }
+                            Button(
+                                onClick = {
+                                    onAwardMedal(fallen.id, medal.id, "Posthumously awarded. ${deed.deedSummary}", deed.missionTitle)
+                                },
+                                enabled = afford,
+                                modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("memorial_present_${deed.id}")
+                            ) { Text(if (afford) "Present (${medal.prestigeCost} PRS)" else "Need ${medal.prestigeCost} PRS") }
                         }
                     }
                 }

@@ -156,7 +156,8 @@ fun SquadArmoryScreen(
         prefs.edit().putStringSet("squad_open_sections", openSections).apply()
     }
     val rosterSections = remember(groundOps, aviationPool, uiState.squads) {
-        val squadSections = uiState.squads.map { squad ->
+        // Item 146: Squads A to D first, then the SF squads
+        val squadSections = com.example.domain.SquadCohesionRules.displayOrder(uiState.squads).map { squad ->
             val members = groundOps.filter { it.id in squad.memberIds }
             RosterSection(
                 id = "sq_${squad.id}",

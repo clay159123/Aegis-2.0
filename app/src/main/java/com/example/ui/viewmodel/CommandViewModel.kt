@@ -417,6 +417,7 @@ class CommandViewModel(
                 repairOcsCommissions(state)
                 repairStarterSchools(state)
                 repairCommandSeniority(state)
+                repairSfSquadNames(state)
                 resolveCaptivity(state, now)
                 // Item 62: covers that blow now; the clock drops and the team must choose
                 state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
@@ -850,6 +851,17 @@ class CommandViewModel(
      * Item 150 follow-up: saves from before the seniority rule can hold a Deputy who outranks the CO.
      * Swap them once so the senior officer commands (the Deputy cap would otherwise shrink the general).
      */
+    /** Item 146: SF squads that still carry an auto-assigned NATO name become ODA 1, 2, 3 once. */
+    private suspend fun repairSfSquadNames(state: CommandUiState) {
+        val renamed = mutableListOf<TacticalSquad>()
+        state.squads.filter { it.isSpecialForces && SquadCohesionRules.isDefaultSquadName(it.name) && !it.name.trim().startsWith("ODA", true) }
+            .forEach { sq ->
+                val taken = state.squads.filter { it.id != sq.id }.map { o -> renamed.find { it.id == o.id } ?: o }
+                renamed += sq.copy(name = SquadCohesionRules.nextDefaultSquadName(taken, specialForces = true))
+            }
+        if (renamed.isNotEmpty()) repository.saveSquads(renamed)
+    }
+
     private suspend fun repairCommandSeniority(state: CommandUiState) {
         val seated = state.operators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
         val co = seated.find { it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER } ?: return
@@ -1554,6 +1566,7 @@ class CommandViewModel(
                     timesWounded = updatedWoundedCount,
                     combatPatchHistory = updatedCombatPatchHistory,
                     status = nextStatus,
+                    fallenNote = if (outcome == OperatorOutcomeType.FALLEN) "Killed in action: ${mission.displayTitle}" else op.fallenNote,
                     hqRole = if (outcome == OperatorOutcomeType.FALLEN) null else op.hqRole,
                     recoveryUntilMillis = recoveryAt,
                     transferRequested = askTransfer,
@@ -2111,6 +2124,7 @@ class CommandViewModel(
                     OperatorOutcomeType.WOUNDED -> OperatorStatus.RECOVERING
                     else -> homeStatus(op)
                 },
+                fallenNote = if (outcome == OperatorOutcomeType.FALLEN) "Killed during the withdrawal from ${mission.displayTitle}" else op.fallenNote,
                 recoveryUntilMillis = if (outcome == OperatorOutcomeType.WOUNDED) {
                     now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities) *
                         // Item 118: the SF Compound's own medics speed SF soldiers' recovery
@@ -3450,7 +3464,7 @@ class CommandViewModel(
         val teamLeaderCandidate = TacticalSquad("check", "", validIds, resolvedLeaderId, teamLeaderId = teamLeaderId)
         val resolvedTeamLeaderId = SquadCohesionRules.validTeamLeaderId(teamLeaderCandidate, state.operators)
         val resolvedName = name.trim().take(24).ifBlank {
-            existing?.name ?: SquadCohesionRules.nextDefaultSquadName(state.squads)
+            existing?.name ?: SquadCohesionRules.nextDefaultSquadName(state.squads.filter { it.id != squadId }, specialForces)
         }
         val now = System.currentTimeMillis()
         // Squads always carry a division patch; a missing or non-division pick gets the first free one

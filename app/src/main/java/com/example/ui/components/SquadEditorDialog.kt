@@ -186,6 +186,10 @@ fun SquadEditorDialog(
                             sfLockedBy = sfLockReason,
                             onSpecialForcesChange = { sf ->
                                 specialForces = sf
+                                // Item 146: an auto-named squad follows the toggle (Echo Squad <-> ODA 1)
+                                if (SquadCohesionRules.isDefaultSquadName(squadName)) {
+                                    squadName = SquadCohesionRules.nextDefaultSquadName(allSquads.filter { it.id != editingSquad?.id }, sf)
+                                }
                                 // An SF squad keeps SF-qualified soldiers only
                                 if (sf) memberIds = memberIds.filter { id -> fieldOperators.find { it.id == id }?.let(TacticalCalculator::isSfQualified) == true }
                             },
