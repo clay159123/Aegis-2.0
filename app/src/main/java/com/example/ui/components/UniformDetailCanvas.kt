@@ -208,7 +208,13 @@ fun OperatorUniformPreview(
                     hasWeapon = false,
                     hasNvg = false,
                     textMeasurer = textMeasurer,
-                    flightSuit = true
+                    flightSuit = true,
+                    // Item 138: wings on the flight suit match the pilot's aviator badge level
+                    aviatorWings = when {
+                        "insig_master_aviator_wings" in ownedIds -> InsigniaShape.MASTER_AVIATOR_WINGS
+                        "insig_senior_aviator_wings" in ownedIds -> InsigniaShape.SENIOR_AVIATOR_WINGS
+                        else -> InsigniaShape.AVIATOR_WINGS
+                    }
                 ) else drawBravosShortSleeveFigure(
                     w = w,
                     h = h,
@@ -1404,7 +1410,7 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
             // Item 66: squad members wear a flash in their squad's division patch colors (fill and diagonal
             // stripe); soldiers with no squad wear the plain Army flash for their beret
             // Item 68: the SF squad wears a black and red SF flash
-            val squadPatch = operator.tailorOverrides.unitPatch.takeIf { it.isDivision || it == UnitPatchStyle.SPECIAL_FORCES }
+            val squadPatch = operator.tailorOverrides.unitPatch.takeIf { it.isDivision || it.isSfTeamPatch }
             val flashFill = squadPatch?.let { Color(it.primaryHex) } ?: when (operator.headgearStyle) {
                 HeadgearStyle.TAN_BERET -> Color(0xFF14181F)
                 HeadgearStyle.MAROON_BERET -> Color(0xFF1C4378)
@@ -2032,7 +2038,9 @@ private fun DrawScope.drawFieldTacticalFigure(
     textMeasurer: TextMeasurer,
     flightSuit: Boolean = false,
     /** Item 58: SF squad field uniforms carry no name, rank, tabs, badges or awards. */
-    sterile: Boolean = false
+    sterile: Boolean = false,
+    /** Item 138: which aviator wings the flight suit name tag carries. */
+    aviatorWings: InsigniaShape = InsigniaShape.AVIATOR_WINGS
 ) {
     val primaryCamo = Color(operator.camoPattern.primaryHex)
     // Item 105: sewn-on items are subdued in the colors of the camo they're sewn onto
@@ -2294,6 +2302,14 @@ private fun DrawScope.drawFieldTacticalFigure(
                 close()
             }
             drawPath(wing, gold)
+        }
+        // Item 138: Senior wings add a star above the shield; Master wings set it in a wreath
+        if (aviatorWings != InsigniaShape.AVIATOR_WINGS) {
+            val starAt = Offset(branchCx, tagTop - tagH * 0.16f)
+            if (aviatorWings == InsigniaShape.MASTER_AVIATOR_WINGS) {
+                drawLaurelWreathArcs(starAt, tagH * 0.30f, gold, 0.9f)
+            }
+            drawStar(starAt, tagH * 0.20f, tagH * 0.085f, gold)
         }
         drawFieldTapeText(operator.callsign.trim().uppercase().take(10), Offset(branchCx, tagTop + tagH * 0.72f), tagW, tagH * 0.5f, gold, textMeasurer)
     } else {

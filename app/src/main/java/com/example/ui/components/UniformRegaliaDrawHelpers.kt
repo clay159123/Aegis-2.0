@@ -670,7 +670,7 @@ internal fun DrawScope.drawUnitPatchEmblem(
         }
 
         // Special Forces: arrowhead with an upright dagger crossed by three lightning bolts
-        UnitPatchStyle.SPECIAL_FORCES -> {
+        UnitPatchStyle.SPECIAL_FORCES, UnitPatchStyle.SF_ODA2, UnitPatchStyle.SF_ODA3 -> {
             val head = Path().apply {
                 moveTo(center.x, center.y - ry * 1.25f)
                 lineTo(center.x + rx * 0.95f, center.y + ry * 0.55f)
