@@ -1109,7 +1109,7 @@ object TacticalCalculator {
         val survival = (squadAvgSurvivalPct(mission, team, gearItems, citations, facilities, hqStaffCount, hqStaffSummary, squads, smartWardrobeEnabled) +
             insertionSurvivalDelta(insertion, pilot, airOps, scattered = false)).coerceIn(42, 98)
         val duration = (mission.durationSeconds * durationMultiplier(facilities, hqStaffSummary) *
-            insertionDurationMultiplier(insertion, pilot)).roundToInt()
+            insertionDurationMultiplier(insertion, pilot) * MosEffects.durationFactor(mission, team)).roundToInt()
         val supply = (dispatchSupplyCost(mission, team.size, supplyCostMultiplier(facilities, hqStaffSummary, completedCampaignIds)) *
             SoldierEvents.schoolDiscountFactor(mission, team, System.currentTimeMillis())).roundToInt() +
             insertionSupplyCost(insertion, facilities, airOps)
@@ -1236,8 +1236,24 @@ object TacticalCalculator {
         return "$ordinal award" + (device?.let { ": $it" } ?: "")
     }
 
-    /** Combat jump stars to draw on this soldier's jump wings (0..5). */
-    fun combatJumpStars(op: Operator): Int = op.combatJumps.coerceIn(0, MAX_COMBAT_JUMP_STARS)
+    /** Item 166: one combat jump star per [COMBAT_JUMPS_PER_STAR] combat jumps (training jumps never count), up to five. */
+    fun combatJumpStars(op: Operator): Int = (op.combatJumps / COMBAT_JUMPS_PER_STAR).coerceIn(0, MAX_COMBAT_JUMP_STARS)
+
+    // ---------- Item 166: parachutist ladder (constants so the pacing pass can retune them) ----------
+    const val COMBAT_JUMPS_PER_STAR = 3
+    const val SENIOR_PARA_ID = "insig_senior_para"
+    const val MASTER_PARA_ID = "insig_master_para"
+    const val SENIOR_PARA_COMBAT_JUMPS = 3
+    const val MASTER_PARA_COMBAT_JUMPS = 8
+
+    /** The parachutist wings a soldier has just earned and doesn't own yet, or null. Master needs SGT+. */
+    fun parachutistMilestone(op: Operator, ownedOrQueued: Set<String>): String? = when {
+        "insig_parachutist" !in ownedOrQueued -> null
+        MASTER_PARA_ID !in ownedOrQueued && SENIOR_PARA_ID in ownedOrQueued &&
+            op.combatJumps >= MASTER_PARA_COMBAT_JUMPS && op.rank.seniorityIndex >= OperatorRank.SGT.seniorityIndex -> MASTER_PARA_ID
+        SENIOR_PARA_ID !in ownedOrQueued && MASTER_PARA_ID !in ownedOrQueued && op.combatJumps >= SENIOR_PARA_COMBAT_JUMPS -> SENIOR_PARA_ID
+        else -> null
+    }
 
     /** True once a soldier has started (attempted) or finished this school. */
     private fun hasEnteredSchool(operator: Operator, missionId: String): Boolean =
@@ -2188,6 +2204,8 @@ object TacticalCalculator {
     }
 
     const val SNIPER_SCHOOL_ID = "msn_sniper_school"
+    /** Item 167 */
+    const val CGSC_SCHOOL_ID = "msn_cgsc_school"
     const val SNIPER_BADGE_ID = "insig_sniper"
     const val SNIPER_PASS_BONUS_PCT = 4
     /** Item 143: snipers often work alone, so they're easier to take prisoner (SERE still cuts it). */
@@ -2265,7 +2283,9 @@ object TacticalCalculator {
             ClandestineRules.nativeSfPassBonus(mission, selectedOperators) +
             environmentPassBonus(mission, selectedOperators) + sniperPassBonus(mission, selectedOperators) +
             // Session 33: Full Detachment / Full Squad rank mix
-            (SquadCompositionRules.teamBonus(mission, selectedOperators, squads)?.second ?: 0)
+            (SquadCompositionRules.teamBonus(mission, selectedOperators, squads)?.second ?: 0) +
+            // Item 165: Infantry on assault work, Engineers on breach work
+            MosEffects.passBonusPct(mission, selectedOperators)
         return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan + talks + freeStrait)
             .coerceIn(minOdds, maxOdds)
     }
@@ -2760,7 +2780,7 @@ object TacticalCalculator {
                 val airborneQualified = "msn_night_qual" in operator.completedMissionIds ||
                     "insig_airborne_tab" in ownedMedalIds ||
                     "insig_parachutist" in ownedMedalIds ||
-                    "insig_master_para" in ownedMedalIds ||
+                    "insig_master_para" in ownedMedalIds || SENIOR_PARA_ID in ownedMedalIds ||
                     "insig_air_assault" in ownedMedalIds ||
                     "cord_airborne_crimson" in ownedMedalIds
                 if (!airborneQualified) {
@@ -3010,9 +3030,10 @@ object TacticalCalculator {
                     missing += "Graduate Marksmanship & Tactical Basics School"
                 }
             }
+            // Item 167: the General Staff Crest comes from Command & General Staff College
             "insig_staff_crest" -> {
-                if (!isHqStaff && operator.staffOpsSupported <= 0) {
-                    missing += "Assign to HQ Staff billet"
+                if (CGSC_SCHOOL_ID !in operator.completedMissionIds) {
+                    missing += "Graduate Command & General Staff College"
                 }
             }
             "insig_sf_tab" -> {
@@ -3020,13 +3041,15 @@ object TacticalCalculator {
                     missing += "Graduate Special Forces Qualification (SFQC)"
                 }
             }
-            "insig_master_para" -> {
-                if ("insig_parachutist" !in ownedMedalIds) {
-                    missing += "Hold Basic Parachutist Jump Wings first"
-                }
-                if (operator.missionsCompleted < 3) {
-                    missing += "Complete 3+ Ops (${operator.missionsCompleted}/3)"
-                }
+            // Item 166: the parachutist ladder runs on combat jumps
+            MASTER_PARA_ID -> {
+                if (SENIOR_PARA_ID !in ownedMedalIds) missing += "Hold Senior Parachutist wings first"
+                if (operator.combatJumps < MASTER_PARA_COMBAT_JUMPS) missing += "Combat jumps ${operator.combatJumps}/$MASTER_PARA_COMBAT_JUMPS"
+            }
+            SENIOR_PARA_ID -> {
+                if ("insig_parachutist" !in ownedMedalIds) missing += "Hold Basic Parachutist Jump Wings first"
+                if (MASTER_PARA_ID in ownedMedalIds) missing += "Already wears Master wings"
+                if (operator.combatJumps < SENIOR_PARA_COMBAT_JUMPS) missing += "Combat jumps ${operator.combatJumps}/$SENIOR_PARA_COMBAT_JUMPS"
             }
             "medal_national_defense" -> Unit // every soldier, on joining
             MFF_BADGE_ID -> {
@@ -3370,6 +3393,9 @@ object TacticalCalculator {
                             SNIPER_SCHOOL_ID -> {
                                 firstEligibleUnowned(listOf(SNIPER_BADGE_ID), includeGeneralFallback = false) to "Graduated ${mission.title}. Now a Sniper."
                             }
+                            CGSC_SCHOOL_ID -> {
+                                firstEligibleUnowned(listOf("insig_staff_crest"), includeGeneralFallback = false) to "Graduated ${mission.title}: joint planning and staff leadership."
+                            }
                             SELECTION_PREP_ID -> null to "Finished ${mission.title}: +$SELECTION_PREP_BONUS_PCT% on the next pipeline try."
                             MFF_SCHOOL_ID -> {
                                 val medalId = firstEligibleUnowned(listOf(MFF_BADGE_ID), includeGeneralFallback = false)
@@ -3496,7 +3522,8 @@ object TacticalCalculator {
                     }
                     MissionRisk.HIGH -> {
                         // Valor comes from the valor roll (item 89); this is the routine citation
-                        val milestoneCandidates = listOf("insig_master_para")
+                        // Item 166: parachutist wings now come from combat jumps (see parachutistMilestone)
+                        val milestoneCandidates = emptyList<String>()
                         val medalId = firstEligibleUnowned(milestoneCandidates, includeGeneralFallback = false)
                             ?: if (rollSeedPct < 35) {
                                 firstEligibleUnowned(

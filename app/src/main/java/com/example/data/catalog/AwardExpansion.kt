@@ -96,10 +96,10 @@ internal object AwardExpansion {
         "insig_sf_tab" to 121, "insig_ranger_tab" to 122, "insig_sapper_tab" to 123, "insig_airborne_tab" to 124,
         "insig_cib" to 125, "insig_combat_medic" to 126, "insig_cab" to 127, "insig_eib_rifle" to 128,
         "insig_cmb_medic" to 129, "insig_master_aviator_wings" to 130, "insig_senior_aviator_wings" to 131,
-        "insig_aviator_wings" to 132, "insig_master_para" to 133, "insig_mff_wings" to 134, "insig_parachutist" to 135,
-        "insig_combat_diver" to 136, "insig_air_assault" to 137, "insig_pathfinder" to 138, "insig_eod_badge" to 139,
-        "insig_sniper" to 140, "insig_mountain" to 141, "insig_jungle" to 142, "insig_arctic" to 143,
-        "insig_staff_crest" to 144, "insig_intel_crest" to 145, "insig_cyber_crest" to 146, "insig_logistics_crest" to 147
+        "insig_aviator_wings" to 132, "insig_master_para" to 133, "insig_senior_para" to 134, "insig_mff_wings" to 135, "insig_parachutist" to 136,
+        "insig_combat_diver" to 137, "insig_air_assault" to 138, "insig_pathfinder" to 139, "insig_eod_badge" to 140,
+        "insig_sniper" to 141, "insig_mountain" to 142, "insig_jungle" to 143, "insig_arctic" to 144,
+        "insig_staff_crest" to 145, "insig_intel_crest" to 146, "insig_cyber_crest" to 147, "insig_logistics_crest" to 148
     )
 
     fun withPrecedence(m: MedalDefinition): MedalDefinition =

@@ -116,29 +116,10 @@ fun CommandersGuideDialog(
                             color = MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = "Your progress is stored locally on this device. You can reset back to initial HQ orders anytime.",
+                            text = "Your progress is stored locally on this device. To start over, use Start a new game in Settings (gear icon).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        OutlinedButton(
-                            onClick = { showResetConfirm = true },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = 48.dp)
-                                .testTag("request_reset_campaign"),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            ),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.RestartAlt,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Reset Campaign Save")
-                        }
                     }
                 }
             }

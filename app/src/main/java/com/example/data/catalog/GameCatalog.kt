@@ -1710,8 +1710,8 @@ object GameCatalog {
             insigniaShape = InsigniaShape.STAR_WINGS,
             insigniaColorHex = 0xFFF2D272,
             allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
-            description = "Gold-starred silver parachutist wings signifying veteran combat airborne mastery.",
-            qualificationRule = "NCO+ (E-5+), Basic Jump Wings & 3+ Ops.",
+            description = "Wreathed and starred parachutist wings signifying veteran combat airborne mastery.",
+            qualificationRule = "SGT+ with Senior Parachutist wings and 8 combat jumps.",
             ribbonStripeHexes = listOf(0xFF6E2228, 0xFFF2D272, 0xFF6E2228),
             prestigeCost = 16,
             minMissionsRequired = 3,
@@ -2010,6 +2010,28 @@ object GameCatalog {
             stealthBonus = 3,
             techBonus = 3,
             resilienceBonus = 1,
+            yieldBonusPct = 4
+        ),
+        // Item 166: the middle step of the parachutist ladder
+        MedalDefinition(
+            id = "insig_senior_para",
+            name = "Senior Parachutist Wings",
+            shortName = "SENIOR JUMP",
+            category = AwardCategory.SCHOOL_INSIGNIA,
+            tier = MedalTier.SERVICE,
+            precedenceOrder = 42,
+            insigniaShape = InsigniaShape.SENIOR_PARA_WINGS,
+            insigniaColorHex = 0xFFDDE3EC,
+            allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
+            description = "Starred parachutist wings for a paratrooper with combat jumps behind them.",
+            qualificationRule = "Basic Jump Wings and 3 combat jumps.",
+            ribbonStripeHexes = listOf(0xFF253245, 0xFFDDE3EC, 0xFFF2D272, 0xFFDDE3EC, 0xFF253245),
+            prestigeCost = 9,
+            minMissionsRequired = 1,
+            firepowerBonus = 2,
+            stealthBonus = 2,
+            techBonus = 0,
+            resilienceBonus = 2,
             yieldBonusPct = 4
         ),
         MedalDefinition(
@@ -3651,6 +3673,38 @@ object GameCatalog {
             rewardXp = 120,
             commsFeed = listOf("Stalk lane: ghillie on, nobody sees you move.", "Known-distance range out to a thousand meters.", "Sniper School graduate!")
         ),
+        // Item 167: Command & General Staff College, the officers' staff school; earns the staff crest
+        MissionTemplate(
+            id = "msn_cgsc_school",
+            title = "School: Command & General Staff College (CGSC)",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 70,
+                minRankTier = RankTier.OFFICER,
+                minRank = OperatorRank.CPT,
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
+                naturalFitSpecialties = setOf(OperatorSpecialty.COMMAND),
+                suitabilitySummary = "Commissioned officers, CPT (O-3) and up • HQ staff may attend",
+                graduationStatBonus = StatProfile(0, 0, 2, 1),
+                graduationRewardsSummary = "Grants +2 TC, +1 RS • Awards the General Staff Crest"
+            ),
+            baseSuccessRatePct = 70,
+            briefing = "Joint planning, campaign design and staff leadership for field-grade officers.",
+            durationSeconds = 36,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 90,
+            primaryFocus = "Staff College • Command",
+            supplyCost = 14.0,
+            rewardCredits = 70.0,
+            rewardSupplies = 10.0,
+            rewardIntel = 16.0,
+            rewardPrestige = 12.0,
+            rewardXp = 140,
+            commsFeed = listOf("Joint planning exercise: the division order is due by morning.", "Staff ride across the old battlefield.", "CGSC graduate: General Staff Crest authorized!")
+        ),
         MissionTemplate(
             id = "msn_sf_aviation_school",
             title = "School: Special Operations Aviation Qualification",
@@ -5005,7 +5059,7 @@ object GameCatalog {
             "msn_medical_school", "msn_engineer_school", "msn_sapper_school", "msn_signals_school",
             "msn_intel_school", "msn_logistics_school")),
         SchoolCategory("leadership", "Leadership & Commissioning", listOf(
-            "msn_nco_school", "msn_snco_school", "msn_ocs_school", "msn_wocs")),
+            "msn_nco_school", "msn_snco_school", "msn_ocs_school", "msn_wocs", "msn_cgsc_school")),
         SchoolCategory("airborne_ranger", "Airborne & Ranger", listOf(
             "msn_night_qual", "msn_air_assault_school", "msn_pathfinder_school", "msn_ranger_school")),
         SchoolCategory("environment", "Environment", listOf(

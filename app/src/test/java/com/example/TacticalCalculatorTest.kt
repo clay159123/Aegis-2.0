@@ -501,7 +501,8 @@ class TacticalCalculatorTest {
 
         val kestrel = GameCatalog.initialOperators.first { it.id == "op_kestrel" }
         val (staffAward, _) = TacticalCalculator.recommendedMedalForHqStaffSupport(
-            operator = kestrel.copy(status = OperatorStatus.HQ_STAFF),
+            // Item 167: the staff crest needs Command & General Staff College
+            operator = kestrel.copy(status = OperatorStatus.HQ_STAFF, completedMissionIds = kestrel.completedMissionIds + TacticalCalculator.CGSC_SCHOOL_ID),
             mission = GameCatalog.missions.first { it.id == "msn_convoy_escort" },
             existingCitationMedalIds = setOf("medal_basic_training", "cord_general_aiguillette")
         )
@@ -1573,7 +1574,9 @@ class TacticalCalculatorTest {
                 "msn_language_school",
                 // Session 29
                 "msn_selection_prep", "msn_mountain_school", "msn_jungle_school", "msn_arctic_school", "msn_sniper_school",
-                "msn_sere3_school"
+                "msn_sere3_school",
+                // Item 167
+                "msn_cgsc_school"
             ),
             schoolIds
         )
@@ -2731,7 +2734,7 @@ class TacticalCalculatorTest {
     @Test
     fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
         val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-        assertEquals(31, schools.size)
+        assertEquals(32, schools.size)
         schools.forEach { school ->
             assertFalse(school.id, school.hasClassCap)
             assertTrue(school.id, 15 in school.minOperators..school.maxOperators)
