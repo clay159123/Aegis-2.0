@@ -109,6 +109,8 @@ data class OperatorEntity(
     val powRescueClosed: Boolean = false,
     val fallenNote: String = "",
     val nativeRegionName: String = "",
+    val sfMissionsSucceeded: Int = 0,
+    val sfHighMissionsSucceeded: Int = 0,
     val languageRegionsCsv: String = "",
     val unlocked: Boolean,
     val recruitCreditCost: Double,

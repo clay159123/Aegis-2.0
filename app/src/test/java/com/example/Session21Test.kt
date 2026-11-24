@@ -17,7 +17,10 @@ class Session21Test {
     private fun sf(id: String, langs: Set<TheaterRegion> = emptySet(), st: Int = 20, tc: Int = 20) =
         GameCatalog.createPostBasicRecruit(id, OperatorSpecialty.ASSAULT, emptySet(), 0).copy(
             id = id, unlocked = true, baseStealth = st, baseTech = tc, languageRegions = langs,
-            completedMissionIds = setOf("msn_basic_qual", TacticalCalculator.SF_SCHOOL_ID, TacticalCalculator.MFF_SCHOOL_ID, TacticalCalculator.COMBAT_DIVER_SCHOOL_ID)
+            completedMissionIds = setOf("msn_basic_qual", TacticalCalculator.SF_SCHOOL_ID, TacticalCalculator.MFF_SCHOOL_ID, TacticalCalculator.COMBAT_DIVER_SCHOOL_ID,
+                TacticalCalculator.SERE3_SCHOOL_ID),
+            // Session 30: seasoned enough for SF2 so tier gates don't mask the language rules
+            sfMissionsSucceeded = 3
         )
     private fun mission(id: String) = GameCatalog.missions.first { it.id == id }
     private val clan = mission("msn_clan_meridian")

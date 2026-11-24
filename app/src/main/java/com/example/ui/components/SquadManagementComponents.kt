@@ -116,7 +116,7 @@ fun FieldSquadsSection(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                if (squad.isSpecialForces) SfMarker()
+                                if (squad.isSpecialForces) SfMarker(tier = TacticalCalculator.squadSfTier(squad, operators))
                                 Text(
                                     text = squad.name.uppercase(),
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
@@ -237,6 +237,7 @@ fun FieldSquadsSection(
                                         NameWithSfMarker(
                                             text = member.callsign,
                                             sfQualified = TacticalCalculator.isSfQualified(member),
+                            sfTier = TacticalCalculator.sfTier(member),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )

@@ -16,7 +16,9 @@ import org.junit.Test
 class Session22Test {
     private fun fac(vararg pairs: Pair<FacilityType, Int>) = pairs.map { FacilityState(it.first, it.second) }
     private fun sf(id: String) = GameCatalog.createPostBasicRecruit(id, OperatorSpecialty.ASSAULT, emptySet(), 0).copy(
-        id = id, unlocked = true, completedMissionIds = setOf("msn_basic_qual", TacticalCalculator.SF_SCHOOL_ID)
+        id = id, unlocked = true, completedMissionIds = setOf("msn_basic_qual", TacticalCalculator.SF_SCHOOL_ID, TacticalCalculator.SERE3_SCHOOL_ID),
+        // Session 30: SF2, so the High-risk test mission's tier gate passes
+        sfMissionsSucceeded = 3
     )
     private fun grunt(id: String) = GameCatalog.createPostBasicRecruit(id, OperatorSpecialty.ASSAULT, emptySet(), 0).copy(id = id, unlocked = true)
 

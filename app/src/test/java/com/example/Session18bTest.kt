@@ -36,7 +36,8 @@ class Session18bTest {
     @Test
     fun sereIsForAviatorsSfAndAirborneAndAwardsTheRibbon() {
         val sere = mission(TacticalCalculator.SERE_SCHOOL_ID)
-        assertEquals(setOf("msn_flight_school", "msn_sf_school", "msn_night_qual"), sere.schoolRequirements!!.prerequisiteAnyIds)
+        // Session 30: SERE 2 is for pilots and Airborne graduates (SF School now requires it)
+        assertEquals(setOf("msn_flight_school", "msn_night_qual"), sere.schoolRequirements!!.prerequisiteAnyIds)
         val grad = pilot.copy(completedMissionIds = pilot.completedMissionIds + sere.id)
         val (medal, _) = TacticalCalculator.recommendedMedalForMissionDeed(sere, grad, OperatorOutcomeType.TRAINING_PASSED, emptyList(), emptySet())
         assertEquals("medal_sere", medal)

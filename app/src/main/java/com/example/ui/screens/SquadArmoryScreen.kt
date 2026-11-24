@@ -792,7 +792,7 @@ fun SquadArmoryScreen(
                                     style = MaterialTheme.typography.titleSmall,
                                     color = extra.brassBright
                                 )
-                                if (TacticalCalculator.isSfQualified(op)) SfMarker()
+                                if (TacticalCalculator.isSfQualified(op)) SfMarker(tier = TacticalCalculator.sfTier(op))
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(

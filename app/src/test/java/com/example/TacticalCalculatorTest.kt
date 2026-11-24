@@ -61,7 +61,8 @@ class TacticalCalculatorTest {
             "msn_flight_school", "msn_flight_hours", "msn_combat_diver_school", "msn_mff_school",
             "msn_air_assault_school", "msn_sere_school", "msn_sf_aviation_school",
             // Session 29: prep, environment and sniper schools are all outdoors
-            "msn_selection_prep", "msn_mountain_school", "msn_jungle_school", "msn_arctic_school", "msn_sniper_school"
+            "msn_selection_prep", "msn_mountain_school", "msn_jungle_school", "msn_arctic_school", "msn_sniper_school",
+            "msn_sere3_school"
         )
         GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.forEach { school ->
             val expected = if (school.id in fieldSchools) WardrobeKit.FIELD else WardrobeKit.BRAVOS
@@ -1571,7 +1572,8 @@ class TacticalCalculatorTest {
                 "msn_sf_aviation_school",
                 "msn_language_school",
                 // Session 29
-                "msn_selection_prep", "msn_mountain_school", "msn_jungle_school", "msn_arctic_school", "msn_sniper_school"
+                "msn_selection_prep", "msn_mountain_school", "msn_jungle_school", "msn_arctic_school", "msn_sniper_school",
+                "msn_sere3_school"
             ),
             schoolIds
         )
@@ -1626,7 +1628,7 @@ class TacticalCalculatorTest {
         assertFalse(TacticalCalculator.canOperatorDeployOnMission(ncoMissingCombat, sfSchool, emptySet()).eligible)
 
         val ncoMissingRanger = vesper.copy(
-            completedMissionIds = setOf("msn_basic_qual", "msn_night_qual"),
+            completedMissionIds = setOf("msn_basic_qual", "msn_night_qual", "msn_sere_school"),
             highestRiskSurvived = MissionRisk.MODERATE,
             baseFirepower = 20,
             baseStealth = 20,
@@ -1636,7 +1638,7 @@ class TacticalCalculatorTest {
 
         // Qualified Ranger NCO/Officer with Moderate+ combat survival & high stats IS eligible for SFQC
         val sfCandidate = kestrel.copy(
-            completedMissionIds = setOf("msn_basic_qual", "msn_night_qual", "msn_ranger_school"),
+            completedMissionIds = setOf("msn_basic_qual", "msn_night_qual", "msn_ranger_school", "msn_sere_school"),
             highestRiskSurvived = MissionRisk.MODERATE,
             baseFirepower = 17,
             baseStealth = 16,
@@ -1814,7 +1816,8 @@ class TacticalCalculatorTest {
                 baseTech = 22,
                 baseResilience = 22,
                 highestRiskSurvived = MissionRisk.MODERATE,
-                completedMissionIds = setOf("msn_basic_qual", "msn_night_qual", "msn_ranger_school")
+                // Session 30: SERE 2 is an SF School prerequisite
+                completedMissionIds = setOf("msn_basic_qual", "msn_night_qual", "msn_ranger_school", "msn_sere_school")
             )
 
         fun maxedNoPrereq(specialty: OperatorSpecialty): Operator =
@@ -2728,7 +2731,7 @@ class TacticalCalculatorTest {
     @Test
     fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
         val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-        assertEquals(30, schools.size)
+        assertEquals(31, schools.size)
         schools.forEach { school ->
             assertFalse(school.id, school.hasClassCap)
             assertTrue(school.id, 15 in school.minOperators..school.maxOperators)

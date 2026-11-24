@@ -166,6 +166,7 @@ fun OperatorUniformPreview(
             withTransform({ scale(buildScale, 1f, pivot = Offset(cx, h * 0.5f)) }) {
             when (inferredKit) {
                 WardrobeKit.FIELD -> drawFieldTacticalFigure(
+                    beardColor = if (TacticalCalculator.sfTier(renderOperator) >= 3) sfBeardColor(renderOperator) else null,
                     w = w,
                     h = h,
                     cx = cx,
@@ -2048,7 +2049,9 @@ private fun DrawScope.drawFieldTacticalFigure(
     /** Item 58: SF squad field uniforms carry no name, rank, tabs, badges or awards. */
     sterile: Boolean = false,
     /** Item 138: which aviator wings the flight suit name tag carries. */
-    aviatorWings: InsigniaShape = InsigniaShape.AVIATOR_WINGS
+    aviatorWings: InsigniaShape = InsigniaShape.AVIATOR_WINGS,
+    /** Session 30: SF3 soldiers wear a beard in the field (null = clean-shaven). */
+    beardColor: Color? = null
 ) {
     val primaryCamo = Color(operator.camoPattern.primaryHex)
     // Item 105: sewn-on items are subdued in the colors of the camo they're sewn onto
@@ -2361,6 +2364,12 @@ private fun DrawScope.drawFieldTacticalFigure(
         drawRoundRect(primaryCamo, Offset(cx - w * 0.100f, h * 0.128f), Size(w * 0.200f, h * 0.052f), CornerRadius(5f, 5f))
         drawRoundRect(secondaryCamo, Offset(cx - w * 0.104f, h * 0.172f), Size(w * 0.208f, h * 0.014f), CornerRadius(3f, 3f))
     } else {
+        // Session 30: the SF3 field beard sits under the eye protection
+        if (beardColor != null) {
+            drawArc(beardColor, 0f, 180f, true, Offset(cx - w * 0.097f, h * 0.196f), Size(w * 0.194f, h * 0.142f))
+            drawRect(beardColor, Offset(cx - w * 0.094f, h * 0.236f), Size(w * 0.188f, h * 0.034f))
+            drawLine(skinShadow.copy(alpha = 0.9f), Offset(cx - w * 0.026f, h * 0.292f), Offset(cx + w * 0.026f, h * 0.292f), strokeWidth = 1.6f, cap = StrokeCap.Round)
+        }
         drawRoundRect(visorTone, Offset(cx - w * 0.075f, h * 0.205f), Size(w * 0.15f, h * 0.042f), CornerRadius(6f, 6f))
     }
 
@@ -2475,4 +2484,10 @@ private fun subduedPaletteFor(camo: CamoPattern): Pair<Color, Color> = when (cam
     CamoPattern.LITTORAL_TIDE -> Color(0xFF1E262D) to Color(0xFFA9B8C2)
     CamoPattern.FLIGHT_SAGE -> Color(0xFF2E3326) to Color(0xFFBFC4A4)
     CamoPattern.FLIGHT_BLACK -> Color(0xFF0C0D0F) to Color(0xFF7A7F86)
+}
+
+/** Session 30: a natural beard color picked per soldier, so it never changes between screens. */
+internal fun sfBeardColor(op: Operator): Color {
+    val palette = listOf(0xFF1C1712, 0xFF3B2A1E, 0xFF5A3E28, 0xFF7A4A2A, 0xFFA8834F, 0xFF8E8A84)
+    return Color(palette[Math.floorMod(op.id.hashCode(), palette.size)])
 }

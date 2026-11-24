@@ -335,7 +335,7 @@ internal fun DrawScope.drawOfficerRankDevice(
  * letters, so they're easy to spot in rosters and pickers.
  */
 @Composable
-fun SfMarker(modifier: Modifier = Modifier) {
+fun SfMarker(modifier: Modifier = Modifier, tier: Int = 0) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(3.dp))
@@ -343,7 +343,8 @@ fun SfMarker(modifier: Modifier = Modifier) {
             .border(1.dp, Color(0xFFD4B24C), RoundedCornerShape(3.dp))
             .padding(horizontal = 4.dp, vertical = 1.dp)
     ) {
-        Text("SF", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF0D77A))
+        // Session 30: the soldier's (or ODA's) SF tier inside the green square
+        Text(if (tier > 0) "SF$tier" else "SF", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF0D77A))
     }
 }
 
@@ -354,7 +355,8 @@ fun NameWithSfMarker(
     sfQualified: Boolean,
     style: androidx.compose.ui.text.TextStyle,
     color: Color = Color.Unspecified,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sfTier: Int = 0
 ) {
     Row(
         modifier = modifier,
@@ -369,6 +371,6 @@ fun NameWithSfMarker(
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
-        if (sfQualified) SfMarker()
+        if (sfQualified) SfMarker(tier = sfTier)
     }
 }
