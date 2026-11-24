@@ -383,8 +383,32 @@ enum class OperatorSpecialty(val label: String, val roleTag: String, val recruit
 }
 
 /** Item 143: the MOS name shown for a soldier: Sniper School graduates read "Sniper" (they count as 11B). */
-val Operator.mosLabel: String get() = if ("msn_sniper_school" in completedMissionIds) "Sniper" else specialty.label
-val Operator.mosTag: String get() = if ("msn_sniper_school" in completedMissionIds) "11B SNIPER" else specialty.roleTag
+val Operator.mosLabel: String get() = when {
+    "msn_sf_school" in completedMissionIds && specialty != OperatorSpecialty.AVIATION -> when (specialty) {
+        OperatorSpecialty.ASSAULT -> "SF Weapons Sergeant"
+        OperatorSpecialty.BREACHER -> "SF Engineer Sergeant"
+        OperatorSpecialty.MEDIC -> "SF Medical Sergeant"
+        OperatorSpecialty.SIGNALS -> "SF Communications Sergeant"
+        OperatorSpecialty.RECON -> "SF Intelligence Sergeant"
+        else -> "SF Officer"
+    }.let { if (rank.isCommissioned) "SF Officer" else if (rank.isWarrant) "SF Warrant Officer" else it }
+    "msn_sniper_school" in completedMissionIds -> "Sniper"
+    else -> specialty.label
+}
+val Operator.mosTag: String get() = when {
+    // Session 30: SF soldiers wear the 18-series MOS
+    "msn_sf_school" in completedMissionIds -> when (specialty) {
+        OperatorSpecialty.ASSAULT -> "18B SF WPN"
+        OperatorSpecialty.BREACHER -> "18C SF ENG"
+        OperatorSpecialty.MEDIC -> "18D SF MED"
+        OperatorSpecialty.SIGNALS -> "18E SF COMMO"
+        OperatorSpecialty.RECON -> "18F SF INTEL"
+        OperatorSpecialty.COMMAND -> "18A SF OFFICER"
+        OperatorSpecialty.AVIATION -> specialty.roleTag
+    }
+    "msn_sniper_school" in completedMissionIds -> "11B SNIPER"
+    else -> specialty.roleTag
+}
 
 /** Where a new recruit comes from (item 31). Each arrives at a set rank with that school's record. */
 enum class RecruitSource(
@@ -1400,6 +1424,9 @@ data class Operator(
     val powTalksFailures: Int = 0,
     val powTalksCooldownUntilMillis: Long = 0L,
     val powRescueClosed: Boolean = false,
+    /** Session 30: successful SF missions (any tier) and High-or-harder ones, for the SF2 and SF3 tiers. */
+    val sfMissionsSucceeded: Int = 0,
+    val sfHighMissionsSucceeded: Int = 0,
     /** Item 133: a region whose language this soldier spoke before the Army (heritage speaker), or null. */
     val nativeRegion: TheaterRegion? = null,
     /** Item 151: how this soldier fell, shown on the Memorial ("Killed in action: Ridge Patrol"). */

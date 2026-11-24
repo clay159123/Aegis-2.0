@@ -778,6 +778,13 @@ object TacticalCalculator {
     fun teamBlocker(mission: MissionTemplate, team: List<Operator>, squads: List<TacticalSquad>, platoonLeaderId: String? = null): String? {
         if (mission.requiresSfTeam) {
             if (team.size !in SF_MIN_TEAM..SF_MAX_TEAM) return "SF teams are $SF_MIN_TEAM to $SF_MAX_TEAM soldiers (${team.size} selected)"
+            // Session 30: 75% of the SF soldiers must hold the mission's tier
+            val need = requiredSfTier(mission)
+            val sfSoldiers = team.filter { isSfQualified(it) }
+            val holding = sfSoldiers.count { sfTier(it) >= need }
+            if (need > 1 && holding < sfTierQuota(sfSoldiers.size)) {
+                return "Needs SF$need: ${sfTierQuota(sfSoldiers.size)} of ${sfSoldiers.size} SF soldiers ($holding now)"
+            }
             // Item 137: coastal SF missions can carry up to 2 non-SF soldiers in with the boat team
             val riders = team.filter { !isSfQualified(it) }
             if (riders.isNotEmpty()) {
@@ -823,6 +830,58 @@ object TacticalCalculator {
     const val SERE_SCHOOL_ID = "msn_sere_school"
     const val SF_AVIATION_SCHOOL_ID = "msn_sf_aviation_school"
     fun isSereQualified(op: Operator): Boolean = SERE_SCHOOL_ID in op.completedMissionIds
+
+    // ---------- Session 30: SERE levels and SF tiers ----------
+    const val SERE3_SCHOOL_ID = "msn_sere3_school"
+
+    /** SERE 1 comes with Basic, SERE 2 is the SERE school, SERE 3 is the SF course. */
+    fun sereLevel(op: Operator): Int = when {
+        SERE3_SCHOOL_ID in op.completedMissionIds -> 3
+        SERE_SCHOOL_ID in op.completedMissionIds -> 2
+        "msn_basic_qual" in op.completedMissionIds -> 1
+        else -> 0
+    }
+
+    const val SF2_MISSIONS = 3
+    const val SF3_HIGH_MISSIONS = 5
+    /** Share of the SF soldiers on a team who must hold the mission's tier (boat riders don't count). */
+    const val SF_TIER_TEAM_SHARE = 0.75
+
+    /**
+     * SF tier: 0 = not SF; 1 = the SF Tab; 2 = SERE 3 and 3 successful SF missions;
+     * 3 = SF2 plus Free Fall, Combat Diver, a language, 5 successful High+ SF missions and SGT or above.
+     */
+    fun sfTier(op: Operator): Int {
+        if (!isSfQualified(op) || op.isAviator) return 0
+        val sere3 = SERE3_SCHOOL_ID in op.completedMissionIds
+        if (!sere3 || op.sfMissionsSucceeded < SF2_MISSIONS) return 1
+        val speaks = op.languageRegions.isNotEmpty() || op.nativeRegion != null
+        val sgtUp = op.rank.seniorityIndex >= OperatorRank.SGT.seniorityIndex
+        return if (isFreeFallQualified(op) && isCombatDiver(op) && speaks && sgtUp &&
+            op.sfHighMissionsSucceeded >= SF3_HIGH_MISSIONS
+        ) 3 else 2
+    }
+
+    /** Tier an SF mission needs: Extreme SF3, High SF2, everything else SF1. */
+    fun requiredSfTier(mission: MissionTemplate): Int = when {
+        !isSfOperation(mission) -> 0
+        mission.risk == MissionRisk.EXTREME -> 3
+        mission.risk == MissionRisk.HIGH -> 2
+        else -> 1
+    }
+
+    /** How many of [count] SF soldiers must hold the tier (75%, rounded up). */
+    fun sfTierQuota(count: Int): Int = kotlin.math.ceil(count * SF_TIER_TEAM_SHARE).toInt()
+
+    /** The highest tier at least 75% of these soldiers hold (0 if none). */
+    fun groupSfTier(ops: List<Operator>): Int {
+        if (ops.isEmpty()) return 0
+        return (3 downTo 1).firstOrNull { t -> ops.count { sfTier(it) >= t } >= sfTierQuota(ops.size) } ?: 0
+    }
+
+    /** Squad card tier for an ODA. */
+    fun squadSfTier(squad: TacticalSquad, operators: List<Operator>): Int =
+        groupSfTier(operators.filter { it.id in squad.memberIds && !it.status.isOutOfActiveService })
     fun isSfAviator(op: Operator): Boolean = op.isAviator && SF_AVIATION_SCHOOL_ID in op.completedMissionIds
     fun isAirAssaultQualified(op: Operator): Boolean = AIR_ASSAULT_SCHOOL_ID in op.completedMissionIds
     /** Fast Rope: a little quicker than landing, and a bonus on assault and urban missions. */
@@ -2004,6 +2063,7 @@ object TacticalCalculator {
             AIR_ASSAULT_SCHOOL_ID -> 74
             ClandestineRules.LANGUAGE_SCHOOL_ID -> 80
             SERE_SCHOOL_ID -> 72
+            SERE3_SCHOOL_ID -> 55
             SF_AVIATION_SCHOOL_ID -> 56
             "msn_intel_school", "msn_ocs_school" -> 80
             "msn_signals_school", "msn_medical_school", "msn_engineer_school", "msn_logistics_school" -> 84

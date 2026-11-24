@@ -60,7 +60,7 @@ class QuickWinsTest {
             xp = rank.xpRequired,
             authorizedTier = rank.tier,
             baseFirepower = 40, baseStealth = 40, baseResilience = 40,
-            completedMissionIds = setOf("msn_basic_qual", "msn_night_qual"),
+            completedMissionIds = setOf("msn_basic_qual", "msn_night_qual", "msn_sere_school"),
             highestRiskSurvived = MissionRisk.HIGH
         )
         assertTrue(TacticalCalculator.canOperatorDeployOnMission(soldier(OperatorRank.SPC), sf, emptySet()).eligible)

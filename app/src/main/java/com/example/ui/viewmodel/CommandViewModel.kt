@@ -1506,6 +1506,8 @@ class CommandViewModel(
                 }
                 val totalCareerOps = newOpsCount + op.staffOpsSupported
                 val cooldownCleared = totalCareerOps >= op.petitionCooldownUntilOps
+                val sfWin = missionSucceeded && outcome != OperatorOutcomeType.FALLEN && outcome != OperatorOutcomeType.CAPTURED &&
+                    TacticalCalculator.isSfOperation(mission) && TacticalCalculator.isSfQualified(op)
                 val updatedCompletedIds = if (missionSucceeded && outcome != OperatorOutcomeType.FALLEN) {
                     op.completedMissionIds + mission.id
                 } else {
@@ -1582,6 +1584,10 @@ class CommandViewModel(
                     missionsCompleted = newOpsCount,
                     combatMissionsCompleted = newCombatOpsCount,
                     completedMissionIds = updatedCompletedIds,
+                    // Session 30: successful SF missions count toward SF2 and SF3
+                    sfMissionsSucceeded = op.sfMissionsSucceeded + if (sfWin) 1 else 0,
+                    sfHighMissionsSucceeded = op.sfHighMissionsSucceeded +
+                        if (sfWin && (mission.risk == MissionRisk.HIGH || mission.risk == MissionRisk.EXTREME)) 1 else 0,
                     highestRiskSurvived = updatedHighestRisk,
                     timesWounded = updatedWoundedCount,
                     combatPatchHistory = updatedCombatPatchHistory,
@@ -3551,7 +3557,11 @@ class CommandViewModel(
 
         // Item 127: saving a standard clears members' own picks for the items it sets, so they wear it
         val followers = state.operators.filter { it.id in validIds }.mapNotNull { op ->
-            TacticalCalculator.followSquadStandard(op, targetSquad).takeIf { it != op }
+            // Session 30: an SF-qualified SPC or below pins SGT when he joins an ODA
+            val promoted = if (targetSquad.isSpecialForces && TacticalCalculator.isSfQualified(op) && op.rank.tier == RankTier.SOLDIER) {
+                applyTierProgressionOnRankUp(op.promotedTo(OperatorRank.SGT).copy(authorizedTier = RankTier.NCO), op.rank, OperatorRank.SGT)
+            } else op
+            TacticalCalculator.followSquadStandard(promoted, targetSquad).takeIf { it != op }
         }
         viewModelScope.launch {
             repository.saveSquads(otherUpdatedSquads + targetSquad)

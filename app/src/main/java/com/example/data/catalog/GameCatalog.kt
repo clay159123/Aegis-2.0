@@ -2897,7 +2897,7 @@ object GameCatalog {
                 basePassRatePct = 24,
                 uniformKit = WardrobeKit.FIELD,
                 maxAttempts = 2,
-                prerequisiteAllIds = setOf("msn_basic_qual", "msn_night_qual"),
+                prerequisiteAllIds = setOf("msn_basic_qual", "msn_night_qual", "msn_sere_school"),
                 minRankTier = RankTier.SOLDIER,
                 minRank = OperatorRank.SPC,
                 minCombatRisk = MissionRisk.MODERATE,
@@ -2918,9 +2918,9 @@ object GameCatalog {
                     OperatorSpecialty.RECON,
                     OperatorSpecialty.BREACHER
                 ),
-                suitabilitySummary = "MOS: Infantry, Recon, Engineer, Command or Medic (combat MOS favored) • SPC+ • Basics+Airborne • Mod+ Op • 17 FP/16 ST/17 RS",
+                suitabilitySummary = "Any ground MOS (combat MOS favored) • SPC+ • Basics, Airborne and SERE 2 • Mod+ Op • 17 FP/16 ST/17 RS",
                 graduationStatBonus = StatProfile(3, 3, 2, 3),
-                graduationRewardsSummary = "Grants +11 Base Stats • Awards SF Tab & Emerald Cord • Unlocks Green Beret & SF Gear"
+                graduationRewardsSummary = "Grants +11 Base Stats • Awards SF Tab & Emerald Cord • SF1 • Unlocks Green Beret & SF Gear • SPCs pin SGT on joining an ODA"
             ),
             baseSuccessRatePct = 24,
             briefing = "Army Special Forces Selection & Q-Course: unconventional warfare, Robin Sage & language immersion. Produces the deadliest warriors.",
@@ -3418,7 +3418,7 @@ object GameCatalog {
         ),
         MissionTemplate(
             id = "msn_sere_school",
-            title = "School: SERE (Survival, Evasion, Resistance, Escape)",
+            title = "School: SERE Level 2 (Survival, Evasion, Resistance, Escape)",
             theater = TheaterRegion.HQ_GROUNDS,
             risk = MissionRisk.TRAINING,
             scope = MissionScope.TRAINING,
@@ -3426,13 +3426,14 @@ object GameCatalog {
                 basePassRatePct = 58,
                 uniformKit = WardrobeKit.FIELD,
                 maxAttempts = 2,
-                prerequisiteAnyIds = setOf("msn_flight_school", "msn_sf_school", "msn_night_qual"),
+                // Session 30: SERE 2 is for pilots and Airborne graduates (SERE 1 comes with Basic)
+                prerequisiteAnyIds = setOf("msn_flight_school", "msn_night_qual"),
                 minResilience = 14,
                 allowedSpecialties = OperatorSpecialty.entries.toSet(),
                 naturalFitSpecialties = setOf(OperatorSpecialty.RECON, OperatorSpecialty.AVIATION),
-                suitabilitySummary = "Aviators, SF-qualified or Airborne graduates • 14+ RS • Max 2 attempts",
+                suitabilitySummary = "Aviators or Airborne graduates • 14+ RS • Max 2 attempts",
                 graduationStatBonus = StatProfile(0, 2, 0, 2),
-                graduationRewardsSummary = "Grants +2 ST, +2 RS • Awards the SERE Ribbon • Required for SF Aviation"
+                graduationRewardsSummary = "Grants +2 ST, +2 RS • Awards the SERE Ribbon • Required for SF School and SF Aviation"
             ),
             baseSuccessRatePct = 58,
             briefing = "Survival in the field, evading a hunter force, and resisting interrogation in a mock prison camp.",
@@ -3451,6 +3452,43 @@ object GameCatalog {
                 "Survival phase: shelter, water and fire with what the woods give.",
                 "Evasion lane: hunter force on the trail all night.",
                 "Resistance lab complete. SERE graduate!"
+            )
+        ),
+        MissionTemplate(
+            id = "msn_sere3_school",
+            title = "School: SERE Level 3 (Special Forces)",
+            theater = TheaterRegion.HQ_GROUNDS,
+            risk = MissionRisk.TRAINING,
+            scope = MissionScope.TRAINING,
+            schoolRequirements = SchoolRequirements(
+                basePassRatePct = 40,
+                uniformKit = WardrobeKit.FIELD,
+                maxAttempts = 2,
+                prerequisiteAllIds = setOf("msn_sf_school", "msn_sere_school"),
+                minResilience = 18,
+                allowedSpecialties = OperatorSpecialty.entries.toSet() - OperatorSpecialty.AVIATION,
+                naturalFitSpecialties = setOf(OperatorSpecialty.RECON),
+                suitabilitySummary = "SF-qualified with SERE 2 • 18+ RS • Max 2 attempts",
+                graduationStatBonus = StatProfile(0, 2, 0, 3),
+                graduationRewardsSummary = "Grants +2 ST, +3 RS • Required for SF2 and SF3"
+            ),
+            baseSuccessRatePct = 40,
+            briefing = "The full resistance and escape course: a long evasion run, then the prison camp and its interrogators.",
+            durationSeconds = 34,
+            minOperators = 1,
+            maxOperators = MissionTemplate.NO_CLASS_CAP,
+            recommendedPower = 110,
+            primaryFocus = "SERE • Very Hard",
+            supplyCost = 18.0,
+            rewardCredits = 60.0,
+            rewardSupplies = 12.0,
+            rewardIntel = 18.0,
+            rewardPrestige = 14.0,
+            rewardXp = 150,
+            commsFeed = listOf(
+                "Evasion corridor: three nights, a hunter force with dogs.",
+                "Captured on purpose. The camp phase begins.",
+                "Resisted, escaped, made the friendly lines. SERE 3 complete!"
             )
         ),
         MissionTemplate(

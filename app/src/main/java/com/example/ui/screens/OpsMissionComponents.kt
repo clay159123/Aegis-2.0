@@ -686,6 +686,17 @@ internal fun HqStagingSheet(
             )
         }
 
+        // Session 30: SF missions show the tier they need
+        val sfNeed = TacticalCalculator.requiredSfTier(mission)
+        if (sfNeed > 0) {
+            Text(
+                text = "Needs SF$sfNeed: 75% of the team's SF soldiers at SF$sfNeed or higher",
+                style = MaterialTheme.typography.labelSmall,
+                color = extra.signalsCyan,
+                modifier = Modifier.testTag("stage_sf_tier")
+            )
+        }
+
         mission.schoolRequirements?.let { schoolReq ->
             Text(
                 text = "Requirements: ${schoolReq.suitabilitySummary}",
@@ -862,7 +873,7 @@ internal fun HqStagingSheet(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                if (squad.isSpecialForces) SfMarker()
+                                if (squad.isSpecialForces) SfMarker(tier = TacticalCalculator.squadSfTier(squad, uiState.operators))
                                 Icon(
                                     imageVector = Icons.Filled.Star,
                                     contentDescription = null,
@@ -1067,7 +1078,7 @@ internal fun HqStagingSheet(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 RankInsigniaBadge(rank = op.rank)
-                                if (TacticalCalculator.isSfQualified(op)) SfMarker()
+                                if (TacticalCalculator.isSfQualified(op)) SfMarker(tier = TacticalCalculator.sfTier(op))
                                 Column {
                                     Text(
                                         text = buildString {
