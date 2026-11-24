@@ -3,6 +3,9 @@ package com.example.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,9 +35,9 @@ import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.theme.LocalAegisColors
 
-/** Map units: the base is drawn in a 200 x 360 grid scaled to the card width (Session 22 added a fifth row). */
+/** Map units: the base is drawn in a 200 x 440 grid (Session 37 added the Parade Ground row) scaled to the card width (Session 22 added a fifth row). */
 private const val MAP_W = 200f
-private const val MAP_H = 360f
+private const val MAP_H = 440f
 
 /** A fixed plot on the base map. */
 internal data class BasePlot(val type: FacilityType?, val label: String, val x: Float, val y: Float, val w: Float, val h: Float)
@@ -55,9 +58,15 @@ internal val BASE_PLOTS = listOf(
     BasePlot(FacilityType.ARMORY_WORKSHOP, "Armory", 10f, 230f, 58f, 56f),
     BasePlot(FacilityType.LOGISTICS_DEPOT, "Quartermaster", 71f, 230f, 58f, 56f),
     BasePlot(FacilityType.AIRBORNE_RANGER_CENTER, "Abn & Ranger", 132f, 230f, 58f, 56f),
-    BasePlot(FacilityType.SF_COMPOUND, "SF Compound", 10f, 294f, 119f, 56f),
-    BasePlot(null, "Gate", 132f, 294f, 58f, 56f)
+    // Session 37: the parade ground (Memorial Wall, item 172) and the Heritage Walk (campaign monuments, item 171)
+    BasePlot(null, PARADE_LABEL, 10f, 294f, 117f, 76f),
+    BasePlot(null, HERITAGE_LABEL, 132f, 294f, 58f, 76f),
+    BasePlot(FacilityType.SF_COMPOUND, "SF Compound", 10f, 378f, 119f, 56f),
+    BasePlot(null, "Gate", 132f, 378f, 58f, 56f)
 )
+
+internal const val PARADE_LABEL = "Parade Ground"
+internal const val HERITAGE_LABEL = "Heritage Walk"
 
 
 /** Art stage for a level: 1 tent (Lv 1-3), 2 wood frame (4-6), 3 block (7-9), 4 compound (10). */
@@ -110,11 +119,24 @@ fun BaseMapCard(
     nowMillis: Long,
     onUpgrade: (FacilityType) -> Unit,
     onRush: (FacilityType) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Session 37: soldiers lost; the Memorial Wall appears on the Parade Ground after the first. */
+    fallenCount: Int = 0,
+    /** Session 37: finished campaigns get a monument on the Heritage Walk. */
+    completedCampaignIds: Set<String> = emptySet(),
+    /** Soldiers, for each campaign record (who wears its combat patch). */
+    operators: List<Operator> = emptyList(),
+    /** Tapping the Memorial Wall opens the Honors Memorial. */
+    onOpenMemorial: (() -> Unit)? = null,
+    /** Session 37: the HQ Base Map tab lets the map zoom (scroll sideways when zoomed). */
+    zoomable: Boolean = false
 ) {
     val extra = LocalAegisColors.current
     val textMeasurer = rememberTextMeasurer()
     var selected by remember { mutableStateOf<FacilityType?>(null) }
+    var showHeritage by remember { mutableStateOf(false) }
+    var zoom by remember { mutableStateOf(1f) }
+    val monuments = remember(completedCampaignIds) { monumentCampaigns(completedCampaignIds) }
     val hqLevel = TacticalCalculator.facilityLevel(facilities, FacilityType.COMMAND_HQ)
     val crews = TacticalCalculator.constructionCrews(facilities)
     val building = facilities.count { it.isUpgrading }
@@ -125,21 +147,54 @@ fun BaseMapCard(
             style = MaterialTheme.typography.labelSmall,
             color = extra.textMuted
         )
-        BoxWithConstraints(
+        if (zoomable) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Zoom", style = MaterialTheme.typography.labelSmall, color = extra.textMuted)
+                listOf(1f, 1.5f, 2f).forEach { z ->
+                    FilterChip(
+                        selected = zoom == z,
+                        onClick = { zoom = z },
+                        label = { Text(if (z == 1f) "1x" else "${z}x") },
+                        modifier = Modifier.testTag("base_map_zoom_${(z * 10).toInt()}")
+                    )
+                }
+            }
+        }
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+          val viewW = maxWidth
+          Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+          BoxWithConstraints(
             modifier = Modifier
-                .fillMaxWidth()
+                .width(viewW * zoom)
                 .aspectRatio(MAP_W / MAP_H)
                 .testTag("base_map")
-        ) {
+          ) {
             val unitPx = constraints.maxWidth / MAP_W
             Canvas(modifier = Modifier.fillMaxSize()) {
-                drawBase(facilities, hqLevel, nowMillis, textMeasurer)
+                drawBase(facilities, hqLevel, nowMillis, textMeasurer, fallenCount, monuments)
+            }
+            // Session 37: the Memorial Wall and the Heritage Walk are tappable too
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            BASE_PLOTS.filter { it.type == null && it.label != "Gate" }.forEach { plot ->
+                val enabled = when (plot.label) {
+                    PARADE_LABEL -> fallenCount > 0 && onOpenMemorial != null
+                    else -> true
+                }
+                if (enabled) with(density) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = (plot.x * unitPx).toDp(), y = (plot.y * unitPx).toDp())
+                            .size((plot.w * unitPx).toDp(), (plot.h * unitPx).toDp())
+                            .clickable { if (plot.label == PARADE_LABEL) onOpenMemorial?.invoke() else showHeritage = true }
+                            .semantics { contentDescription = if (plot.label == PARADE_LABEL) "Memorial Wall, $fallenCount names" else "Heritage Walk, ${monuments.size} monuments" }
+                            .testTag(if (plot.label == PARADE_LABEL) "base_memorial_wall" else "base_heritage_walk")
+                    )
+                }
             }
             // Tap targets over each plot (also give each building an accessible label)
             BASE_PLOTS.filter { it.type != null }.forEach { plot ->
                 val type = plot.type!!
                 val level = TacticalCalculator.facilityLevel(facilities, type)
-                val density = androidx.compose.ui.platform.LocalDensity.current
                 with(density) {
                     Box(
                         modifier = Modifier
@@ -151,7 +206,13 @@ fun BaseMapCard(
                     )
                 }
             }
+          }
+          }
         }
+    }
+
+    if (showHeritage) {
+        HeritageWalkDialog(monuments = monuments, operators = operators, onDismiss = { showHeritage = false })
     }
 
     selected?.let { type ->
@@ -165,6 +226,59 @@ fun BaseMapCard(
             onDismiss = { selected = null }
         )
     }
+}
+
+/** Session 37 (item 171): the record behind each campaign monument. */
+@Composable
+private fun HeritageWalkDialog(monuments: List<TheaterCampaign>, operators: List<Operator>, onDismiss: () -> Unit) {
+    val extra = LocalAegisColors.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Heritage Walk", style = MaterialTheme.typography.titleLarge, color = extra.brassBright) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()).testTag("heritage_dialog"),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (monuments.isEmpty()) {
+                    Text(
+                        "No monuments yet. Each campaign the command finishes raises one here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = extra.textMuted
+                    )
+                }
+                monuments.forEach { c ->
+                    val patchWearers = operators.count { op -> op.combatPatchHistory.any { it.campaignId == c.id } }
+                    val stages = c.stageMissionIds.size
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, extra.borderSubtle)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(c.title, style = MaterialTheme.typography.titleSmall, color = extra.brassBright)
+                            Text(
+                                "${c.theater.label} • ${c.difficultyLabel} • $stages stages",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = extra.textMuted
+                            )
+                            Text(c.summary, style = MaterialTheme.typography.bodySmall)
+                            Text("Theater perk: ${c.theaterBuffLabel}", style = MaterialTheme.typography.labelSmall, color = extra.signalsCyan)
+                            Text(
+                                "$patchWearers soldier${if (patchWearers == 1) "" else "s"} wear its combat patch",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = extra.textMuted
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) { Text("Close") }
+        }
+    )
 }
 
 @Composable
@@ -276,7 +390,14 @@ private val Ink = Color(0xFF1E211A)
 private val Label = Color(0xFFF2EEDF)
 private val BuildAmber = Color(0xFFF2A93B)
 
-private fun DrawScope.drawBase(facilities: List<FacilityState>, hqLevel: Int, now: Long, tm: TextMeasurer) {
+private fun DrawScope.drawBase(
+    facilities: List<FacilityState>,
+    hqLevel: Int,
+    now: Long,
+    tm: TextMeasurer,
+    fallenCount: Int = 0,
+    monumentCampaigns: List<TheaterCampaign> = emptyList()
+) {
     val u = size.width / MAP_W
     fun r(x: Float, y: Float, w: Float, h: Float) = Rect(Offset(x * u, y * u), Size(w * u, h * u))
     val band = baseDevelopmentBand(hqLevel)
@@ -290,8 +411,8 @@ private fun DrawScope.drawBase(facilities: List<FacilityState>, hqLevel: Int, no
     // Roads: dirt, gravel, paved
     val roadCol = when (band) { 1 -> Color(0xFF8C7A55); 2 -> Color(0xFF9A988F); else -> Color(0xFF55585A) }
     listOf(
-        r(68f, 88f, 3f, 200f), r(129f, 88f, 3f, 264f), r(10f, 155f, 180f, 6f), r(10f, 223f, 180f, 6f), r(10f, 88f, 180f, 5f),
-        r(10f, 287f, 180f, 6f), r(129f, 350f, 61f, 5f)
+        r(68f, 88f, 3f, 200f), r(129f, 88f, 3f, 344f), r(10f, 155f, 180f, 6f), r(10f, 223f, 180f, 6f), r(10f, 88f, 180f, 5f),
+        r(10f, 287f, 180f, 6f), r(10f, 371f, 180f, 6f), r(129f, 430f, 61f, 5f)
     ).forEach {
         drawRect(roadCol, it.topLeft, it.size)
     }
@@ -299,8 +420,26 @@ private fun DrawScope.drawBase(facilities: List<FacilityState>, hqLevel: Int, no
         drawLine(Color(0xFFE8E2C8), Offset(10f * u, 158f * u), Offset(190f * u, 158f * u), strokeWidth = 0.6f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f * u, 3f * u)))
     }
 
+    // Session 37: more detail: a tree line outside the wall, traffic on the roads, street lamps on a paved post
+    for (i in 0..15) {
+        val tx = (8f + i * 12.2f) * u
+        val ty = (12f + (i % 3) * 2.5f) * u
+        drawCircle(Color(0xFF3F4C2E), (4.2f + (i % 2)) * u, Offset(tx, ty))
+        drawCircle(Color(0xFF4E5E38), (2.6f + (i % 2) * 0.6f) * u, Offset(tx - 1.2f * u, ty - 1.2f * u))
+    }
+    if (band >= 2) {
+        listOf(Triple(40f, 156f, Color(0xFF55603F)), Triple(150f, 224f, Color(0xFF6B6F72)), Triple(96f, 288f, Color(0xFF55603F)), Triple(130f, 400f, Color(0xFF6B6F72)))
+            .forEachIndexed { idx, (vx, vy, col) ->
+                val vertical = idx == 3
+                val sz = if (vertical) Size(3.4f * u, 7f * u) else Size(7f * u, 3.4f * u)
+                drawRoundRect(col, Offset(vx * u, vy * u), sz, CornerRadius(0.8f * u))
+                drawRect(Color(0xFF2A2E25).copy(alpha = 0.6f), Offset(vx * u + (if (vertical) 0.5f else 5f) * u, vy * u + (if (vertical) 0.5f else 0.5f) * u),
+                    if (vertical) Size(2.4f * u, 1.6f * u) else Size(1.6f * u, 2.4f * u))
+            }
+    }
+
     // Item 159: a home installation's perimeter: wire fence, then chain-link on posts, then a masonry wall
-    val wall = r(3f, 26f, 194f, 330f)
+    val wall = r(3f, 26f, 194f, 410f)
     fun fencePosts(step: Float, radius: Float, col: Color) {
         var x = wall.left
         while (x <= wall.right) { drawCircle(col, radius, Offset(x, wall.top)); drawCircle(col, radius, Offset(x, wall.bottom)); x += step * u }
@@ -327,8 +466,12 @@ private fun DrawScope.drawBase(facilities: List<FacilityState>, hqLevel: Int, no
         val rect = r(plot.x, plot.y, plot.w, plot.h)
         val type = plot.type
         if (type == null) {
-            drawGate(rect, u, band)
-            drawPlotLabel(tm, plot.label, rect, u, Label)
+            when (plot.label) {
+                PARADE_LABEL -> drawParadeGround(rect, u, band, fallenCount)
+                HERITAGE_LABEL -> drawHeritageWalk(rect, u, monumentCampaigns)
+                else -> drawGate(rect, u, band)
+            }
+            drawPlotLabel(tm, if (plot.label == PARADE_LABEL && fallenCount > 0) "Parade Ground • Memorial" else plot.label, rect, u, Label)
             return@forEach
         }
         val state = facilities.find { it.type == type } ?: FacilityState(type, type.startLevel)
@@ -564,3 +707,100 @@ private fun DrawScope.drawConstruction(rect: Rect, u: Float, state: FacilityStat
     drawCircle(Color.Black.copy(alpha = 0.45f), 6.5f * u, c)
     drawArc(BuildAmber, -90f, 360f * frac, false, Offset(c.x - 5 * u, c.y - 5 * u), Size(10 * u, 10 * u), style = Stroke(width = 2f * u, cap = StrokeCap.Round))
 }
+
+// ---------- Session 37: Parade Ground with the Memorial Wall (item 172) and the Heritage Walk (item 171) ----------
+
+/** Monument colors, one per campaign in campaign order. */
+private val MonumentStone = listOf(
+    Color(0xFFCFC6B0), Color(0xFFB8BEC4), Color(0xFFD7C08A), Color(0xFFAFA79A), Color(0xFFC9B79C),
+    Color(0xFFBFC7B5), Color(0xFFD2B48C), Color(0xFFA9B2BA), Color(0xFFC4BBA8), Color(0xFFB7A98F), Color(0xFF8F9A88)
+)
+
+private fun DrawScope.drawParadeGround(rect: Rect, u: Float, band: Int, fallenCount: Int) {
+    // Drill field: cut grass with mowing stripes and a gravel border
+    val field = Rect(Offset(rect.left + 3 * u, rect.top + 18 * u), Size(rect.width - 6 * u, rect.height - 30 * u))
+    drawRect(if (band >= 2) Color(0xFF6E7F4E) else Color(0xFF677648), field.topLeft, field.size)
+    var sx = field.left
+    var stripe = 0
+    while (sx < field.right) {
+        if (stripe % 2 == 0) drawRect(Color.White.copy(alpha = 0.05f), Offset(sx, field.top), Size(6f * u, field.height))
+        sx += 6f * u; stripe++
+    }
+    drawRect(Color(0xFFBDB49B), field.topLeft, field.size, style = Stroke(0.8f * u))
+    // Reviewing stand and three flagpoles at the far end
+    drawRect(Wood, Offset(field.left + 2 * u, field.bottom - 9 * u), Size(16 * u, 7 * u))
+    drawRect(WoodRoof, Offset(field.left + 1 * u, field.bottom - 11 * u), Size(18 * u, 2.4f * u))
+    listOf(Color(0xFF2F5FA6), Color(0xFFB22234), Color(0xFFE0B84A)).forEachIndexed { i, flag ->
+        val px = field.left + 24 * u + i * 5 * u
+        drawLine(Color(0xFFDADADA), Offset(px, field.bottom - 2 * u), Offset(px, field.bottom - 20 * u), strokeWidth = 0.6f * u)
+        drawRect(flag, Offset(px, field.bottom - 20 * u), Size(4 * u, 2.6f * u))
+    }
+    // A formation drilling on the field
+    for (row in 0..2) for (col in 0..5) {
+        drawCircle(Color(0xFF2E3324), 0.9f * u, Offset(field.left + 52 * u + col * 5.5f * u, field.top + 12 * u + row * 6 * u))
+    }
+    // Memorial Wall: built once the command has lost a soldier; one name mark per soldier (up to 48)
+    if (fallenCount > 0) {
+        val wall = Rect(Offset(rect.left + 8 * u, rect.top + 4 * u), Size(rect.width - 16 * u, 10 * u))
+        drawRoundRect(Color(0xFF26292E), wall.topLeft, wall.size, CornerRadius(1.2f * u))
+        drawRoundRect(Color(0xFF51565E), wall.topLeft, wall.size, CornerRadius(1.2f * u), style = Stroke(0.6f * u))
+        val marks = fallenCount.coerceAtMost(48)
+        val perRow = 24
+        for (i in 0 until marks) {
+            val rowY = wall.top + (2.6f + (i / perRow) * 3.6f) * u
+            // Each name: a short engraved block of gold lettering
+            val mx = wall.left + 4 * u + (i % perRow) * ((wall.width - 8 * u) / perRow)
+            drawRect(Color(0xFFD8C27A), Offset(mx, rowY - 0.5f * u), Size(1.8f * u, 1f * u))
+        }
+        // Wreath at the center
+        drawCircle(Color(0xFF2D6A3E), 3.2f * u, Offset(wall.center.x, wall.bottom + 2.6f * u), style = Stroke(1.2f * u))
+        drawCircle(Color(0xFFB22234), 0.9f * u, Offset(wall.center.x, wall.bottom + 5.2f * u))
+    }
+}
+
+private fun DrawScope.drawHeritageWalk(rect: Rect, u: Float, campaigns: List<TheaterCampaign>) {
+    // A stone path with a monument for each finished campaign, two on each side of it
+    drawRect(Color(0xFFB9AE95), Offset(rect.center.x - 2 * u, rect.top + 4 * u), Size(4 * u, rect.height - 16 * u))
+    monumentSlots(rect, u).forEachIndexed { i, c ->
+        val campaign = campaigns.getOrNull(i)
+        if (campaign == null) {
+            // Future spot: a faint survey marker
+            drawCircle(Color(0xFFC8C3B3).copy(alpha = 0.35f), 1.2f * u, c)
+            return@forEachIndexed
+        }
+        val stone = MonumentStone[(campaign.order - 1).coerceIn(0, MonumentStone.lastIndex)]
+        // Plinth
+        drawRect(Color(0xFF8D877A), Offset(c.x - 4.4f * u, c.y + 1.6f * u), Size(8.8f * u, 2.4f * u))
+        if (campaign.isSpecialForces) {
+            // SF campaign: a dagger-topped column in SF black and red
+            drawRect(Color(0xFF1C1C1C), Offset(c.x - 1.3f * u, c.y - 8 * u), Size(2.6f * u, 9.6f * u))
+            drawLine(Color(0xFFC62828), Offset(c.x, c.y - 11 * u), Offset(c.x, c.y - 8 * u), strokeWidth = 1f * u)
+        } else if (campaign.order % 2 == 0) {
+            // Obelisk
+            drawPath(Path().apply {
+                moveTo(c.x - 1.8f * u, c.y + 1.6f * u); lineTo(c.x - 1.1f * u, c.y - 8 * u)
+                lineTo(c.x, c.y - 10 * u); lineTo(c.x + 1.1f * u, c.y - 8 * u); lineTo(c.x + 1.8f * u, c.y + 1.6f * u); close()
+            }, stone)
+        } else {
+            // Statue on a block: a soldier figure
+            drawRect(stone, Offset(c.x - 2.6f * u, c.y - 2.4f * u), Size(5.2f * u, 4 * u))
+            drawCircle(stone, 1.3f * u, Offset(c.x, c.y - 8.2f * u))
+            drawRect(stone, Offset(c.x - 1.4f * u, c.y - 6.8f * u), Size(2.8f * u, 4.4f * u))
+        }
+    }
+}
+
+/** Monument spots in the Heritage Walk plot, in campaign order (four columns around the path, three rows). */
+internal fun monumentSlots(rect: Rect, u: Float): List<Offset> = (0 until 12).map { i ->
+    // Two columns each side of the center path, three rows
+    val col = i % 4
+    val row = i / 4
+    val x = listOf(8f, 19f, 39f, 50f)[col]
+    Offset(rect.left + x * u, rect.top + (20f + row * 18f) * u)
+}
+
+/** The campaigns with a monument, in campaign order (theater campaigns first, the SF campaign last). */
+fun monumentCampaigns(completedCampaignIds: Set<String>): List<TheaterCampaign> =
+    com.example.data.catalog.GameCatalog.campaigns
+        .filter { it.id in completedCampaignIds }
+        .sortedWith(compareBy<TheaterCampaign> { it.isSpecialForces }.thenBy { it.order })

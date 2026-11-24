@@ -373,7 +373,8 @@ fun AegisCommandApp() {
                                     onToggleDressDisplayMode = viewModel::toggleDressDisplayMode,
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },
-                                    onNavigateToOps = { navigateTo(ROUTE_OPS) }
+                                    onNavigateToOps = { navigateTo(ROUTE_OPS) },
+                                    onOpenMemorial = { navigateTo(ROUTE_HONORS) }
                                 )
                             }
                             composable(ROUTE_SQUAD) {
