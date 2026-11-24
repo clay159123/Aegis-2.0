@@ -13,13 +13,28 @@ object ClandestineRules {
     const val FREE_STRAIT_ID = TacticalCalculator.UW_CAMPAIGN_ID
 
     /** The regions a language can be learned for: the theaters of the ten campaigns. */
+    /** Item 133: only regions with clandestine missions, plus Kestrel Strait for the Free Strait campaign. */
     val languageRegions: List<TheaterRegion>
-        get() = GameCatalog.campaigns.filter { !it.isSpecialForces }.map { it.theater }.distinct()
+        get() = (GameCatalog.missions.filter { it.isClandestine }.map { it.theater } + TheaterRegion.KESTREL_STRAIT).distinct()
 
-    fun knowsLanguage(op: Operator, region: TheaterRegion): Boolean = region in op.languageRegions
+    fun knowsLanguage(op: Operator, region: TheaterRegion): Boolean = region in op.languageRegions || op.nativeRegion == region
 
-    /** Regions this soldier hasn't learned yet. */
-    fun regionsToLearn(op: Operator): List<TheaterRegion> = languageRegions.filter { it !in op.languageRegions }
+    /** Regions this soldier hasn't learned yet (a native language counts as known). */
+    fun regionsToLearn(op: Operator): List<TheaterRegion> = languageRegions.filter { !knowsLanguage(op, it) }
+
+    // ---------- Item 133: heritage (native) speakers ----------
+    const val NATIVE_SPEAKER_CHANCE_PCT = 8
+    /** Extra blown-cover cut per native speaker in their own region, on top of LANGUAGE_CUT_PCT. */
+    const val NATIVE_EXTRA_CUT_PCT = 4
+    /** Pass bonus on SF missions in a native speaker's region. */
+    const val NATIVE_SF_PASS_BONUS = 3
+
+    /** A new recruit's native language, if they roll one (8%). */
+    fun rollNativeRegion(random: Random = Random): TheaterRegion? =
+        if (random.nextInt(100) < NATIVE_SPEAKER_CHANCE_PCT) languageRegions.random(random) else null
+
+    fun nativeSfPassBonus(mission: MissionTemplate, team: List<Operator>): Int =
+        if (TacticalCalculator.isSfOperation(mission) && team.any { it.nativeRegion == mission.theater }) NATIVE_SF_PASS_BONUS else 0
 
     // ---------- Clandestine teams ----------
 
@@ -58,7 +73,8 @@ object ClandestineRules {
         if (!mission.isClandestine || team.isEmpty()) return 0
         val avgStealthTech = team.map { (it.baseStealth + it.baseTech) / 2.0 }.average()
         val statCut = ((avgStealthTech - 20).coerceAtLeast(0.0) * STAT_CUT_PER_POINT).toInt()
-        val languageCut = team.count { knowsLanguage(it, mission.theater) } * LANGUAGE_CUT_PCT
+        val languageCut = team.count { knowsLanguage(it, mission.theater) } * LANGUAGE_CUT_PCT +
+            team.count { it.nativeRegion == mission.theater } * NATIVE_EXTRA_CUT_PCT
         val perk = if (FREE_STRAIT_ID in clearedCampaignIds) FREE_STRAIT_CUT_PCT else 0
         return (BASE_BLOWN_COVER_PCT - statCut - languageCut - perk - CompoundRules.blownCoverCutPct()).coerceIn(MIN_BLOWN_COVER_PCT, MAX_BLOWN_COVER_PCT)
     }

@@ -32,8 +32,9 @@ class Session21Test {
         val school = mission(ClandestineRules.LANGUAGE_SCHOOL_ID)
         assertEquals(setOf(TacticalCalculator.SF_SCHOOL_ID), school.schoolRequirements!!.prerequisiteAllIds)
         val regions = ClandestineRules.languageRegions
-        assertTrue(regions.size >= 6)
-        assertEquals(GameCatalog.campaigns.filter { !it.isSpecialForces }.map { it.theater }.toSet(), regions.toSet())
+        // Item 133: clandestine theaters plus Kestrel Strait
+        assertTrue(regions.size >= 4)
+        assertEquals((GameCatalog.missions.filter { it.isClandestine }.map { it.theater } + TheaterRegion.KESTREL_STRAIT).toSet(), regions.toSet())
         val plain = sf("p").copy(completedMissionIds = setOf("msn_basic_qual"), baseTech = 20)
         assertFalse(TacticalCalculator.canOperatorDeployOnMission(plain, school, emptySet()).eligible)
         val one = sf("a", setOf(TheaterRegion.MERIDIAN_CITY)).copy(completedMissionIds = sf("a").completedMissionIds + school.id)

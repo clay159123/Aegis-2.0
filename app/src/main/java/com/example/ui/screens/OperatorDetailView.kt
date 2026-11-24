@@ -594,6 +594,17 @@ fun OperatorDetailView(
                             style = MaterialTheme.typography.labelMedium,
                             color = extra.brassBright
                         )
+                        // Item 133: languages, native first
+                        val languages = listOfNotNull(operator.nativeRegion?.let { "${it.label} (native speaker)" }) +
+                            operator.languageRegions.filter { it != operator.nativeRegion }.map { it.label }
+                        if (languages.isNotEmpty()) {
+                            Text(
+                                text = "Languages: " + languages.joinToString(" • "),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = extra.signalsCyan,
+                                modifier = Modifier.testTag("record_languages")
+                            )
+                        }
                     }
                 }
 

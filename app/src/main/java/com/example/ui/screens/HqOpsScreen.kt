@@ -988,7 +988,14 @@ fun HqOpsScreen(
                 flightHours = flightHours,
                 onFlightHoursChange = { flightHours = it },
                 languageRegion = languageRegion,
-                onLanguageRegionChange = { languageRegion = it; onSelectLanguageRegion(it) },
+                onLanguageRegionChange = { region ->
+                    languageRegion = region
+                    onSelectLanguageRegion(region)
+                    // Item 134: drop anyone already speaking the new region from the class
+                    selectedOperatorIds = selectedOperatorIds.filter { id ->
+                        uiState.operators.find { it.id == id }?.let { !com.example.domain.ClandestineRules.knowsLanguage(it, region) } ?: false
+                    }
+                },
                 onEditKits = {
                     stagingMission = null
                     selectedOperatorIds = emptyList()

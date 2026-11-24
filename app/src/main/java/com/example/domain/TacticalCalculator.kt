@@ -778,7 +778,12 @@ object TacticalCalculator {
     fun teamBlocker(mission: MissionTemplate, team: List<Operator>, squads: List<TacticalSquad>, platoonLeaderId: String? = null): String? {
         if (mission.requiresSfTeam) {
             if (team.size !in SF_MIN_TEAM..SF_MAX_TEAM) return "SF teams are $SF_MIN_TEAM to $SF_MAX_TEAM soldiers (${team.size} selected)"
-            team.firstOrNull { !isSfQualified(it) }?.let { return "${it.callsign} isn't SF-qualified" }
+            // Item 137: coastal SF missions can carry up to 2 non-SF soldiers in with the boat team
+            val riders = team.filter { !isSfQualified(it) }
+            if (riders.isNotEmpty()) {
+                if (!takesBoatRiders(mission)) return "${riders.first().callsign} isn't SF-qualified"
+                if (riders.size > MAX_BOAT_RIDERS) return "Up to $MAX_BOAT_RIDERS non-SF soldiers ride with the boat team (${riders.size})"
+            }
             // Item 119: up to 3 SF squads; the team is built around whichever one brings the most soldiers
             if (sfSquadOf(squads) == null) return "Form an SF squad first"
             val sfSquad = squads.filter { it.isSpecialForces }.maxBy { sq -> team.count { it.id in sq.memberIds } }
@@ -828,6 +833,13 @@ object TacticalCalculator {
         m.theater.terrain == Terrain.URBAN || listOf("Assault", "Breach", "Strike").any { it in m.primaryFocus }
 
     /** Why this team can't use [method] on [mission], or null when it can. */
+    /** Item 137: most non-SF soldiers an SF boat team can bring along. */
+    const val MAX_BOAT_RIDERS = 2
+
+    /** Item 137: coastal SF missions that allow a Maritime insertion (never clandestine ones) take boat riders. */
+    fun takesBoatRiders(mission: MissionTemplate): Boolean =
+        mission.requiresSfTeam && mission.coastal && !mission.isClandestine && InsertionMethod.MARITIME in mission.allowedInsertions
+
     fun insertionBlocker(
         mission: MissionTemplate,
         method: InsertionMethod,
@@ -836,6 +848,10 @@ object TacticalCalculator {
         facilities: List<FacilityState>
     ): String? {
         if (method !in mission.allowedInsertions) return "Not available for this mission"
+        // Item 137: non-SF riders only come in by boat
+        if (mission.requiresSfTeam && method != InsertionMethod.MARITIME && team.any { !isSfQualified(it) }) {
+            return "Non-SF soldiers can only ride in with the boat team"
+        }
         return when (method) {
             InsertionMethod.GROUND -> null
             InsertionMethod.HELICOPTER -> when {
@@ -1321,7 +1337,7 @@ object TacticalCalculator {
             }
         }
 
-        if (mission.requiresSfTeam && !isSfQualified(operator)) {
+        if (mission.requiresSfTeam && !isSfQualified(operator) && !takesBoatRiders(mission)) {
             return EligibilityResult(false, listOf("SF-qualified soldiers only"))
         }
         if (operator.isAviator && mission.scope == MissionScope.FIELD_COMBAT) {
@@ -2045,7 +2061,8 @@ object TacticalCalculator {
         // Item 63: who sits at the table for release talks, and how hard the captors have become
         val talks = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) PowRules.talksModifierPct(selectedOperators, PowRules.activeTalksFailures) else 0
         // Item 98: the guerrilla force and the Op Free Strait completion perk
-        val freeStrait = ClandestineRules.guerrillaPassBonus(mission) + ClandestineRules.freeStraitSfBonus(mission)
+        val freeStrait = ClandestineRules.guerrillaPassBonus(mission) + ClandestineRules.freeStraitSfBonus(mission) +
+            ClandestineRules.nativeSfPassBonus(mission, selectedOperators)
         return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan + talks + freeStrait)
             .coerceIn(minOdds, maxOdds)
     }
