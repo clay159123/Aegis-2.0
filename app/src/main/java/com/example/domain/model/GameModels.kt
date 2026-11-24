@@ -1370,6 +1370,8 @@ data class Operator(
     val powTalksFailures: Int = 0,
     val powTalksCooldownUntilMillis: Long = 0L,
     val powRescueClosed: Boolean = false,
+    /** Item 151: how this soldier fell, shown on the Memorial ("Killed in action: Ridge Patrol"). */
+    val fallenNote: String = "",
     /** Item 62: regions whose language and culture this soldier learned at the Language school. */
     val languageRegions: Set<TheaterRegion> = emptySet(),
     /** Awarded rifle qualification (Marksman, Sharpshooter or Expert); null = not yet qualified */

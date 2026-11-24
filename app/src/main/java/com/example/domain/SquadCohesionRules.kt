@@ -29,10 +29,27 @@ object SquadCohesionRules {
         "Foxtrot Squad"
     )
 
-    fun nextDefaultSquadName(existingSquads: List<TacticalSquad>): String {
+    fun nextDefaultSquadName(existingSquads: List<TacticalSquad>, specialForces: Boolean = false): String {
         val existingLower = existingSquads.map { it.name.trim().lowercase() }.toSet()
+        // Item 146: SF squads are numbered Operational Detachments (ODA 1, ODA 2, ODA 3)
+        if (specialForces) return (1..99).map { "ODA $it" }.first { it.lowercase() !in existingLower }
         return natoSquadCallsigns.firstOrNull { it.lowercase() !in existingLower }
             ?: "Squad ${existingSquads.size + 1}"
+    }
+
+    /** Item 146: is this one of the auto-assigned names (so it can follow the SF toggle)? */
+    fun isDefaultSquadName(name: String): Boolean =
+        name.trim().lowercase() in natoSquadCallsigns.map { it.lowercase() } || Regex("(?i)^oda \\d+$").matches(name.trim())
+
+    /** Item 146: regular squads first (Alpha to Foxtrot in order, then custom names), then SF squads by number. */
+    fun displayOrder(squads: List<TacticalSquad>): List<TacticalSquad> {
+        fun natoIndex(sq: TacticalSquad) = natoSquadCallsigns.indexOfFirst { it.equals(sq.name.trim(), ignoreCase = true) }.let { if (it < 0) 99 else it }
+        fun odaNumber(sq: TacticalSquad) = Regex("(?i)^oda (\\d+)$").find(sq.name.trim())?.groupValues?.get(1)?.toIntOrNull() ?: 99
+        return squads.sortedWith(
+            compareBy<TacticalSquad> { it.isSpecialForces }
+                .thenBy { if (it.isSpecialForces) odaNumber(it) else natoIndex(it) }
+                .thenBy { it.name.lowercase() }
+        )
     }
 
     fun pickDefaultLeaderId(

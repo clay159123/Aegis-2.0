@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.domain.SquadCohesionRules
 import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.theme.LocalAegisColors
@@ -65,10 +66,10 @@ sealed interface PersonnelGroupFilter {
         override val testTag: String = "dress_group_field"
     }
 
-    data object Memorial : PersonnelGroupFilter {
-        override val key: String = "memorial"
-        override val label: String = "Memorial"
-        override val testTag: String = "dress_group_memorial"
+    data object Aviators : PersonnelGroupFilter {
+        override val key: String = "aviators"
+        override val label: String = "Aviators"
+        override val testTag: String = "dress_group_aviators"
     }
 }
 
@@ -113,7 +114,8 @@ internal fun buildOrganizedRosterSections(
 
     // 2. Named Tactical Squads (leader first, then by rank descending)
     val assignedSquadMemberIds = mutableSetOf<String>()
-    squads.forEach { squad ->
+    // Item 146: Squads A to D first, then the SF squads
+    SquadCohesionRules.displayOrder(squads).forEach { squad ->
         val squadMembers = squad.memberIds
             .mapNotNull { byId[it] }
             .filter { it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService }
@@ -139,7 +141,20 @@ internal fun buildOrganizedRosterSections(
         }
     }
 
-    // 3. Unassigned Field Personnel (sorted by rank descending)
+    // 3. Aviators (item 81; item 147 puts them before Unassigned): pilots aren't squad members, so they get their own group
+    val aviators = unlockedOps
+        .filter { it.isAviator && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService }
+        .sortedWith(compareByDescending<Operator> { it.rank.seniorityIndex }.thenByDescending { it.flightSkill })
+    if (aviators.isNotEmpty()) {
+        sections += OrganizedRosterSection(
+            id = "sec_aviators",
+            title = "Aviators (${aviators.size})",
+            subtitle = "Warrant officer pilots of the Aviation Pool",
+            operators = aviators
+        )
+    }
+
+    // 4. Unassigned Field Personnel (sorted by rank descending)
     val unassignedField = unlockedOps
         .filter {
             it.status != OperatorStatus.HQ_STAFF &&
@@ -164,35 +179,7 @@ internal fun buildOrganizedRosterSections(
         )
     }
 
-    // 3b. Aviators (item 81): pilots aren't squad members, so they get their own group
-    val aviators = unlockedOps
-        .filter { it.isAviator && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService }
-        .sortedWith(compareByDescending<Operator> { it.rank.seniorityIndex }.thenByDescending { it.flightSkill })
-    if (aviators.isNotEmpty()) {
-        sections += OrganizedRosterSection(
-            id = "sec_aviators",
-            title = "Aviators (${aviators.size})",
-            subtitle = "Warrant officer pilots of the Aviation Pool",
-            operators = aviators
-        )
-    }
-
-    // 4. Memorial Roll (Fallen heroes)
-    val memorialOps = unlockedOps
-        .filter { it.status == OperatorStatus.FALLEN }
-        .sortedWith(
-            compareByDescending<Operator> { it.rank.seniorityIndex }
-                .thenByDescending { it.missionsCompleted }
-        )
-    if (memorialOps.isNotEmpty()) {
-        sections += OrganizedRosterSection(
-            id = "sec_memorial",
-            title = "Memorial Roll (${memorialOps.size})",
-            subtitle = "Fallen personnel preserved in ceremonial dress",
-            operators = memorialOps
-        )
-    }
-
+    // Item 151: the fallen moved to the Memorial on the Honors page
     return sections
 }
 
@@ -301,7 +288,7 @@ fun DressPersonnelSwitcherCard(
             if (hqOps.isNotEmpty()) {
                 add(PersonnelGroupFilter.HqStaff to hqOps)
             }
-            squads.forEach { sq ->
+            SquadCohesionRules.displayOrder(squads).forEach { sq ->
                 val members = billetOrderedAll.filter {
                     it.id in sq.memberIds &&
                         it.status != OperatorStatus.HQ_STAFF &&
@@ -311,17 +298,19 @@ fun DressPersonnelSwitcherCard(
                     add(PersonnelGroupFilter.Squad(sq.id, sq.name) to members)
                 }
             }
+            // Item 147: Aviators get their own chip ahead of Unassigned
+            val aviatorOps = billetOrderedAll.filter { it.isAviator && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService }
+            if (aviatorOps.isNotEmpty()) {
+                add(PersonnelGroupFilter.Aviators to aviatorOps)
+            }
             val unassignedOps = billetOrderedAll.filter {
                 it.status != OperatorStatus.HQ_STAFF &&
                     !it.status.isOutOfActiveService &&
+                    !it.isAviator &&
                     it.id !in assignedSquadIds
             }
             if (unassignedOps.isNotEmpty()) {
                 add(PersonnelGroupFilter.FieldUnassigned(hasSquads = squads.isNotEmpty()) to unassignedOps)
-            }
-            val memorialOps = billetOrderedAll.filter { it.status == OperatorStatus.FALLEN }
-            if (memorialOps.isNotEmpty()) {
-                add(PersonnelGroupFilter.Memorial to memorialOps)
             }
         }
     }

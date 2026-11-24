@@ -59,7 +59,8 @@ fun DressAwardsScreen(
 ) {
     val extra = LocalAegisColors.current
     val unlockedOps = remember(uiState.operators) {
-        uiState.operators.filter { it.unlocked && it.status != OperatorStatus.RETIRED && it.status != OperatorStatus.TRANSFERRED }
+        // Item 151: the fallen live on the Honors page Memorial now, not the uniform screen
+        uiState.operators.filter { it.unlocked && !it.status.isOutOfActiveService }
     }
     var selectedOpId by rememberSaveable {
         mutableStateOf(

@@ -424,7 +424,11 @@ fun AegisCommandApp() {
                                 )
                             }
                             composable(ROUTE_HONORS) {
-                                HonorsScreen(uiState = uiState)
+                                HonorsScreen(
+                                    uiState = uiState,
+                                    onAwardMedal = viewModel::awardMedal,
+                                    onDismissDeed = viewModel::dismissPendingDeed
+                                )
                             }
                         }
                     }
