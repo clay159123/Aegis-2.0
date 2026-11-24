@@ -733,22 +733,7 @@ class CommandViewModel(
             op.authorizedTier
         }
         val bonus = if (tierChanged) endorsementFocus?.statBonus else null
-        // Item 135: a new general takes the open general billet (CO first, then Deputy Commander)
-        val generalBillet = if (nextRank.tier == RankTier.FLAG_OFFICER) {
-            TacticalCalculator.openGeneralBillet(op, state.operators, state.facilities)
-        } else null
-        val seatedForStar = if (generalBillet != null && op.hqRole != generalBillet) {
-            op.copy(
-                equippedGearIds = emptyMap(),
-                status = OperatorStatus.HQ_STAFF,
-                hqRole = generalBillet,
-                transferRequested = false,
-                retirementRequested = false,
-                uniformMode = UniformMode.DRESS_UNIFORM,
-                activeWardrobeKit = WardrobeKit.ALPHAS
-            )
-        } else op
-        val promoted = seatedForStar.promotedTo(nextRank)
+        val promoted = op.promotedTo(nextRank)
         val progressedOp = applyTierProgressionOnRankUp(
             op = promoted.copy(
                 authorizedTier = if (nextRank.isWarrant) RankTier.WARRANT else nextAuthorizedTier,
@@ -771,13 +756,6 @@ class CommandViewModel(
                 )
             }
             repository.saveOperator(progressedOp)
-            if (seatedForStar !== op) {
-                val prunedSquads = SquadCohesionRules.pruneUnavailableMembers(
-                    squads = state.squads,
-                    operators = state.operators.map { if (it.id == op.id) progressedOp else it }
-                ).filter { updated -> state.squads.find { it.id == updated.id } != updated }
-                if (prunedSquads.isNotEmpty()) repository.saveSquads(prunedSquads)
-            }
             val promotionDeeds = newlyEligibleAwardDeeds(
                 before = op,
                 after = progressedOp,
@@ -791,8 +769,7 @@ class CommandViewModel(
             }
             val msg = if (tierChanged) {
                 val focusNote = endorsementFocus?.let { " • Endorsed: ${it.title}" } ?: ""
-                val seatNote = if (seatedForStar !== op) " Now seated as ${generalBillet?.shortCode}." else ""
-                "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!$seatNote"
+                "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!"
             } else {
                 "${op.callsign} promoted to ${nextRank.title} (${nextRank.code} / ${nextRank.payGrade})."
             }

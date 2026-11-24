@@ -2202,23 +2202,15 @@ object TacticalCalculator {
     /** Item 135: billets a general can hold (no rank cap below the flag grades). */
     val GENERAL_BILLETS = setOf(HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.DEPUTY_COMMANDER)
 
-    /** Item 135: the general billet a COL's star would fill, or null when none is open to them. */
-    fun openGeneralBillet(candidate: Operator, allOperators: List<Operator>, facilities: List<FacilityState>): HqStaffRole? {
-        if (candidate.status == OperatorStatus.HQ_STAFF && candidate.hqRole in GENERAL_BILLETS) return candidate.hqRole
-        // A new BG can't take command over a seated officer who outranks him
-        val outranked = allOperators.any {
-            it.id != candidate.id && it.unlocked && it.status == OperatorStatus.HQ_STAFF &&
-                it.hqRole != HqStaffRole.CO_COMMANDING_OFFICER && it.earnedRank.isCommissioned &&
-                it.earnedRank.seniorityIndex > OperatorRank.BG.seniorityIndex
-        }
-        val unlocked = unlockedHqRoles(facilities)
-        val taken = allOperators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.id != candidate.id }
-            .mapNotNull { it.hqRole }.toSet()
-        // Item 150: the Deputy only takes a new star when the CO sits above BG (the Deputy stays one rank below)
-        return GENERAL_BILLETS.sortedBy { it.slotOrder }.firstOrNull { role ->
-            role in unlocked && role !in taken && !(role == HqStaffRole.CO_COMMANDING_OFFICER && outranked) &&
-                (role != HqStaffRole.DEPUTY_COMMANDER || HqChain.deputyCap().seniorityIndex >= OperatorRank.BG.seniorityIndex)
-        }
+    /**
+     * Item 135: generals serve only on HQ staff. A star needs the soldier already seated in a billet that
+     * allows one (CO, or Deputy when the CO sits above BG); the XO tops out at COL. Returns that billet or null.
+     */
+    fun seatedGeneralBillet(candidate: Operator): HqStaffRole? {
+        if (candidate.status != OperatorStatus.HQ_STAFF) return null
+        val role = candidate.hqRole?.takeIf { it in GENERAL_BILLETS } ?: return null
+        val cap = role.rankCapFor(candidate.earnedRank)
+        return role.takeIf { cap == null || cap.seniorityIndex >= OperatorRank.BG.seniorityIndex }
     }
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {

@@ -29,8 +29,6 @@ class Session25Test {
         // The Deputy can step up
         assertTrue(TacticalCalculator.evaluateHqRoleEligibility(HqStaffRole.CO_COMMANDING_OFFICER, dcg)
             .missingRequirements.none { it.startsWith("Outranked") })
-        // A new BG can't take the open CO seat over a seated LTG
-        assertNull(TacticalCalculator.openGeneralBillet(col, listOf(col, dcg), hq))
     }
 
     @Test
@@ -50,14 +48,13 @@ class Session25Test {
     }
 
     @Test
-    fun newStarOnlyFillsDeputyWhenCoOutranksBg() {
-        val col = base.copy(id = "op_col", xp = OperatorRank.COL.xpRequired, authorizedTier = RankTier.OFFICER)
-        val co = base.copy(id = "op_co", xp = OperatorRank.BG.xpRequired, authorizedTier = RankTier.FLAG_OFFICER, flagGrade = 1,
-            status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.CO_COMMANDING_OFFICER)
+    fun deputyGetsAStarOnlyUnderASeniorCo() {
+        val dcgCol = base.copy(id = "op_dcg", xp = OperatorRank.COL.xpRequired, authorizedTier = RankTier.OFFICER,
+            status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.DEPUTY_COMMANDER)
         HqChain.commanderRank = OperatorRank.BG
-        assertNull(TacticalCalculator.openGeneralBillet(col, listOf(col, co), hq))
+        assertNull(TacticalCalculator.seatedGeneralBillet(dcgCol))
         HqChain.commanderRank = OperatorRank.MG
-        assertEquals(HqStaffRole.DEPUTY_COMMANDER, TacticalCalculator.openGeneralBillet(col, listOf(col, co), hq))
+        assertEquals(HqStaffRole.DEPUTY_COMMANDER, TacticalCalculator.seatedGeneralBillet(dcgCol))
     }
 
     @Test

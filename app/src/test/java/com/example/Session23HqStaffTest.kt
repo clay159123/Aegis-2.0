@@ -95,18 +95,17 @@ class Session23HqStaffTest {
 
     @Test
     fun generalsServeOnHqOnly() {
-        // Item 135: a COL needs an open general billet; a field general can't take field missions
+        // Item 135: the general board needs the COL seated as CO or Deputy; a field general can't take field missions
         val col = base.copy(id = "op_col", xp = OperatorRank.COL.xpRequired, authorizedTier = RankTier.OFFICER, missionsCompleted = 30)
-        val co = seated(HqStaffRole.CO_COMMANDING_OFFICER, OperatorRank.BG, "op_co")
-        val dcg = seated(HqStaffRole.DEPUTY_COMMANDER, OperatorRank.BG, "op_dcg")
-        assertEquals(HqStaffRole.CO_COMMANDING_OFFICER, TacticalCalculator.openGeneralBillet(col, listOf(col), hq(10)))
-        assertEquals(HqStaffRole.DEPUTY_COMMANDER, TacticalCalculator.openGeneralBillet(col, listOf(col, co), hq(10)))
-        assertNull(TacticalCalculator.openGeneralBillet(col, listOf(col, co, dcg), hq(10)))
-        val full = TacticalCalculator.evaluatePromotionBoard(col, listOf(col, co, dcg), emptyList(), emptyList(), hq(10))
-        assertTrue(full.meritChecks.any { it.id == "billet_flag" && !it.satisfied })
-        // An XO capped at COL can still sit the general board when a general billet is open
+        val board = TacticalCalculator.evaluatePromotionBoard(col, listOf(col), emptyList(), emptyList(), hq(10))
+        assertTrue(board.meritChecks.any { it.id == "billet_flag" && !it.satisfied })
+        assertNull(TacticalCalculator.seatedGeneralBillet(col))
+        val coCol = col.copy(status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.CO_COMMANDING_OFFICER)
+        assertEquals(HqStaffRole.CO_COMMANDING_OFFICER, TacticalCalculator.seatedGeneralBillet(coCol))
+        // The XO tops out at COL, so no board from there
         val xo = seated(HqStaffRole.XO_CHIEF_OF_STAFF, OperatorRank.COL, "op_xo")
-        assertEquals(OperatorRank.BG, TacticalCalculator.evaluatePromotionBoard(xo, listOf(xo, co), emptyList(), emptyList(), hq(10)).nextRank)
+        assertNull(TacticalCalculator.evaluatePromotionBoard(xo, listOf(xo), emptyList(), emptyList(), hq(10)).nextRank)
+        assertNull(TacticalCalculator.seatedGeneralBillet(xo))
         val fieldGeneral = base.copy(id = "op_gen", xp = OperatorRank.BG.xpRequired, authorizedTier = RankTier.FLAG_OFFICER, flagGrade = 1)
         val combat = GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT }
         assertTrue(TacticalCalculator.canOperatorDeployOnMission(fieldGeneral, combat, emptySet(), facilities = hq(10))
