@@ -79,6 +79,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_air_assault",
                 "insig_parachutist",
                 "insig_eod_badge",
@@ -88,6 +89,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_air_assault",
                 "insig_parachutist",
                 "insig_pathfinder",
@@ -108,6 +110,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_parachutist",
                 "insig_pathfinder",
                 "insig_eod_badge"
@@ -117,6 +120,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_parachutist",
                 "insig_pathfinder",
                 "insig_intel_crest",
@@ -136,6 +140,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_air_assault",
                 "insig_parachutist",
                 "insig_pathfinder"
@@ -147,6 +152,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_parachutist",
                 "insig_cyber_crest",
                 "insig_intel_crest"
@@ -163,6 +169,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_pathfinder",
                 "insig_parachutist",
                 "insig_air_assault",
@@ -174,6 +181,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_parachutist",
                 "insig_air_assault",
                 "insig_cyber_crest",
@@ -193,6 +201,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_air_assault",
                 "insig_parachutist"
             ),
@@ -205,6 +214,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_parachutist"
             ),
             ChestBadgeSlot.RIGHT_POCKET to listOf(
@@ -219,6 +229,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_air_assault",
                 "insig_eod_badge",
                 "insig_pathfinder",
@@ -231,6 +242,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_air_assault",
                 "insig_parachutist",
                 "insig_eod_badge"
@@ -250,6 +262,7 @@ object UniformRegaliaRules {
                 "insig_mff_wings",
                 "insig_combat_diver",
                 "insig_master_para",
+                "insig_senior_para",
                 "insig_air_assault",
                 "insig_parachutist"
             ),
@@ -399,7 +412,15 @@ object UniformRegaliaRules {
         overrides: UniformTailorOverrides
     ): List<MedalDefinition?> {
         // Item 142: environment badges have their own spot above the name plate
-        val ownedBadgeMedals = ownedBadgeMedalsAll.filter { it.id !in TacticalCalculator.ENVIRONMENT_BADGE_IDS }
+        // Item 166: only the highest parachutist (and aviator) wings are worn
+        val ownedIdsAll = ownedBadgeMedalsAll.map { it.id }.toSet()
+        val outranked = buildSet {
+            if (TacticalCalculator.MASTER_PARA_ID in ownedIdsAll) { add(TacticalCalculator.SENIOR_PARA_ID); add("insig_parachutist") }
+            if (TacticalCalculator.SENIOR_PARA_ID in ownedIdsAll) add("insig_parachutist")
+            if (TacticalCalculator.MASTER_AVIATOR_WINGS_ID in ownedIdsAll) { add(TacticalCalculator.SENIOR_AVIATOR_WINGS_ID); add(TacticalCalculator.AVIATOR_WINGS_ID) }
+            if (TacticalCalculator.SENIOR_AVIATOR_WINGS_ID in ownedIdsAll) add(TacticalCalculator.AVIATOR_WINGS_ID)
+        }
+        val ownedBadgeMedals = ownedBadgeMedalsAll.filter { it.id !in TacticalCalculator.ENVIRONMENT_BADGE_IDS && it.id !in outranked }
         val slots = listOf(
             ChestBadgeSlot.ABOVE_RACK to overrides.pinSlot1,
             ChestBadgeSlot.LEFT_POCKET to overrides.pinSlot2,

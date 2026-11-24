@@ -203,13 +203,16 @@ fun HonorsScreen(
             Spacer(modifier = Modifier.height(4.dp))
             TacticalPanelCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    RankTier.entries.forEach { tier ->
+                    // Item 174: enlisted, then the warrant track, then officers and generals
+                    listOf(RankTier.SOLDIER, RankTier.NCO, RankTier.SNCO, RankTier.WARRANT, RankTier.OFFICER, RankTier.FLAG_OFFICER).forEach { tier ->
                         val ranksInTier = OperatorRank.entries.filter { it.tier == tier }
                         val uniformPerks = when (tier) {
-                            RankTier.SOLDIER -> "AGSU Service Green & Dress Blues, Berets, Collar Discs, Sleeve Chevrons"
+                            RankTier.SOLDIER -> "ASU Service Blues (green AGSU on SF squads), Berets, Collar Discs, Sleeve Chevrons"
                             RankTier.NCO -> "NCO Parade Dress Blues, Service Visor Cap, Sleeve Rockers & Gold Cuff Trim"
-                            RankTier.SNCO -> "Senior Enlisted Parade Blues, Dual-Braid Cuffs, Senior Visor Cap & SLC Promotion Board"
-                            RankTier.OFFICER, RankTier.WARRANT -> "Officer Mess Blues, Ivory Ceremonial, Peaked Cap, Gold Epaulets & Sam Browne"
+                            // Item 175: SLC and a board are how a soldier gets here, not an SNCO feature
+                            RankTier.SNCO -> "Senior Enlisted Parade Blues, Dual-Braid Cuffs & Senior Visor Cap • reached through SLC and a promotion board"
+                            RankTier.WARRANT -> "Officer Service Blues & Mess, Peaked Cap • appointed through WOCS; each grade is its own board"
+                            RankTier.OFFICER -> "Officer Mess Blues, Ivory Ceremonial, Peaked Cap, Gold Epaulets & Sam Browne"
                             RankTier.FLAG_OFFICER -> "General Staff Formal, 1–4 Star Bullion Epaulets, Dual Oak-Leaf Cuffs, Crimson Sash"
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {

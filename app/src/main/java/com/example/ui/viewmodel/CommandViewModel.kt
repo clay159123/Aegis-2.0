@@ -8,6 +8,7 @@ import com.example.data.local.AegisRepository
 import com.example.data.local.CommanderStateEntity
 import com.example.domain.PromotionEndorsementFocus
 import com.example.domain.SquadCohesionRules
+import com.example.domain.MosEffects
 import com.example.domain.GameTiming
 import com.example.domain.MissionNameGenerator
 import com.example.domain.MissionNames
@@ -1223,7 +1224,9 @@ class CommandViewModel(
         } else 0
         val hoursMult = if (bookedHours > 0) TacticalCalculator.flightHoursDurationMultiplier(bookedHours) else 1.0
         val durationMs = (mission.durationSeconds * 1000.0 * TacticalCalculator.durationMultiplier(state.facilities, state.hqStaffSummary) *
-            TacticalCalculator.insertionDurationMultiplier(insertion, pilot) * hoursMult).toLong()
+            TacticalCalculator.insertionDurationMultiplier(insertion, pilot) * hoursMult *
+            // Item 165: Signals on the team shorten the mission
+            MosEffects.durationFactor(mission, chosenOps)).toLong()
         val effPct = TacticalCalculator.missionEfficiencyPct(
             mission = mission,
             selectedOperators = chosenOps,
@@ -1590,12 +1593,14 @@ class CommandViewModel(
                     }
                     roll < survivalPct + 12 -> OperatorOutcomeType.WOUNDED
                     // Aid Station can pull a would-be fatality back as wounded
-                    Random.nextInt(100) < TacticalCalculator.aidSaveChancePct(state.facilities) -> OperatorOutcomeType.WOUNDED
+                    // Item 165: Engineers and Medics on the team pull more would-be fatalities back
+                    Random.nextInt(100) < TacticalCalculator.aidSaveChancePct(state.facilities) + MosEffects.casualtySavePct(groundOps) -> OperatorOutcomeType.WOUNDED
                     else -> OperatorOutcomeType.FALLEN
                 }
                 // Item 63: anyone who lives through a field mission can be captured
                 val outcome = if (rolledOutcome != OperatorOutcomeType.FALLEN &&
-                    Random.nextDouble() * 100.0 < PowRules.captureChancePct(mission, op, missionSucceeded, blownCover = deployment.coverBlown)
+                    Random.nextDouble() * 100.0 < PowRules.captureChancePct(mission, op, missionSucceeded, blownCover = deployment.coverBlown) *
+                        MosEffects.captureFactor(groundOps)
                 ) OperatorOutcomeType.CAPTURED else rolledOutcome
 
                 val wasHqStaff = op.status == OperatorStatus.HQ_STAFF
@@ -1612,7 +1617,8 @@ class CommandViewModel(
                 val recoveryAt = if (outcome == OperatorOutcomeType.WOUNDED) {
                     now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities) *
                         // Item 118: the SF Compound's own medics speed SF soldiers' recovery
-                        (if (op.id in CompoundRules.sfSquadMemberIds(state.squads)) CompoundRules.sfRecoveryMultiplier() else 1.0)).roundToLong())
+                        (if (op.id in CompoundRules.sfSquadMemberIds(state.squads)) CompoundRules.sfRecoveryMultiplier() else 1.0) *
+                        MosEffects.recoveryFactor(groundOps)).roundToLong())
                 } else {
                     0L
                 }
@@ -1800,6 +1806,25 @@ class CommandViewModel(
                             createdAtMillis = now
                         )
                     )
+                }
+                // Item 166: combat jumps earn Senior, then Master Parachutist wings
+                if (jumped) {
+                    val ownedOrQueued = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet() +
+                        state.pendingDeeds.filter { it.operatorId == op.id }.map { it.recommendedMedalId } +
+                        newDeeds.filter { it.operatorId == op.id }.map { it.recommendedMedalId }
+                    TacticalCalculator.parachutistMilestone(updatedOp, ownedOrQueued)?.let { wingsId ->
+                        val wings = GameCatalog.medals.first { it.id == wingsId }
+                        newDeeds.add(
+                            PendingDeed(
+                                id = "deed_${UUID.randomUUID().toString().take(8)}",
+                                operatorId = op.id,
+                                missionTitle = mission.title,
+                                deedSummary = "Combat jump #${updatedOp.combatJumps} earned the ${wings.name}.",
+                                recommendedMedalId = wingsId,
+                                createdAtMillis = now
+                            )
+                        )
+                    }
                 }
 
                 outcomes.add(
@@ -2004,7 +2029,9 @@ class CommandViewModel(
                 mission = mission,
                 missionSucceeded = missionSucceeded,
                 gainMultiplier = TacticalCalculator.dfacCohesionMultiplier(state.facilities) *
-                    (1.0 + state.hqStaffSummary.cohesionGainBonusPct / 100.0)
+                    (1.0 + state.hqStaffSummary.cohesionGainBonusPct / 100.0) *
+                    // Item 165: a Command soldier on the team speeds cohesion
+                    MosEffects.cohesionFactor(targetOps)
             )
         }
         val postMissionDeployed = targetOps.map { updatedOpsById[it.id] ?: it }

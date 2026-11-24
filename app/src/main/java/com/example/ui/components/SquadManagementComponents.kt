@@ -162,11 +162,10 @@ fun FieldSquadsSection(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Cohesion Bar & Tier
-                    Row(
+                    // Cohesion Bar & Tier (item 173: stacked so the two lines never run together)
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Text(
                             text = "COHESION ${squad.cohesionScore}% • ${tier.label.uppercase()}",
@@ -201,8 +200,16 @@ fun FieldSquadsSection(
                         trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     )
 
-                    // Session 33: rank-mix bonus status for this squad
+                    // Session 33: rank-mix bonus status for this squad; item 168: missing MOS
                     if (members.isNotEmpty()) {
+                        val missingMos = com.example.domain.MosEffects.missingMos(members)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (missingMos.isEmpty()) "Every MOS covered" else "Missing MOS: " + missingMos.joinToString(" • ") { it.roleTag },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (missingMos.isEmpty()) extra.brassBright else extra.signalsCyan,
+                            modifier = Modifier.testTag("squad_missing_mos_${squad.id}")
+                        )
                         val compKind = com.example.domain.SquadCompositionRules.kindFor(members)
                         val compGaps = com.example.domain.SquadCompositionRules.missing(members)
                         Spacer(modifier = Modifier.height(4.dp))

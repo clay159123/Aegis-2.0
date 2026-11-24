@@ -1042,6 +1042,16 @@ internal fun HqStagingSheet(
                 modifier = Modifier.testTag("staging_composition_line")
             )
         }
+        // Item 165: what the team's MOS mix brings
+        val mosLines = com.example.domain.MosEffects.summary(mission, selectedOps)
+        if (mosLines.isNotEmpty()) {
+            Text(
+                text = "MOS: " + mosLines.joinToString(" • "),
+                style = MaterialTheme.typography.labelSmall,
+                color = extra.signalsCyan,
+                modifier = Modifier.testTag("staging_mos_effects")
+            )
+        }
 
         if (readyOperators.isEmpty()) {
             Text(

@@ -516,7 +516,7 @@ fun AwardVisualThumbnail(
                             )
                         }
                     }
-                    InsigniaShape.WINGS, InsigniaShape.STAR_WINGS -> {
+                    InsigniaShape.WINGS, InsigniaShape.STAR_WINGS, InsigniaShape.SENIOR_PARA_WINGS -> {
                         // Sculpted layered feathers
                         drawLine(col, Offset(w * 0.08f, cy - h * 0.06f), Offset(w * 0.92f, cy - h * 0.06f), strokeWidth = (h * 0.11f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
                         drawLine(col, Offset(w * 0.14f, cy + h * 0.10f), Offset(w * 0.86f, cy + h * 0.10f), strokeWidth = (h * 0.08f).coerceAtLeast(2.2f), cap = StrokeCap.Round)
@@ -535,6 +535,8 @@ fun AwardVisualThumbnail(
                         if (medal.insigniaShape == InsigniaShape.STAR_WINGS) {
                             drawLaurelWreathArcs(Offset(cx, h * 0.22f), h * 0.18f, Color(0xFFF2D272), (h * 0.055f).coerceAtLeast(1.6f))
                             drawStar(Offset(cx, h * 0.22f), h * 0.15f, h * 0.065f, Color(0xFFF2D272))
+                        } else if (medal.insigniaShape == InsigniaShape.SENIOR_PARA_WINGS) {
+                            drawStar(Offset(cx, h * 0.22f), h * 0.14f, h * 0.06f, col)
                         }
                     }
                     InsigniaShape.MOUNTAIN_BADGE, InsigniaShape.JUNGLE_BADGE, InsigniaShape.ARCTIC_BADGE, InsigniaShape.SNIPER_BADGE ->

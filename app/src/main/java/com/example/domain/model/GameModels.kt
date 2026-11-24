@@ -1192,6 +1192,8 @@ enum class InsigniaShape {
     AVIATOR_WINGS,
     SENIOR_AVIATOR_WINGS,
     MASTER_AVIATOR_WINGS,
+    /** Item 166: parachutist wings with a star (no wreath); Master adds the wreath (STAR_WINGS). */
+    SENIOR_PARA_WINGS,
     DIVER_BADGE,
     MFF_WINGS,
     /** Items 142 and 143 */

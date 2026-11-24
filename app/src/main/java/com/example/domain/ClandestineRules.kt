@@ -76,7 +76,7 @@ object ClandestineRules {
         val languageCut = team.count { knowsLanguage(it, mission.theater) } * LANGUAGE_CUT_PCT +
             team.count { it.nativeRegion == mission.theater } * NATIVE_EXTRA_CUT_PCT
         val perk = if (FREE_STRAIT_ID in clearedCampaignIds) FREE_STRAIT_CUT_PCT else 0
-        return (BASE_BLOWN_COVER_PCT - statCut - languageCut - perk - CompoundRules.blownCoverCutPct()).coerceIn(MIN_BLOWN_COVER_PCT, MAX_BLOWN_COVER_PCT)
+        return (BASE_BLOWN_COVER_PCT - statCut - languageCut - perk - CompoundRules.blownCoverCutPct() - MosEffects.blownCoverCutPct(team)).coerceIn(MIN_BLOWN_COVER_PCT, MAX_BLOWN_COVER_PCT)
     }
 
     /** When cover will blow (25% to 75% of the way in), or 0 if it holds. Rolled at launch. */

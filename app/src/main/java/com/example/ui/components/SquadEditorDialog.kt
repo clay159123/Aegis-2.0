@@ -306,6 +306,24 @@ private fun RosterTab(
 
     SquadTypeSelector(specialForces = specialForces, sfLockedBy = sfLockedBy, onChange = onSpecialForcesChange)
 
+    // Item 168: which MOS the squad still lacks, and its rank-mix bonus status
+    if (members.isNotEmpty()) {
+        val missingMos = com.example.domain.MosEffects.missingMos(members)
+        Text(
+            text = if (missingMos.isEmpty()) "Every MOS covered" else "Missing MOS: " + missingMos.joinToString(" • ") { it.roleTag },
+            style = MaterialTheme.typography.labelMedium,
+            color = if (missingMos.isEmpty()) extra.brassBright else extra.signalsCyan,
+            modifier = Modifier.testTag("squad_editor_missing_mos")
+        )
+        val compGaps = com.example.domain.SquadCompositionRules.missing(members)
+        Text(
+            text = com.example.domain.SquadCompositionRules.kindFor(members).label +
+                if (compGaps.isEmpty()) ": +${com.example.domain.SquadCompositionRules.BONUS_PCT}% odds" else ": " + compGaps.joinToString(" • "),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (compGaps.isEmpty()) extra.brassBright else extra.textMuted
+        )
+    }
+
     // Cohesion lost to turnover, shown before the player confirms
     if (editingSquad != null && (memberIds != editingSquad.memberIds || leaderId != editingSquad.leaderId)) {
         val afterXp = SquadCohesionRules.cohesionAfterRosterChange(editingSquad, memberIds, leaderId)

@@ -80,7 +80,8 @@ class ExperienceTest {
     fun combatJumpStarsTopOutAtFive() {
         val op = recruit()
         assertEquals(0, TacticalCalculator.combatJumpStars(op))
-        assertEquals(3, TacticalCalculator.combatJumpStars(op.copy(combatJumps = 3)))
-        assertEquals(5, TacticalCalculator.combatJumpStars(op.copy(combatJumps = 9)))
+        // Item 166: one star per 3 combat jumps
+        assertEquals(1, TacticalCalculator.combatJumpStars(op.copy(combatJumps = 3)))
+        assertEquals(5, TacticalCalculator.combatJumpStars(op.copy(combatJumps = 15)))
     }
 }

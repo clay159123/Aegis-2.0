@@ -1843,7 +1843,7 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 drawArc(gold, startAngle = -90f, sweepAngle = 180f, useCenter = false, topLeft = Offset(cx - badgeH * 0.08f, cy - badgeH * 0.02f), size = Size(badgeH * 0.16f, badgeH * 0.16f), style = Stroke(1.0f))
             }
         }
-        InsigniaShape.WINGS, InsigniaShape.STAR_WINGS -> {
+        InsigniaShape.WINGS, InsigniaShape.STAR_WINGS, InsigniaShape.SENIOR_PARA_WINGS -> {
             // Tapered 3-feather swept wings + ribbed parachute canopy + shroud lines
             drawLine(col, Offset(cx - badgeW * 0.48f, cy - badgeH * 0.04f), Offset(cx + badgeW * 0.48f, cy - badgeH * 0.04f), strokeWidth = 2.2f, cap = StrokeCap.Round)
             drawLine(col, Offset(cx - badgeW * 0.40f, cy + badgeH * 0.12f), Offset(cx + badgeW * 0.40f, cy + badgeH * 0.12f), strokeWidth = 1.7f, cap = StrokeCap.Round)
@@ -1861,6 +1861,8 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
             if (shape == InsigniaShape.STAR_WINGS) {
                 drawLaurelWreathArcs(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.22f, gold, 1.3f)
                 drawStar(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.18f, badgeH * 0.08f, gold)
+            } else if (shape == InsigniaShape.SENIOR_PARA_WINGS) {
+                drawStar(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.16f, badgeH * 0.07f, col)
             }
             // Combat jump device: small bronze stars along the top of the wings, centered
             val jumpStars = combatJumps.coerceIn(0, 5)
