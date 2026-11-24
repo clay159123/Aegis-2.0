@@ -64,9 +64,11 @@ class Session16Test {
 
     @Test
     fun staffCrestAlwaysBelowTheNameTag() {
+        // Item 167: HQ staff always wear the staff crest there, whatever the MOS
         val owned = GameCatalog.medals.filter { it.id in setOf("insig_staff_crest", "insig_logistics_crest", "insig_intel_crest") }
         for (mos in OperatorSpecialty.entries) {
-            val slots = UniformRegaliaRules.resolveChestBadgeSlots(base.copy(specialty = mos), owned, UniformTailorOverrides())
+            val staffer = base.copy(specialty = mos, status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.S1_PERSONNEL_HONORS)
+            val slots = UniformRegaliaRules.resolveChestBadgeSlots(staffer, owned, UniformTailorOverrides())
             assertEquals(mos.name, "insig_staff_crest", slots[2]?.id)
         }
     }

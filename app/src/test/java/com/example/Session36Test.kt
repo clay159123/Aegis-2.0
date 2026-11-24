@@ -84,3 +84,38 @@ class Session36Test {
         assertFalse(TacticalCalculator.canOperatorDeployOnMission(lt, cgsc, emptySet()).eligible)
     }
 }
+
+class StaffCrestPlacementTest {
+    @Test
+    fun onlyHqStaffPreferTheStaffCrest() {
+        val base = GameCatalog.createPostBasicRecruit("op_crest", OperatorSpecialty.BREACHER, emptySet(), 0)
+            .copy(xp = OperatorRank.CPT.xpRequired, authorizedTier = RankTier.OFFICER)
+        val badges = GameCatalog.medals.filter { it.id in setOf("insig_staff_crest", "insig_logistics_crest", "insig_intel_crest") }
+        fun slots(op: Operator) = UniformRegaliaRules.resolveChestBadgeSlots(op, badges, UniformTailorOverrides()).map { it?.id }
+        assertEquals("insig_staff_crest", slots(base.copy(status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.S1_PERSONNEL_HONORS))[2])
+        // In the field the right pocket goes to the soldier's own crest first
+        val field = slots(base)
+        assertTrue(field[2] != "insig_staff_crest")
+        // A Tailor pick still puts the crest there
+        val picked = UniformRegaliaRules.resolveChestBadgeSlots(base, badges, UniformTailorOverrides(pinSlot3 = "insig_staff_crest"))
+        assertEquals("insig_staff_crest", picked[2]?.id)
+    }
+}
+
+class DressDisplayDefaultsTest {
+    @Test
+    fun alphasWearRibbonsAndMessWearsMiniatures() {
+        for (op in GameCatalog.initialOperators) {
+            assertEquals(op.id, DressDisplayMode.RIBBONS, TacticalCalculator.resolveKitAppearance(op, WardrobeKit.ALPHAS).dressDisplayMode)
+            assertEquals(op.id, DressDisplayMode.FULL_MEDALS, TacticalCalculator.resolveKitAppearance(op, WardrobeKit.MESS).dressDisplayMode)
+        }
+        // HQ staff wear full medals on Alphas by default
+        val staffer = GameCatalog.initialOperators.first().copy(status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.S1_PERSONNEL_HONORS)
+        assertEquals(DressDisplayMode.FULL_MEDALS, TacticalCalculator.resolveKitAppearance(staffer, WardrobeKit.ALPHAS).dressDisplayMode)
+        assertEquals(DressDisplayMode.FULL_MEDALS, TacticalCalculator.resolveKitAppearance(staffer, WardrobeKit.MESS).dressDisplayMode)
+        // Full medals on Alphas stay a Tailor choice for everyone else
+        val op = GameCatalog.initialOperators.first()
+        val medals = op.copy(wardrobe = op.wardrobe.withKit(WardrobeKit.ALPHAS, op.wardrobe.alphas.copy(dressDisplayMode = DressDisplayMode.FULL_MEDALS)))
+        assertEquals(DressDisplayMode.FULL_MEDALS, TacticalCalculator.resolveKitAppearance(medals, WardrobeKit.ALPHAS).dressDisplayMode)
+    }
+}
