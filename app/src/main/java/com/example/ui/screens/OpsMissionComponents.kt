@@ -42,6 +42,7 @@ import com.example.domain.TacticalCalculator
 import com.example.domain.model.*
 import com.example.ui.components.RankInsigniaBadge
 import com.example.ui.components.SfMarker
+import com.example.ui.components.SfTierBadge
 import com.example.ui.components.TacticalPanelCard
 import com.example.ui.components.formatCountdown
 import com.example.ui.theme.LocalAegisColors
@@ -1078,7 +1079,7 @@ internal fun HqStagingSheet(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 RankInsigniaBadge(rank = op.rank)
-                                if (TacticalCalculator.isSfQualified(op)) SfMarker(tier = TacticalCalculator.sfTier(op))
+                                if (TacticalCalculator.isSfQualified(op)) SfTierBadge(op)
                                 Column {
                                     Text(
                                         text = buildString {

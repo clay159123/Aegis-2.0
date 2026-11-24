@@ -362,6 +362,7 @@ private fun RosterTab(
                         text = "${member.rank.code} ${member.callsign}",
                         sfQualified = TacticalCalculator.isSfQualified(member),
                             sfTier = TacticalCalculator.sfTier(member),
+                            operator = member,
                         style = MaterialTheme.typography.titleSmall,
                         color = if (isLeader) extra.brassBright else MaterialTheme.colorScheme.onSurface
                     )
@@ -447,6 +448,7 @@ private fun RosterTab(
                             text = "${candidate.rank.code} ${candidate.callsign} • ${candidate.mosTag}",
                             sfQualified = TacticalCalculator.isSfQualified(candidate),
                             sfTier = TacticalCalculator.sfTier(candidate),
+                            operator = candidate,
                             style = MaterialTheme.typography.labelLarge,
                             color = if (!full) MaterialTheme.colorScheme.onSurface else extra.textMuted
                         )

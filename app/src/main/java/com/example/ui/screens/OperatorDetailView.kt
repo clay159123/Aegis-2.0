@@ -594,6 +594,16 @@ fun OperatorDetailView(
                             style = MaterialTheme.typography.labelMedium,
                             color = extra.brassBright
                         )
+                        // Session 31: progress to the next SF tier
+                        if (TacticalCalculator.isSfQualified(operator) && !operator.isAviator) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Special Forces • SF${TacticalCalculator.sfTier(operator)} • ${operator.sfMissionsSucceeded} SF ops (${operator.sfHighMissionsSucceeded} High+)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = extra.signalsCyan
+                            )
+                            com.example.ui.components.SfProgressList(operator, modifier = Modifier.testTag("record_sf_progress"))
+                        }
                         // Item 133: languages, native first
                         val languages = listOfNotNull(operator.nativeRegion?.let { "${it.label} (native speaker)" }) +
                             operator.languageRegions.filter { it != operator.nativeRegion }.map { it.label }

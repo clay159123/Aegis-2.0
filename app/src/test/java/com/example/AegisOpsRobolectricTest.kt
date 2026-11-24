@@ -796,6 +796,9 @@ class AegisOpsRobolectricTest {
         }
 
         composeTestRule.waitForIdle()
+        // Session 31: Ready only starts on; show every op for this test
+        composeTestRule.onNodeWithTag("ops_filter_ready").performScrollTo().performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("ops_tab_schools").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("mission_uniform_req_msn_basic_qual").performScrollTo().assertIsDisplayed()
@@ -958,6 +961,8 @@ class AegisOpsRobolectricTest {
             }
         }
 
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("ops_filter_ready").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("refresh_rotating_ops").performScrollTo().assertIsEnabled().performClick()
         assertEquals(1, refreshCalls)
