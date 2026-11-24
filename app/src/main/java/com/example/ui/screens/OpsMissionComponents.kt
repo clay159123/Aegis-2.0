@@ -533,9 +533,14 @@ internal fun HqStagingSheet(
             facilities = uiState.facilities
         )
     }
-    val readyOperators = evaluatedOps.filter { it.second.eligible }.map { it.first }
+    // Item 134: once a Language class has a region, only soldiers who can still learn it are listed
+    val languageFilter: (Operator) -> Boolean = { op ->
+        mission.id != com.example.domain.ClandestineRules.LANGUAGE_SCHOOL_ID || languageRegion == null ||
+            !com.example.domain.ClandestineRules.knowsLanguage(op, languageRegion)
+    }
+    val readyOperators = evaluatedOps.filter { it.second.eligible && languageFilter(it.first) }.map { it.first }
     val readyOpIds = readyOperators.map { it.id }.toSet()
-    val ineligibleOperators = evaluatedOps.filterNot { it.second.eligible }
+    val ineligibleOperators = evaluatedOps.filterNot { it.second.eligible || !languageFilter(it.first) }
 
     val selectedOps = readyOperators.filter { it.id in selectedOperatorIds }
     val uniformReq = TacticalCalculator.missionUniformRequirement(mission)

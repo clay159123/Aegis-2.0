@@ -2245,7 +2245,7 @@ class CommandViewModel(
                     lastSimulatedAtMillis = now
                 )
             }
-            repository.saveOperator(op.copy(unlocked = true))
+            repository.saveOperator(op.copy(unlocked = true, nativeRegion = op.nativeRegion ?: ClandestineRules.rollNativeRegion()))
             // Item 43: cadre transfers arrive holding everything their record earns
             val held = state.citations.filter { it.operatorId == op.id }.map { it.medalId }.toSet()
             TacticalCalculator.earnedStartingAwards(op.copy(unlocked = true), held).forEachIndexed { i, medalId ->
@@ -2287,8 +2287,8 @@ class CommandViewModel(
             usedNames = state.operators.map { it.name }.toSet(),
             seedIndex = state.operators.size + Random.nextInt(100)
         )
-        // Officers and warrant officers arrive in their tier's uniforms
-        val recruit = applyTierProgressionOnRankUp(raw, OperatorRank.PV2, raw.rank)
+        // Officers and warrant officers arrive in their tier's uniforms; item 133: some speak a region's language already
+        val recruit = applyTierProgressionOnRankUp(raw, OperatorRank.PV2, raw.rank).copy(nativeRegion = ClandestineRules.rollNativeRegion())
         // Item 128: the package, then everything else the recruit's record already earns (badges, tabs, cords),
         // so nothing waits in the awards queue to be handed out by hand
         val awardIds = TacticalCalculator.recruitArrivalAwards(recruit, source)

@@ -79,7 +79,8 @@ class SpecialForcesPlatoonTest {
 
     @Test
     fun sfTeamsAreFourToSixQualifiedAndRewardDifferentMos() {
-        val da = mission("msn_sf_da_hostage")
+        // Item 137: a non-coastal SF mission, where every soldier must be SF-qualified
+        val da = GameCatalog.missions.first { it.requiresSfTeam && !it.isClandestine && !TacticalCalculator.takesBoatRiders(it) && it.maxOperators >= 6 }
         val team = listOf(sf("a"), sf("m", OperatorSpecialty.MEDIC), sf("e", OperatorSpecialty.BREACHER), sf("x", OperatorSpecialty.SIGNALS))
         val sfSquad = listOf(TacticalSquad("sq_sf", "ODA", listOf("a", "m"), "a", isSpecialForces = true))
         assertNull(TacticalCalculator.teamBlocker(da, team, sfSquad))

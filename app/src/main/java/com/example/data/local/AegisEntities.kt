@@ -108,6 +108,7 @@ data class OperatorEntity(
     val powTalksCooldownUntilMillis: Long = 0L,
     val powRescueClosed: Boolean = false,
     val fallenNote: String = "",
+    val nativeRegionName: String = "",
     val languageRegionsCsv: String = "",
     val unlocked: Boolean,
     val recruitCreditCost: Double,

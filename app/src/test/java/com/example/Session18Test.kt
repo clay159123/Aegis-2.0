@@ -36,8 +36,10 @@ class Session18Test {
     @Test
     fun sfMissionsTakeOnlySfQualifiedSoldiers() {
         val plain = soldier("p", sf = false)
-        assertFalse(TacticalCalculator.canOperatorDeployOnMission(plain, da, emptySet()).eligible)
-        assertTrue(TacticalCalculator.canOperatorDeployOnMission(soldier("q"), da, emptySet()).eligible)
+        // Item 137: coastal SF missions take boat riders, so check one that doesn't
+        val sfOnly = GameCatalog.missions.first { it.requiresSfTeam && !it.isClandestine && !TacticalCalculator.takesBoatRiders(it) && it.campaignId == null }
+        assertFalse(TacticalCalculator.canOperatorDeployOnMission(plain, sfOnly, emptySet()).eligible)
+        assertTrue(TacticalCalculator.canOperatorDeployOnMission(soldier("q"), sfOnly, emptySet()).eligible)
     }
 
     @Test
