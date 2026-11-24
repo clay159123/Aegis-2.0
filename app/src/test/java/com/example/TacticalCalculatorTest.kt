@@ -2988,16 +2988,19 @@ class TacticalCalculatorTest {
         // Barracks drives the roster
         assertEquals(8, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 1)))
         assertEquals(20, TacticalCalculator.maxFieldRosterSlots(with(FacilityType.BARRACKS, 5)))
-        // Range: +1%/lv, +2%/lv for Ranger, still capped
+        // Item 159: the Range helps only its shooting schools (+2%/lv); Ranger moved to the Airborne & Ranger center
         val recruit = GameCatalog.createPostBasicRecruit("op_r", OperatorSpecialty.ASSAULT, emptySet(), 0)
         val signals = GameCatalog.missions.first { it.id == "msn_signals_school" }
         val ranger = GameCatalog.missions.first { it.id == "msn_ranger_school" }
-        assertEquals(3, TacticalCalculator.rangeSchoolBonusPct(signals, with(FacilityType.TRAINING_RANGE, 3)))
-        assertEquals(6, TacticalCalculator.rangeSchoolBonusPct(ranger, with(FacilityType.TRAINING_RANGE, 3)))
-        val noRange = TacticalCalculator.schoolPassOddsPct(signals, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 0))
-        val range3 = TacticalCalculator.schoolPassOddsPct(signals, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 3))
+        val eib = GameCatalog.missions.first { it.id == "msn_eib_testing" }
+        assertEquals(0, TacticalCalculator.rangeSchoolBonusPct(signals, with(FacilityType.TRAINING_RANGE, 3)))
+        assertEquals(0, TacticalCalculator.rangeSchoolBonusPct(ranger, with(FacilityType.TRAINING_RANGE, 3)))
+        assertEquals(6, TacticalCalculator.rangeSchoolBonusPct(eib, with(FacilityType.TRAINING_RANGE, 3)))
+        assertEquals(6, TacticalCalculator.airborneRangerSchoolBonusPct(ranger, with(FacilityType.AIRBORNE_RANGER_CENTER, 3)))
+        val noRange = TacticalCalculator.schoolPassOddsPct(eib, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 0))
+        val range3 = TacticalCalculator.schoolPassOddsPct(eib, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 3))
         assertTrue(range3 >= noRange)
-        assertTrue(TacticalCalculator.schoolPassOddsPct(ranger, recruit, emptyList(), facilities = with(FacilityType.TRAINING_RANGE, 10)) <= 68)
+        assertTrue(TacticalCalculator.schoolPassOddsPct(ranger, recruit, emptyList(), facilities = with(FacilityType.AIRBORNE_RANGER_CENTER, 10)) <= 68)
         // Aid Station and DFAC
         assertEquals(0, TacticalCalculator.aidSaveChancePct(with(FacilityType.AID_STATION, 0)))
         assertEquals(25, TacticalCalculator.aidSaveChancePct(with(FacilityType.AID_STATION, 5)))

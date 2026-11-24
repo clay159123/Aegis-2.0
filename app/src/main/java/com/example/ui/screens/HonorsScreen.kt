@@ -58,6 +58,8 @@ fun HonorsScreen(
     var inspectedOp by remember { mutableStateOf<Operator?>(null) }
     var inspectedKit by remember { mutableStateOf<WardrobeKit?>(null) }
     var inspectedAward by remember { mutableStateOf<MedalDefinition?>(null) }
+    // Item 158: the ledger shows the most recent citations until "Show all" is tapped
+    var showAllCitations by remember { mutableStateOf(false) }
 
     if (inspectedAward != null) {
         BackHandler { inspectedAward = null }
@@ -464,7 +466,9 @@ fun HonorsScreen(
                     subtitle = "Permanent record of awarded medals, ribbons, cords, and school insignia"
                 )
             }
-            items(uiState.citations.take(20), key = { it.id }) { cit ->
+            val ledger = uiState.citations.sortedByDescending { it.awardedAtMillis }
+            val shownCitations = if (showAllCitations) ledger else ledger.take(CITATION_LEDGER_RECENT)
+            items(shownCitations, key = { it.id }) { cit ->
                 val op = uiState.operators.find { it.id == cit.operatorId }
                 val medal = GameCatalog.medals.find { it.id == cit.medalId }
                 if (op != null && medal != null) {
@@ -495,6 +499,16 @@ fun HonorsScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+            if (ledger.size > CITATION_LEDGER_RECENT) {
+                item(key = "ledger_toggle") {
+                    OutlinedButton(
+                        onClick = { showAllCitations = !showAllCitations },
+                        modifier = Modifier.fillMaxWidth().testTag("ledger_show_all")
+                    ) {
+                        Text(if (showAllCitations) "Show recent only" else "Show all (${ledger.size})")
                     }
                 }
             }
@@ -537,3 +551,6 @@ fun HonorsScreen(
         )
     }
 }
+
+/** Item 158: citations shown in the ledger before "Show all". */
+private const val CITATION_LEDGER_RECENT = 10

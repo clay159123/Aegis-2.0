@@ -53,6 +53,20 @@ private data class OpsMissionGroup(
     val missions: List<MissionTemplate>
 )
 
+/** Item 155: one group per school category, in pipeline order; anything uncategorized lands in "Other Schools". */
+private fun schoolGroups(): List<OpsMissionGroup> {
+    val byId = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.associateBy { it.id }
+    val placed = mutableSetOf<String>()
+    val groups = GameCatalog.schoolCategories.mapNotNull { cat ->
+        val missions = cat.missionIds.mapNotNull { byId[it] }
+        placed += missions.map { it.id }
+        if (missions.isEmpty()) null
+        else OpsMissionGroup("school_${cat.id}", cat.title, MissionScope.TRAINING, missions)
+    }
+    val rest = byId.values.filter { it.id !in placed }
+    return if (rest.isEmpty()) groups else groups + OpsMissionGroup("school_other", "Other Schools", MissionScope.TRAINING, rest)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HqOpsScreen(
@@ -198,12 +212,7 @@ fun HqOpsScreen(
                 scope = MissionScope.FIELD_COMBAT,
                 missions = GameCatalog.missions.filter { it.requiresSfTeam && it.campaignId == null }
             ) else null,
-            OpsMissionGroup(
-                id = "schools",
-                title = "Specialty Schools",
-                scope = MissionScope.TRAINING,
-                missions = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-            ),
+        ) + schoolGroups() + listOf(
             OpsMissionGroup(
                 id = "staff",
                 title = "Diplomatic & Staff Ops",
@@ -671,7 +680,7 @@ fun HqOpsScreen(
                             OpsBoardTab.ALL -> orderedGroups.sumOf { it.missions.size } + GameCatalog.campaigns.size
                             OpsBoardTab.CAMPAIGNS -> GameCatalog.campaigns.size
                             OpsBoardTab.COMBAT -> orderedGroups.first { it.scope == MissionScope.FIELD_COMBAT }.missions.size
-                            OpsBoardTab.SCHOOLS -> orderedGroups.first { it.scope == MissionScope.TRAINING }.missions.size
+                            OpsBoardTab.SCHOOLS -> orderedGroups.filter { it.scope == MissionScope.TRAINING }.sumOf { it.missions.size }
                             OpsBoardTab.STAFF -> orderedGroups.first { it.scope == MissionScope.STAFF_DIPLOMATIC }.missions.size
                         }
                         val tabIcon = when (tab) {
@@ -854,12 +863,14 @@ fun HqOpsScreen(
             }
         } else {
             visibleGroups.forEach { group ->
-                val isGroupExpanded = selectedTab != OpsBoardTab.ALL || group.id !in collapsedGroupIds
+                // Item 155: school categories get headers on the Schools tab too
+                val showHeader = selectedTab == OpsBoardTab.ALL || selectedTab == OpsBoardTab.SCHOOLS
+                val isGroupExpanded = !showHeader || group.id !in collapsedGroupIds
                 val readyInGroup = group.missions.count { m ->
                     (qualifiedByMissionId[m.id] ?: 0) >= m.minOperators
                 }
 
-                if (selectedTab == OpsBoardTab.ALL) {
+                if (showHeader) {
                     item(key = "header_${group.id}") {
                         OpsSectionBanner(
                             title = "${group.title} (${group.missions.size})",

@@ -96,6 +96,9 @@ fun UniformTailorStudioCard(
         val reg = UniformRegaliaRules.chestBadgesForSlot(GameCatalog.medals, ChestBadgeSlot.RIGHT_POCKET, operator.specialty)
         reg + allChestBadges.filter { it !in reg }
     }
+    val environmentCatalog = remember {
+        GameCatalog.medals.filter { it.id in TacticalCalculator.ENVIRONMENT_BADGE_IDS }.sortedBy { it.precedenceOrder }
+    }
     val neckCatalog = remember {
         GameCatalog.medals.filter {
             it.category == AwardCategory.MEDAL && it.isNeckMedallion
@@ -626,6 +629,20 @@ fun UniformTailorStudioCard(
                     onSelect = { v -> updateOverrides { it.copy(pinSlot3 = v) } },
                     testTag = "dropdown_pin_slot_3"
                 )
+                // Item 142: the environment school badge above the name plate
+                if (environmentCatalog.any { it.id in ownedMedalIds }) {
+                    RegaliaSlotDropdown(
+                        label = "Environment Badge • Above Name Plate",
+                        slotValue = overrides.environmentSlot,
+                        candidateMedals = environmentCatalog,
+                        ownedMedalIds = ownedMedalIds,
+                        autoTitle = "Auto (Combat Patch Theater)",
+                        autoHint = "Matches the combat patch theater, else the terrain deployed to most",
+                        noneSubtitle = "No environment badge",
+                        onSelect = { v -> updateOverrides { it.copy(environmentSlot = v) } },
+                        testTag = "dropdown_environment_slot"
+                    )
+                }
                 MarksmanshipBadgeDropdown(
                     selectedTier = overrides.marksmanshipBadge,
                     resolvedTier = resolvedMarksmanship,

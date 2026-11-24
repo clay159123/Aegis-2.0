@@ -544,14 +544,23 @@ object TacticalCalculator {
         (1.0 - facilityLevel(facilities, FacilityType.DFAC).coerceAtLeast(0) * 0.06).coerceAtLeast(0.4)
 
     /** Training Range: school pass bonus, +1% per level or +2% for SF selection, Ranger and EIB Testing. */
-    fun rangeSchoolBonusPct(mission: MissionTemplate, facilities: List<FacilityState>): Int {
-        val lv = facilityLevel(facilities, FacilityType.TRAINING_RANGE).coerceAtLeast(0)
-        val perLevel = if (mission.id in RANGE_DOUBLE_BONUS_SCHOOLS) 2 else 1
-        return lv * perLevel
-    }
+    /** Item 159: the Range only helps the shooting and infantry schools, +2% per level. */
+    fun rangeSchoolBonusPct(mission: MissionTemplate, facilities: List<FacilityState>): Int =
+        if (mission.id in RANGE_SCHOOLS) facilityLevel(facilities, FacilityType.TRAINING_RANGE).coerceAtLeast(0) * FOCUS_SCHOOL_BONUS_PER_LEVEL else 0
 
-    /** Item 106: the Range trains shooters, so EIB and Ranger gain double; SF assessment gains the normal +1. */
-    val RANGE_DOUBLE_BONUS_SCHOOLS = setOf("msn_ranger_school", "msn_eib_testing")
+    /** Item 159: the Airborne & Ranger Training Center helps its five schools, +2% per level. */
+    fun airborneRangerSchoolBonusPct(mission: MissionTemplate, facilities: List<FacilityState>): Int =
+        if (mission.id in AIRBORNE_RANGER_SCHOOLS) facilityLevel(facilities, FacilityType.AIRBORNE_RANGER_CENTER).coerceAtLeast(0) * FOCUS_SCHOOL_BONUS_PER_LEVEL else 0
+
+    const val FOCUS_SCHOOL_BONUS_PER_LEVEL = 2
+
+    /** Item 159: shooting and infantry schools the Range trains (SF gets no Range bonus; Selection Prep covers it). */
+    val RANGE_SCHOOLS = setOf("msn_basic_qual", "msn_rifle_qual", "msn_eib_testing", "msn_sniper_school")
+
+    /** Item 159: schools the Airborne & Ranger Training Center trains (Ranger moved off the Range). */
+    val AIRBORNE_RANGER_SCHOOLS = setOf(
+        "msn_night_qual", "msn_air_assault_school", "msn_pathfinder_school", "msn_ranger_school", "msn_mff_school"
+    )
 
     /** Aid Station: medbay recovery time multiplier, -7% per level (floor 37%). */
     fun aidRecoveryMultiplier(facilities: List<FacilityState>): Double =
@@ -2128,8 +2137,8 @@ object TacticalCalculator {
             "msn_nco_school" -> 92
             else -> 94
         }
-        // Training Range bonus still stops at the school's cap
-        val rangeBonus = rangeSchoolBonusPct(mission, facilities)
+        // Training Range and Airborne & Ranger Training Center bonuses still stop at the school's cap
+        val rangeBonus = rangeSchoolBonusPct(mission, facilities) + airborneRangerSchoolBonusPct(mission, facilities)
         val airfieldBonus = if (mission.id == FLIGHT_SCHOOL_MISSION_ID) airfieldFlightSchoolBonus(facilityLevel(facilities, FacilityType.AIRFIELD)) else 0
         // Items 102/110: the SOF officer helps SF schools; the CSM helps the NCO schools
         val billetBonus = when (mission.id) {

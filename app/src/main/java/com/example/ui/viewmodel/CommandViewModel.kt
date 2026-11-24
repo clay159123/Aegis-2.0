@@ -2759,6 +2759,7 @@ class CommandViewModel(
 
         val finalOverrides = ov.copy(
             neckSlot = sanitizeSlot(ov.neckSlot) { it.isNeckMedallion },
+            environmentSlot = sanitizeSlot(ov.environmentSlot) { it.id in TacticalCalculator.ENVIRONMENT_BADGE_IDS },
             tabSlot1 = sanitizeSlot(ov.tabSlot1) {
                 it.category == AwardCategory.SCHOOL_INSIGNIA && it.insigniaShape == InsigniaShape.TAB
             },

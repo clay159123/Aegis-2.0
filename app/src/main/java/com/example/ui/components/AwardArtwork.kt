@@ -207,6 +207,107 @@ internal fun DrawScope.drawDetailedMedalPendant(
             drawHexagon(center, radius * 0.60f, bronze, gold)
             drawCircle(color = gold, radius = radius * 0.22f, center = center)
         }
+        // Item 156: every other medal and ribbon gets its own pendant (no shared fallback disc)
+        "medal_distinguished_service" -> {
+            drawCircle(color = gold, radius = radius * 0.92f, center = center)
+            drawCircle(color = Color(0xFF2B60A8), radius = radius * 0.64f, center = center)
+            drawStar(center, radius * 0.52f, radius * 0.22f, gold)
+        }
+        "medal_legion_merit" -> {
+            drawStar(center, radius * 0.96f, radius * 0.52f, Color(0xFFB22234))
+            drawStar(center, radius * 0.62f, radius * 0.32f, Color.White)
+            drawCircle(color = Color(0xFF2D8A56), radius = radius * 0.20f, center = center)
+        }
+        "medal_flying_cross" -> {
+            drawCrossPattee(center, radius * 0.94f, bronze, gold)
+            drawStar(center, radius * 0.78f, radius * 0.10f, silver, points = 4)
+            drawCircle(color = gold, radius = radius * 0.14f, center = center)
+        }
+        "medal_soldiers" -> {
+            drawStar(center, radius * 0.94f, radius * 0.87f, gold, points = 8)
+            drawCircle(color = Color(0xFF1E3A6E), radius = radius * 0.52f, center = center)
+            drawStar(center, radius * 0.34f, radius * 0.15f, silver)
+        }
+        "medal_air_medal" -> {
+            drawStar(center, radius * 0.96f, radius * 0.36f, bronze, points = 8)
+            drawStar(center, radius * 0.56f, radius * 0.24f, gold, points = 4)
+            drawCircle(color = darkCore, radius = radius * 0.12f, center = center)
+        }
+        "medal_joint_commendation" -> {
+            drawHexagon(center, radius * 0.90f, Color(0xFF2D6E8C), gold)
+            drawStar(center, radius * 0.44f, radius * 0.19f, gold)
+        }
+        "medal_army_achievement" -> {
+            drawHexagon(center, radius * 0.88f, bronze, gold)
+            drawHeartShield(center, radius * 0.44f, Color(0xFF2B5B3F), gold)
+        }
+        "medal_joint_achievement" -> {
+            drawCircle(color = bronze, radius = radius * 0.84f, center = center)
+            drawStar(center, radius * 0.64f, radius * 0.28f, silver, points = 6)
+            drawCircle(color = Color(0xFF2D6E8C), radius = radius * 0.16f, center = center)
+        }
+        "medal_pow" -> {
+            drawCircle(color = bronze, radius = radius * 0.88f, center = center)
+            drawCircle(color = darkCore, radius = radius * 0.70f, center = center, style = Stroke(radius * 0.10f))
+            drawStar(center, radius * 0.46f, radius * 0.20f, darkCore)
+        }
+        "medal_good_conduct" -> {
+            drawCircle(color = bronze, radius = radius * 0.88f, center = center)
+            drawLaurelWreathArcs(center, radius * 0.70f, gold, radius * 0.16f)
+            drawStar(center, radius * 0.36f, radius * 0.16f, Color(0xFFB22234))
+        }
+        "medal_national_defense" -> {
+            drawCircle(color = bronze, radius = radius * 0.88f, center = center)
+            drawHeartShield(center, radius * 0.56f, Color(0xFFB22234), gold)
+        }
+        "medal_expeditionary" -> {
+            drawStar(center, radius * 0.94f, radius * 0.52f, bronze, points = 7)
+            drawCircle(color = Color(0xFF2D4F38), radius = radius * 0.32f, center = center)
+        }
+        "medal_armed_forces_service" -> {
+            drawCircle(color = bronze, radius = radius * 0.88f, center = center)
+            drawCircle(color = darkCore, radius = radius * 0.60f, center = center)
+            drawStar(center, radius * 0.50f, radius * 0.18f, gold, points = 4)
+        }
+        "medal_humanitarian" -> {
+            drawCircle(color = silver, radius = radius * 0.88f, center = center)
+            drawLaurelWreathArcs(center, radius * 0.70f, bronze, radius * 0.18f)
+            drawCircle(color = bronze, radius = radius * 0.28f, center = center)
+        }
+        "medal_nco_dev" -> {
+            drawStar(center, radius * 0.94f, radius * 0.64f, gold, points = 12)
+            drawCircle(color = Color(0xFF1E3E66), radius = radius * 0.42f, center = center)
+            drawStar(center, radius * 0.28f, radius * 0.12f, gold)
+        }
+        "medal_sere" -> {
+            drawCircle(color = darkCore, radius = radius * 0.88f, center = center)
+            drawLaurelWreathArcs(center, radius * 0.68f, silver, radius * 0.16f)
+            drawCircle(color = silver, radius = radius * 0.20f, center = center)
+        }
+        "medal_night_owl" -> {
+            drawCircle(color = Color(0xFF1B2433), radius = radius * 0.88f, center = center)
+            drawCircle(color = gold, radius = radius * 0.52f, center = center)
+            drawCircle(color = Color(0xFF1B2433), radius = radius * 0.46f, center = Offset(center.x + radius * 0.22f, center.y - radius * 0.08f))
+        }
+        "medal_basic_training" -> {
+            drawCircle(color = Color(0xFFB22234), radius = radius * 0.88f, center = center)
+            drawStar(center, radius * 0.62f, radius * 0.26f, gold)
+        }
+        "medal_overseas_service" -> {
+            drawCircle(color = Color(0xFF1E3A6E), radius = radius * 0.88f, center = center)
+            drawCircle(color = Color(0xFF63B8D6), radius = radius * 0.56f, center = center)
+            drawStar(center, radius * 0.28f, radius * 0.12f, gold)
+        }
+        "medal_nato" -> {
+            drawCircle(color = Color(0xFF14306E), radius = radius * 0.88f, center = center)
+            drawCircle(color = Color.White, radius = radius * 0.80f, center = center, style = Stroke(radius * 0.06f))
+            drawStar(center, radius * 0.72f, radius * 0.14f, Color.White, points = 4)
+        }
+        "medal_un" -> {
+            drawCircle(color = Color(0xFF5B92E5), radius = radius * 0.88f, center = center)
+            drawLaurelWreathArcs(center, radius * 0.66f, Color.White, radius * 0.14f)
+            drawCircle(color = Color.White, radius = radius * 0.22f, center = center)
+        }
         else -> {
             val base = if (tier == MedalTier.SUPREME) gold else bronze
             drawCircle(color = base, radius = radius * 0.86f, center = center)
@@ -214,6 +315,17 @@ internal fun DrawScope.drawDetailedMedalPendant(
         }
     }
 }
+
+/** Item 156: medals and ribbons with their own pendant art (anything else would fall back to the plain disc). */
+internal val PENDANT_ART_IDS: Set<String> = setOf(
+    "medal_sovereign_star", "medal_distinguished_cross", "medal_defense_superior", "medal_silver_vanguard",
+    "medal_purple_shield", "medal_bronze_valor", "medal_meritorious", "medal_army_commendation",
+    "medal_distinguished_service", "medal_legion_merit", "medal_flying_cross", "medal_soldiers", "medal_air_medal",
+    "medal_joint_commendation", "medal_army_achievement", "medal_joint_achievement", "medal_pow", "medal_good_conduct",
+    "medal_national_defense", "medal_expeditionary", "medal_armed_forces_service", "medal_humanitarian",
+    "medal_nco_dev", "medal_sere", "medal_night_owl", "medal_basic_training", "medal_overseas_service",
+    "medal_nato", "medal_un"
+)
 
 @Composable
 fun MedalRibbonBar(

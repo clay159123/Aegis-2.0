@@ -63,7 +63,7 @@ fun CommandersGuideDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Command an Army task force from a local Forward Operating Base. Upgrade facilities, qualify soldiers at specialty schools, staff HQ desks, and confer decorations.",
+                    text = "Command an Army task force from its home installation and deploy soldiers out to the theaters. Upgrade facilities, qualify soldiers at specialty schools, staff HQ desks, and confer decorations.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

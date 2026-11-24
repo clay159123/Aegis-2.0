@@ -32,7 +32,7 @@ internal object AwardExpansion {
         award("medal_flying_cross", "Distinguished Flying Cross", "DFC", AwardCategory.MEDAL, MedalTier.VALOR, 7,
             "Heroism or extraordinary achievement while flying.",
             "Aviators only, through a heroism roll while flying a High or Extreme combat sortie. Repeats with oak leaf clusters.",
-            listOf(0xFF1E3A6E, 0xFFFFFFFF, 0xFFC8102E, 0xFFFFFFFF, 0xFF1E3A6E), 22, 0, 1, 3, 3, 3, 10),
+            listOf(0xFFC8102E, 0xFFFFFFFF, 0xFF1E3A6E, 0xFF1E3A6E, 0xFFFFFFFF, 0xFFC8102E, 0xFFFFFFFF, 0xFF1E3A6E, 0xFF1E3A6E, 0xFFFFFFFF, 0xFFC8102E), 22, 0, 1, 3, 3, 3, 10),
         award("medal_soldiers", "Soldier's Medal", "SM", AwardCategory.MEDAL, MedalTier.VALOR, 8,
             "Heroism not involving actual conflict with an enemy.",
             "Through a heroism roll at a field school or on a diplomatic or staff op. Repeats with oak leaf clusters.",
@@ -64,11 +64,11 @@ internal object AwardExpansion {
         award("medal_nato", "Allied Coalition Medal", "ACM", AwardCategory.MEDAL, MedalTier.SERVICE, 27,
             "Service on coalition diplomatic stages of a campaign (game version of the NATO Medal).",
             "Diplomatic campaign stages. A bronze service star for each different stage.",
-            listOf(0xFF1F4E9E, 0xFFFFFFFF, 0xFF1F4E9E, 0xFFFFFFFF, 0xFF1F4E9E), 6, 0, 1, 1, 2, 1, 4),
+            listOf(0xFF14306E, 0xFF14306E, 0xFF14306E, 0xFFFFFFFF, 0xFF14306E, 0xFF14306E, 0xFFFFFFFF, 0xFF14306E, 0xFF14306E, 0xFF14306E), 6, 0, 1, 1, 2, 1, 4),
         award("medal_un", "International Peacekeeping Medal", "IPM", AwardCategory.MEDAL, MedalTier.SERVICE, 28,
             "Service on peacekeeping and diplomatic missions (game version of the UN Medal).",
             "Single diplomatic missions. A bronze service star for each different mission.",
-            listOf(0xFF5B92E5, 0xFFFFFFFF, 0xFF5B92E5, 0xFFFFFFFF, 0xFF5B92E5), 6, 0, 0, 1, 2, 1, 4)
+            listOf(0xFFFFFFFF, 0xFF5B92E5, 0xFF5B92E5, 0xFF5B92E5, 0xFF5B92E5, 0xFF5B92E5, 0xFF5B92E5, 0xFF5B92E5, 0xFFFFFFFF), 6, 0, 0, 1, 2, 1, 4)
     )
 
     /**
@@ -83,13 +83,28 @@ internal object AwardExpansion {
         "medal_army_commendation" to 14, "medal_joint_achievement" to 15, "medal_army_achievement" to 16, "medal_pow" to 17,
         "medal_good_conduct" to 18, "medal_national_defense" to 19, "medal_expeditionary" to 20,
         "medal_armed_forces_service" to 21, "medal_humanitarian" to 22, "medal_nco_dev" to 23,
-        "medal_sere" to 24, "medal_night_owl" to 25, "medal_basic_training" to 26, "medal_overseas_service" to 27,
-        "medal_nato" to 28, "medal_un" to 29
+        // Item 157: Army Service and Overseas Service ribbons follow the NCO ribbon; the game's own training
+        // ribbons (SERE, Night Ops) come after them; international medals last, UN before NATO
+        "medal_basic_training" to 24, "medal_overseas_service" to 25, "medal_sere" to 26, "medal_night_owl" to 27,
+        "medal_un" to 28, "medal_nato" to 29,
+        // Item 157: cords, in one block after the ribbon rack
+        "cord_general_aiguillette" to 101, "cord_valor_fourragere" to 102, "cord_sf_emerald" to 103,
+        "cord_airborne_crimson" to 104, "cord_aviation" to 105, "cord_infantry_blue" to 106,
+        "cord_engineer_scarlet" to 107, "cord_signals_orange" to 108, "cord_intel_teal" to 109,
+        "cord_medical_maroon" to 110, "cord_logistics_buff" to 111,
+        // Item 157: tabs, combat and expert badges, aviation, parachutist and skill badges, then crests
+        "insig_sf_tab" to 121, "insig_ranger_tab" to 122, "insig_sapper_tab" to 123, "insig_airborne_tab" to 124,
+        "insig_cib" to 125, "insig_combat_medic" to 126, "insig_cab" to 127, "insig_eib_rifle" to 128,
+        "insig_cmb_medic" to 129, "insig_master_aviator_wings" to 130, "insig_senior_aviator_wings" to 131,
+        "insig_aviator_wings" to 132, "insig_master_para" to 133, "insig_mff_wings" to 134, "insig_parachutist" to 135,
+        "insig_combat_diver" to 136, "insig_air_assault" to 137, "insig_pathfinder" to 138, "insig_eod_badge" to 139,
+        "insig_sniper" to 140, "insig_mountain" to 141, "insig_jungle" to 142, "insig_arctic" to 143,
+        "insig_staff_crest" to 144, "insig_intel_crest" to 145, "insig_cyber_crest" to 146, "insig_logistics_crest" to 147
     )
 
     fun withPrecedence(m: MedalDefinition): MedalDefinition =
         precedence[m.id]?.let { m.copy(precedenceOrder = it) }
             ?: if (m.category == AwardCategory.SHOULDER_CORD || m.category == AwardCategory.SCHOOL_INSIGNIA) {
-                m.copy(precedenceOrder = m.precedenceOrder + 100)
+                m.copy(precedenceOrder = m.precedenceOrder + 200)
             } else m
 }
