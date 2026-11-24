@@ -103,7 +103,7 @@ class Session22Test {
     fun baseMapHasTheCompoundRowWithoutOverlaps() {
         val compound = BASE_PLOTS.single { it.type == FacilityType.SF_COMPOUND }
         assertEquals(119f, compound.w)
-        val gate = BASE_PLOTS.single { it.type == null && it.label == "Gate" }
+        val gate = BASE_PLOTS.single { it.type == FacilityType.MAIN_GATE }
         assertTrue(gate.y >= compound.y)
         assertEquals(FacilityType.entries.toSet(), BASE_PLOTS.mapNotNull { it.type }.toSet())
         for (i in BASE_PLOTS.indices) for (j in i + 1 until BASE_PLOTS.size) {

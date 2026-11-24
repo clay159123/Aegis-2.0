@@ -32,7 +32,10 @@ fun FieldSquadsSection(
     onCreateSquadClick: () -> Unit,
     onEditSquadClick: (TacticalSquad) -> Unit,
     onConductSquadInspection: (String) -> Unit = {},
-    onSwitchSquadKit: (String, WardrobeKit) -> Unit = { _, _ -> }
+    onSwitchSquadKit: (String, WardrobeKit) -> Unit = { _, _ -> },
+    /** Session 38: squad leave and the clock it runs on. */
+    onSendSquadOnLeave: (String) -> Unit = {},
+    nowMillis: Long = 0L
 ) {
     val extra = LocalAegisColors.current
     val opsById = remember(operators) { operators.associateBy { it.id } }
@@ -210,6 +213,40 @@ fun FieldSquadsSection(
                             color = if (missingMos.isEmpty()) extra.brassBright else extra.signalsCyan,
                             modifier = Modifier.testTag("squad_missing_mos_${squad.id}")
                         )
+                        // Session 38: squad morale, rallies and leave
+                        val avgMorale = members.map { it.morale }.average().toInt()
+                        val band = com.example.domain.MoraleRules.band(avgMorale)
+                        val rallies = squad.ralliedForIds.mapNotNull { id -> opsById[id]?.callsign }
+                        Text(
+                            text = "Morale $avgMorale (${band.label})" +
+                                (if (rallies.isNotEmpty()) " • Rallied for ${rallies.joinToString()}" else "") +
+                                (if (squad.leaveUntilMillis > nowMillis) " • On leave" else ""),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when (band) {
+                                com.example.domain.MoraleRules.Band.HIGH -> extra.brassBright
+                                com.example.domain.MoraleRules.Band.STEADY -> MaterialTheme.colorScheme.onSurface
+                                else -> extra.amberTelemetry
+                            },
+                            modifier = Modifier.testTag("squad_morale_${squad.id}")
+                        )
+                        val leaveReady = squad.leaveReadyAtMillis <= nowMillis
+                        val allHome = members.all { it.status == OperatorStatus.READY }
+                        OutlinedButton(
+                            onClick = { onSendSquadOnLeave(squad.id) },
+                            enabled = leaveReady && allHome,
+                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 40.dp).testTag("squad_leave_${squad.id}")
+                        ) {
+                            Text(
+                                when {
+                                    squad.leaveUntilMillis > nowMillis -> "On leave • back in ${TacticalCalculator.formatBuildTime((squad.leaveUntilMillis - nowMillis) / 1000)}"
+                                    !leaveReady -> "Leave again in ${TacticalCalculator.formatBuildTime((squad.leaveReadyAtMillis - nowMillis) / 1000)}"
+                                    !allHome -> "Leave: whole squad must be home"
+                                    else -> "Send on Leave • +${com.example.domain.MoraleRules.SQUAD_LEAVE_MORALE} morale • ${(com.example.domain.MoraleRules.SQUAD_LEAVE_CREDITS_PER_SOLDIER * members.size).toInt()} CR"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1
+                            )
+                        }
                         val compKind = com.example.domain.SquadCompositionRules.kindFor(members)
                         val compGaps = com.example.domain.SquadCompositionRules.missing(members)
                         Spacer(modifier = Modifier.height(4.dp))

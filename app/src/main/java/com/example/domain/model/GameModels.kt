@@ -170,6 +170,17 @@ enum class FacilityType(
         unlockHqLevel = 4,
         startLevel = 0
     ),
+    /** Session 38 (item 72): the Main Gate, an Access Control Point that firms up as it levels. */
+    MAIN_GATE(
+        id = "main_gate",
+        title = "Main Gate",
+        subtitle = "Access Control Point: guard shack, MP station, hardened gate",
+        primaryResource = ResourceType.CREDITS,
+        baseRatePerSec = 0.0,
+        baseCreditCost = 70.0,
+        baseSupplyCost = 40.0,
+        perkDescription = "+1 morale baseline per level for every soldier • recruits cost 3% less per level"
+    ),
     /** Item 118: houses the SF squads apart from the Barracks; buildable once the first SF squad forms. */
     SF_COMPOUND(
         id = "sf_compound",
@@ -1470,6 +1481,14 @@ data class Operator(
      * Null means no pin recorded yet (soldier ranks, or a soldier not yet saved), so the rank follows XP.
      */
     val pinnedRank: OperatorRank? = null,
+    /** Session 38 (item 70): morale 0-100; drifts back toward the base's baseline. */
+    val morale: Int = 70,
+    /** Session 38: field deployments in a row without rest (more than 3 costs morale). */
+    val deployStreak: Int = 0,
+    /** Session 38: when the soldier last came back from a deployment (rest check). */
+    val lastReturnAtMillis: Long = 0L,
+    /** Session 38: last uniform inspection that raised this soldier's morale (30-minute cooldown). */
+    val inspectionMoraleAtMillis: Long = 0L,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */
@@ -1924,7 +1943,16 @@ data class TacticalSquad(
     val standardAlphasGloves: Boolean? = null,
     val standardMessGloves: Boolean? = null,
     /** Item 58: the command's one Special Forces squad (SF-qualified members only, up to 6). */
-    val isSpecialForces: Boolean = false
+    val isSpecialForces: Boolean = false,
+    /** Session 38: captured members this squad was shaken by (morale given back when they come home). */
+    val shakenForIds: Set<String> = emptySet(),
+    /** Session 38: captured members this squad rallied for (bonus on their rescue). */
+    val ralliedForIds: Set<String> = emptySet(),
+    /** Session 38: squad leave ends at this time; the squad can go again after [leaveReadyAtMillis]. */
+    val leaveUntilMillis: Long = 0L,
+    val leaveReadyAtMillis: Long = 0L,
+    /** Session 38: last Parade Ground unit run (cooldown per squad). */
+    val lastRunAtMillis: Long = 0L
 ) {
     val clampedCohesionXp: Int get() = cohesionXp.coerceIn(0, MAX_SQUAD_COHESION_XP)
     val cohesionScore: Int get() = (clampedCohesionXp / 10).coerceIn(0, 100)
@@ -1978,7 +2006,10 @@ data class UniformInspectionReport(
     val prestigeEarned: Int,
     val buffDurationSec: Int,
     val findings: List<String>,
-    val highlights: List<String>
+    val highlights: List<String>,
+    /** Session 38: morale each inspected soldier gained (0 for a C, or when on cooldown). */
+    val moraleGain: Int = 0,
+    val moraleSoldiers: Int = 0
 )
 
 data class ActiveSquadCohesionBonus(

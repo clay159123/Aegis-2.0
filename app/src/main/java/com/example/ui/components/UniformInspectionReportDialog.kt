@@ -150,6 +150,14 @@ fun UniformInspectionReportDialog(
                     }
                 }
 
+                // Session 38: morale from the inspection
+                if (report.moraleGain > 0) {
+                    Text(
+                        text = "Morale +${report.moraleGain} for ${report.moraleSoldiers} soldier${if (report.moraleSoldiers == 1) "" else "s"}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = extra.brassBright
+                    )
+                }
                 Text(
                     text = "INSPECTOR FINDINGS",
                     style = MaterialTheme.typography.labelSmall,

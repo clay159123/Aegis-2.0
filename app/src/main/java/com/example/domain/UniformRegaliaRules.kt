@@ -682,7 +682,7 @@ object UniformRegaliaRules {
                     highlights += "${op.rank.code} ${op.callsign}: Daily Garrison Bravos short-sleeve turn-out verified"
                 }
                 WardrobeKit.FIELD -> {
-                    findings += "${op.callsign}: Standing in Field ACU rather than Dress Uniform (-15 pts)"
+                    findings += "${op.callsign}: in field uniform, not a dress uniform (-15)"
                 }
             }
 
@@ -690,7 +690,7 @@ object UniformRegaliaRules {
                 opScore += 15
             } else {
                 opScore += 8
-                findings += "${op.callsign}: Upgrade to ${op.rank.tier.shortLabel} Coat Cut for full formal turn-out"
+                findings += "${op.callsign}: coat isn't the ${op.rank.tier.shortLabel} cut for their rank (-7)"
             }
 
             if (op.dressDisplayMode != DressDisplayMode.CLEAN && opMedals.isNotEmpty()) {
@@ -699,25 +699,35 @@ object UniformRegaliaRules {
             } else if (opMedals.isEmpty()) {
                 opScore += 10
             } else {
-                findings += "${op.callsign}: Chest rack hidden (Clean mode)"
+                findings += "${op.callsign}: awards hidden (Clean display) (-15)"
             }
 
-            if (kit == WardrobeKit.BRAVOS || op.hasWhiteGloves) opScore += 5
+            // Session 38: white gloves are only required with Mess Dress
+            if (kit != WardrobeKit.MESS || op.hasWhiteGloves) opScore += 5
+            else findings += "${op.callsign}: no white gloves with Mess Dress (-5)"
             val sashAllowed = TacticalCalculator.evaluateDressSashEligibility(op, squads).eligible
-            if (kit == WardrobeKit.BRAVOS || kit == WardrobeKit.MESS || op.hasDressSash || !sashAllowed) {
+            if (kit == WardrobeKit.BRAVOS || kit == WardrobeKit.MESS || kit == WardrobeKit.FIELD || op.hasDressSash || !sashAllowed) {
                 opScore += 5
+            } else {
+                findings += "${op.callsign}: no sash with Alphas (-5)"
             }
 
             val opGear = gearItems.equippedBy(op)
             val markTier = resolveMarksmanshipTier(op, opGear)
             if (kit == WardrobeKit.MESS || markTier != MarksmanshipBadgeTier.NONE) {
                 opScore += 5
+            } else {
+                findings += "${op.callsign}: no marksmanship badge (qualify at Rifle Qual) (-5)"
             }
+            // Session 38: only the squad leader is checked for the leader crest
+            val isTheLeader = subjectSquad != null && subjectSquad.leaderId == op.id
             if (isLeaderPinShown(op, squads)) {
                 opScore += 5
                 highlights += "${op.rank.code} ${op.callsign}: Designated Squad Leader Crest verified above nameplate"
-            } else if (subjectSquad == null) {
+            } else if (!isTheLeader) {
                 opScore += 5
+            } else {
+                findings += "${op.callsign}: squad leader without the leader crest (-5)"
             }
             if (kit == WardrobeKit.MESS) opScore += 3
             totalScore += opScore.coerceIn(0, 100)
@@ -757,7 +767,8 @@ object UniformRegaliaRules {
             scorePct = avgScore,
             prestigeEarned = prestigeEarned,
             buffDurationSec = 180,
-            findings = findings.distinct().take(4),
+            // Session 38: every finding is shown, grouped by soldier in inspection order
+            findings = findings.distinct(),
             highlights = highlights.distinct().take(4)
         )
     }

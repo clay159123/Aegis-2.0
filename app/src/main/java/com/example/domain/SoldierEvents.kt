@@ -430,7 +430,8 @@ object SoldierEvents {
             status = OperatorStatus.RECOVERING,
             recoveryUntilMillis = ctx.now + GameTiming.millis(TacticalCalculator.BASE_RECOVERY_MILLIS / 2)
         )
-        fun away(o: Operator) = o.copy(status = OperatorStatus.ON_LEAVE, recoveryUntilMillis = ctx.now + awayMillis())
+        // Session 38: time away on leave or a short duty lifts morale
+        fun away(o: Operator) = MoraleRules.adjust(o, MoraleRules.LEAVE).copy(status = OperatorStatus.ON_LEAVE, recoveryUntilMillis = ctx.now + awayMillis())
         fun base(banner: String) = SoldierEventOutcome(creditsDelta = -cr, suppliesDelta = -sup, banner = banner)
 
         return when (e.kind) {
@@ -438,7 +439,11 @@ object SoldierEvents {
                 petitionAction = if (declined) PetitionAction.DECLINE_TRANSFER else PetitionAction.APPROVE_TRANSFER, banner = "")
             SoldierEventKind.RETIREMENT_PETITION -> SoldierEventOutcome(
                 petitionAction = if (declined) PetitionAction.DENY_RETIREMENT else PetitionAction.APPROVE_RETIREMENT, banner = "")
-            else -> if (declined) SoldierEventOutcome(banner = "$who: request declined.") else when (e.kind) {
+            // Session 38: turning down a personal request costs that soldier morale
+            else -> if (declined) SoldierEventOutcome(
+                banner = "$who: request declined." + if (e.kind.personal) " (Morale ${MoraleRules.REQUEST_DECLINED})" else "",
+                operatorUpdates = if (e.kind.personal) listOf(MoraleRules.adjust(op, MoraleRules.REQUEST_DECLINED)) else emptyList()
+            ) else when (e.kind) {
                 SoldierEventKind.TRAINING_REQUEST -> base("$who: $TRAINING_DISCOUNT_PCT% off their next enrollment.").copy(
                     operatorUpdates = listOf(op.copy(eventBuffs = op.eventBuffs.copy(
                         schoolDiscountUntilMillis = ctx.now + GameTiming.millis(TRAINING_DISCOUNT_MILLIS)))))
@@ -567,5 +572,7 @@ object SoldierEvents {
         return launchedAtMillis <= op.eventBuffs.opRequestUntilMillis && t.matches(mission)
     }
 
-    fun discountedRecruitCost(base: Double): Double = base * (100 - effects.recruitDiscountPct) / 100.0
+    /** Event discount plus the Main Gate's 3% per level (Session 38). */
+    fun discountedRecruitCost(base: Double): Double =
+        base * (100 - effects.recruitDiscountPct - TacticalCalculator.mainGateLevel * TacticalCalculator.GATE_RECRUIT_DISCOUNT_PER_LEVEL).coerceAtLeast(10) / 100.0
 }

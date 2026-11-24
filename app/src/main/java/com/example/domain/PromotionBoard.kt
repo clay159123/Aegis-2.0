@@ -104,6 +104,9 @@ object PromotionBoardEvaluator {
             // Item 126: the S-3 and CSM are enlisted billets; a commission means leaving them
             seatedRole?.isEnlistedOnly == true && !nextRank.tier.isEnlisted ->
                 "${seatedRole.shortCode} is an enlisted billet. Return to the field to pursue a commission."
+            // Session 38: broken morale keeps a soldier from a board (pins inside a tier still work)
+            OperatorRank.isBoardGate(currentRank, nextRank) && MoraleRules.boardBlocker(operator) != null ->
+                MoraleRules.boardBlocker(operator)
             else -> null
         }
         if (nextRank == null || blockedReason != null) {

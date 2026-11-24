@@ -622,6 +622,9 @@ object TacticalCalculator {
     /** The current Airfield level, set from game state for perks applied deep in the calculations. */
     @Volatile
     var airfieldLevel: Int = 0
+    /** Session 38: Main Gate level, set each tick (recruit discount). */
+    @Volatile var mainGateLevel: Int = 0
+    const val GATE_RECRUIT_DISCOUNT_PER_LEVEL = 3
 
     /** Helicopter survival: +1 for every two Airfield levels. */
     fun airfieldHeloSurvivalBonus(level: Int = airfieldLevel): Int = level.coerceAtLeast(0) / 2
@@ -2022,7 +2025,8 @@ object TacticalCalculator {
             }
             WardrobeKit.ALPHAS -> {
                 // Item 91: HQ staff wear the waist sash by default
-                val rawSash = settings.hasDressSash ?: (operator.hasDressSash || operator.status == OperatorStatus.HQ_STAFF)
+                // Session 38: HQ staff and squad leaders (regular and SF) wear the sash on Auto
+                val rawSash = settings.hasDressSash ?: (operator.status == OperatorStatus.HQ_STAFF || squads.any { it.leaderId == operator.id })
                 operator.copy(
                     activeWardrobeKit = WardrobeKit.ALPHAS,
                     uniformMode = UniformMode.DRESS_UNIFORM,
@@ -2041,7 +2045,8 @@ object TacticalCalculator {
                     // full medals for field troops are a Tailor (or toggle) choice
                     dressDisplayMode = settings.dressDisplayMode
                         ?: if (operator.status == OperatorStatus.HQ_STAFF) DressDisplayMode.FULL_MEDALS else DressDisplayMode.RIBBONS,
-                    hasWhiteGloves = settings.hasWhiteGloves ?: std.gloves ?: operator.hasWhiteGloves,
+                    // Session 38: white gloves are a Mess Dress item; Alphas go without on Auto
+                    hasWhiteGloves = settings.hasWhiteGloves ?: std.gloves ?: false,
                     hasDressSash = rawSash && sashAllowed
                 )
             }
@@ -2288,7 +2293,9 @@ object TacticalCalculator {
             // Session 33: Full Detachment / Full Squad rank mix
             (SquadCompositionRules.teamBonus(mission, selectedOperators, squads)?.second ?: 0) +
             // Item 165: Infantry on assault work, Engineers on breach work
-            MosEffects.passBonusPct(mission, selectedOperators)
+            MosEffects.passBonusPct(mission, selectedOperators) +
+            // Session 38: the team's average morale
+            MoraleRules.teamOddsPct(selectedOperators)
         return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan + talks + freeStrait)
             .coerceIn(minOdds, maxOdds)
     }

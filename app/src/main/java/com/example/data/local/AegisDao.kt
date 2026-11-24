@@ -33,6 +33,15 @@ interface AegisDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOperators(operators: List<OperatorEntity>)
 
+    /** Session 38: morale drift in one statement, so it never overwrites other changes to a soldier. */
+    @Query(
+        "UPDATE operators SET morale = CASE " +
+            "WHEN morale < :baseline THEN MIN(morale + :steps, :baseline) " +
+            "WHEN morale > :baseline THEN MAX(morale - :steps, :baseline) ELSE morale END " +
+            "WHERE statusName NOT IN ('FALLEN', 'RETIRED', 'TRANSFERRED') AND morale != :baseline"
+    )
+    suspend fun driftMorale(baseline: Int, steps: Int)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOperator(operator: OperatorEntity)
 
