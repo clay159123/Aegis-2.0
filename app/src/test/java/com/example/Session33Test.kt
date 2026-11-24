@@ -122,3 +122,17 @@ class Session33Test {
         assertTrue(TacticalCalculator.isSfQualified(officer(true)))
     }
 }
+
+class SessionJRecruitingTest {
+    @Test
+    fun recruitSourcesAfterOptionB() {
+        // Kept: Reception, NCO Academy (SGT), OCS (2LT), both WOCS tracks (technical and aviator)
+        assertEquals(6, RecruitSource.entries.size)
+        assertEquals(OperatorRank.SGT, RecruitSource.NCO_ACADEMY.arrivalRank)
+        assertEquals(OperatorRank.LT2, RecruitSource.OCS.arrivalRank)
+        val tech = GameCatalog.createRecruit("op_wo_t", OperatorSpecialty.SIGNALS, RecruitSource.WOCS_TECHNICAL, emptySet(), 0)
+        assertTrue(tech.isTechnicalWarrant)
+        // The SLC recruit is now the priciest ground recruit, above a 2LT
+        assertTrue(RecruitSource.SENIOR_LEADER_COURSE.creditCost > RecruitSource.OCS.creditCost)
+    }
+}

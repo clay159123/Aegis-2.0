@@ -437,7 +437,8 @@ enum class RecruitSource(
 ) {
     RECEPTION("Reception Station", OperatorRank.PV2, 45.0, null),
     NCO_ACADEMY("NCO Academy", OperatorRank.SGT, 110.0, "msn_nco_school"),
-    SENIOR_LEADER_COURSE("Senior Leader Course", OperatorRank.SFC, 200.0, "msn_snco_school"),
+    // Session J: a ready-made SNCO skips two pins and a board, so it costs more than a 2LT
+    SENIOR_LEADER_COURSE("Senior Leader Course", OperatorRank.SFC, 300.0, "msn_snco_school"),
     OCS("Officer Candidate School", OperatorRank.LT2, 220.0, "msn_ocs_school"),
     WOCS_TECHNICAL("WOCS: Technical", OperatorRank.WO1, 180.0, "msn_wocs"),
     WOCS_AVIATOR("WOCS: Aviator", OperatorRank.WO1, 240.0, "msn_wocs");
