@@ -723,9 +723,13 @@ private fun HqOccupiedBilletCard(
     val crCost = operator.rank.promotionCreditCost()
     val prsCost = operator.rank.promotionPrestigeCost()
     val crossesTierCard = nextRank != null && OperatorRank.isBoardGate(operator.rank, nextRank)
-    val canPromote = nextRank != null && (
-        crossesTierCard || (resources.credits >= crCost && resources.prestige >= prsCost)
-    )
+    // Session 33: inside a tier from SGT up, the rank is pinned once XP is there (free)
+    val pinsRank = nextRank != null && !crossesTierCard && operator.pinnedRank != null && operator.rank.tier != RankTier.SOLDIER
+    val canPromote = nextRank != null && when {
+        crossesTierCard -> true
+        pinsRank -> operator.pinEligibleRank != null
+        else -> resources.credits >= crCost && resources.prestige >= prsCost
+    }
 
     TacticalPanelCard(
         borderColor = if (isOnTasking) extra.amberTelemetry else extra.signalsCyan.copy(alpha = 0.65f),
@@ -877,6 +881,8 @@ private fun HqOccupiedBilletCard(
                             nextRank == null && promotionBlockedReason != null -> "Billet Top Rank"
                             nextRank == null -> "Max Rank (GEN)"
                             crossesTierCard -> "${nextRank.tier.shortLabel} Board (${nextRank.code})"
+                            pinsRank && operator.pinEligibleRank != null -> "Pin ${nextRank.code}"
+                            pinsRank -> "${nextRank.code} at ${nextRank.xpRequired} XP"
                             else -> "Promote ${nextRank.code} (${crCost.toInt()}C/${prsCost}P)"
                         },
                         maxLines = 1

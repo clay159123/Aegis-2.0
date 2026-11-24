@@ -407,6 +407,7 @@ fun AegisCommandApp() {
                                     onToggleUniformMode = viewModel::toggleOperatorUniformMode,
                                     onToggleDressDisplayMode = viewModel::toggleDressDisplayMode,
                                     onPromoteOperator = viewModel::promoteOperator,
+                                    onPinAllPromotions = viewModel::pinAllEligiblePromotions,
                                     onCustomizeOperator = viewModel::customizeOperator,
                                     onAwardMedal = viewModel::awardMedal,
                                     onDismissDeed = viewModel::dismissPendingDeed,

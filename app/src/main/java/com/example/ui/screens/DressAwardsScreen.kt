@@ -55,7 +55,9 @@ fun DressAwardsScreen(
     onConductKitInspection: ((String, WardrobeKit) -> Unit)? = null,
     onAwardAllPending: () -> Unit = {},
     onAwardAllEligible: (String) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Session 33: pin the next rank for every promotable soldier. */
+    onPinAllPromotions: () -> Unit = {}
 ) {
     val extra = LocalAegisColors.current
     val unlockedOps = remember(uiState.operators) {
@@ -232,6 +234,21 @@ fun DressAwardsScreen(
                 facilities = uiState.facilities,
                 onSelectOperator = { id -> selectedOpId = id }
             )
+        }
+        // Session 33: one tap pins the next rank for everyone XP has made promotable
+        val promotableCount = unlockedOps.count { it.pinEligibleRank != null }
+        if (promotableCount > 0) {
+            item(key = "pin_all_promotions") {
+                Button(
+                    onClick = onPinAllPromotions,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("pin_all_promotions_button")
+                ) {
+                    Text("Promote all eligible ($promotableCount)")
+                }
+            }
         }
 
         // Army Dress Uniform & Rank Showcase Pedestal
@@ -510,11 +527,15 @@ fun DressAwardsScreen(
                         val readyForBoard = crossesTier && boardEval.allMeritsMet
                         val metCount = boardEval.meritChecks.count { it.satisfied }
                         val totalChecks = boardEval.meritChecks.size
+                        val pinsRank = !crossesTier && selectedOp.pinnedRank != null && selectedOp.rank.tier != RankTier.SOLDIER
 
                         Text(
                             text = when {
                                 readyForBoard -> "PROMOTION BOARD READY (${selectedOp.rank.code} → ${nextRank.code} ${nextRank.tier.shortLabel}) — Review Board & Pin"
                                 crossesTier -> "PROMOTION BOARD GATE ($metCount/$totalChecks Merits • ${selectedOp.xp}/${nextRank.xpRequired} XP) — ${selectedOp.rank.code} → ${nextRank.code}"
+                                // Session 33: from SGT up the player pins each rank once XP is there
+                                pinsRank && selectedOp.pinEligibleRank != null -> "PROMOTABLE: ${selectedOp.xp}/${nextRank.xpRequired} XP → pin ${nextRank.code}"
+                                pinsRank -> "WITHIN-CATEGORY XP: ${selectedOp.xp}/${nextRank.xpRequired} → ${nextRank.code} (pin when XP is reached)"
                                 else -> "WITHIN-CATEGORY XP: ${selectedOp.xp}/${nextRank.xpRequired} → ${nextRank.code} (auto on XP, or promote early)"
                             },
                             style = MaterialTheme.typography.labelSmall,
@@ -554,6 +575,23 @@ fun DressAwardsScreen(
                             ) {
                                 Text(
                                     text = "Inspect ${nextRank.tier.shortLabel} Board ($metCount/$totalChecks Merits) • ${promoCr.toInt()} CR / $promoPrs PRS",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1
+                                )
+                            }
+                        } else if (pinsRank) {
+                            Button(
+                                onClick = { onPromoteOperator(selectedOp.id, null) },
+                                enabled = selectedOp.pinEligibleRank != null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .testTag("promote_operator_button"),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = if (selectedOp.pinEligibleRank != null) "Pin ${nextRank.code} (${nextRank.payGrade})"
+                                        else "${nextRank.code} at ${nextRank.xpRequired} XP",
                                     style = MaterialTheme.typography.labelMedium,
                                     maxLines = 1
                                 )

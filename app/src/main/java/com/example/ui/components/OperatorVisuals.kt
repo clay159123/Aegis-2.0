@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.domain.model.OperatorRank
 import com.example.domain.model.RankTier
 import com.example.ui.theme.LocalAegisColors
@@ -380,6 +381,21 @@ fun NameWithSfMarker(
         if (sfQualified) {
             if (operator != null) SfTierBadge(operator) else SfMarker(tier = sfTier)
         }
+        // Session 33: promotable inside the tier (the player pins the rank on the Uniform tab)
+        if (operator?.pinEligibleRank != null) PromotableMarker()
+    }
+}
+
+/** Session 33: the small "P" shown by a soldier ready to pin their next rank. */
+@Composable
+fun PromotableMarker(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(Color(0xFF12313A), androidx.compose.foundation.shape.RoundedCornerShape(3.dp))
+            .border(1.dp, Color(0xFF4FC3D9), androidx.compose.foundation.shape.RoundedCornerShape(3.dp))
+            .padding(horizontal = 4.dp, vertical = 0.dp)
+    ) {
+        Text("P", fontSize = 10.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color(0xFF4FC3D9))
     }
 }
 

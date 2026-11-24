@@ -1024,6 +1024,25 @@ internal fun HqStagingSheet(
             }
         }
 
+        // Session 33: the team's rank mix (Full Detachment / Full Squad)
+        if (mission.scope == MissionScope.FIELD_COMBAT && selectedOps.isNotEmpty()) {
+            val composition = com.example.domain.SquadCompositionRules.teamBonus(mission, selectedOps, uiState.squads)
+            val kindLabel = com.example.domain.SquadCompositionRules.kindFor(selectedOps).label
+            val gaps = if (composition == null) com.example.domain.SquadCompositionRules.missing(selectedOps) else emptyList()
+            Text(
+                text = if (composition != null) {
+                    "${composition.first.label}: +${composition.second}% Odds"
+                } else if (mission.requiredSquads > 1) {
+                    "$kindLabel: every squad needs the full rank mix (+${com.example.domain.SquadCompositionRules.BONUS_PCT}%)"
+                } else {
+                    "$kindLabel (+${com.example.domain.SquadCompositionRules.BONUS_PCT}%): ${gaps.joinToString(" • ")}"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (composition != null) extra.brassBright else extra.textMuted,
+                modifier = Modifier.testTag("staging_composition_line")
+            )
+        }
+
         if (readyOperators.isEmpty()) {
             Text(
                 text = if (mission.risk.isTraining) {

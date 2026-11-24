@@ -242,7 +242,9 @@ fun DressPersonnelSwitcherCard(
             .groupBy { it.operatorId }
             .mapValues { (_, list) -> list.map { it.medalId }.distinct().size }
     }
-    val boardReadyIds = remember(unlockedOps, citations, gearItems, facilities) {
+    // Session 33: soldiers XP has made promotable (the "P"), counted with board-ready soldiers in Action Needed
+    val promotableIds = remember(unlockedOps) { unlockedOps.filter { it.pinEligibleRank != null }.map { it.id }.toSet() }
+    val boardReadyIds = promotableIds + remember(unlockedOps, citations, gearItems, facilities) {
         unlockedOps.filter { op ->
             val next = OperatorRank.nextRank(op.rank)
             if (next == null || next.tier == op.rank.tier || op.status == OperatorStatus.FALLEN) {
@@ -573,6 +575,7 @@ fun DressPersonnelDirectorySheet(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sortMode by rememberSaveable { mutableStateOf(RosterSortMode.BY_BILLET) }
     var onlyNeedsAttention by rememberSaveable { mutableStateOf(false) }
+    val promotableIds = remember(allOperators) { allOperators.filter { it.pinEligibleRank != null }.map { it.id }.toSet() }
 
     val normalizedQuery = searchQuery.trim().lowercase()
     fun matchesOperator(op: Operator): Boolean {
@@ -758,7 +761,8 @@ fun DressPersonnelDirectorySheet(
                                     ),
                                     isSquadLeader = squads.any { it.leaderId == op.id && op.status != OperatorStatus.HQ_STAFF },
                                     pendingDeedCount = deedCountsByOp[op.id] ?: 0,
-                                    isBoardReady = op.id in boardReadyIds,
+                                    isBoardReady = op.id in boardReadyIds && op.id !in promotableIds,
+                                    isPromotable = op.id in promotableIds,
                                     honorCount = honorCountsByOp[op.id] ?: 0,
                                     onClick = { onSelectOperator(op.id) }
                                 )
@@ -797,7 +801,8 @@ fun DressPersonnelDirectorySheet(
                                 ),
                                 isSquadLeader = squads.any { it.leaderId == op.id && op.status != OperatorStatus.HQ_STAFF },
                                 pendingDeedCount = deedCountsByOp[op.id] ?: 0,
-                                isBoardReady = op.id in boardReadyIds,
+                                isBoardReady = op.id in boardReadyIds && op.id !in promotableIds,
+                                isPromotable = op.id in promotableIds,
                                 honorCount = honorCountsByOp[op.id] ?: 0,
                                 onClick = { onSelectOperator(op.id) }
                             )
@@ -863,13 +868,14 @@ private fun PersonnelDirectoryRow(
     pendingDeedCount: Int,
     isBoardReady: Boolean,
     honorCount: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isPromotable: Boolean = false
 ) {
     val extra = LocalAegisColors.current
     val borderCol = when {
         isSelected -> extra.brassBright
         pendingDeedCount > 0 -> extra.brass.copy(alpha = 0.8f)
-        isBoardReady -> extra.signalsCyan.copy(alpha = 0.7f)
+        isBoardReady || isPromotable -> extra.signalsCyan.copy(alpha = 0.7f)
         else -> extra.borderSubtle
     }
     val containerCol = if (isSelected) {
@@ -946,6 +952,22 @@ private fun PersonnelDirectoryRow(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondary,
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    // Session 33: promotable inside the tier; the player pins the rank
+                    if (isPromotable) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = extra.signalsContainer,
+                            border = BorderStroke(1.dp, extra.signalsCyan.copy(alpha = 0.7f))
+                        ) {
+                            Text(
+                                text = "P",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = extra.signalsCyan,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp).testTag("promotable_${operator.id}")
                             )
                         }
                     }

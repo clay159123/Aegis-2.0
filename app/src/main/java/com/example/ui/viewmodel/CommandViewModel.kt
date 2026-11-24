@@ -693,12 +693,75 @@ class CommandViewModel(
         showBanner(done.joinToString { "${it.type.title} Lv ${it.level}" } + " construction complete")
     }
 
+    /**
+     * Session 33 (Option B): pin the next rank for every soldier XP has made promotable (SGT and up, no board).
+     * One rank per soldier per press; a soldier with more XP stays promotable for the next press.
+     */
+    fun pinAllEligiblePromotions() {
+        val state = uiState.value
+        val eligible = state.operators.filter { it.pinEligibleRank != null }
+        if (eligible.isEmpty()) {
+            showBanner("No soldiers are ready to pin a new rank.")
+            return
+        }
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val pinned = eligible.map { op -> op to op.promotedTo(op.pinEligibleRank!!) }
+            repository.saveOperators(pinned.map { it.second })
+            val deeds = pinned.flatMap { (before, after) ->
+                newlyEligibleAwardDeeds(before = before, after = after, state = state, reasonTitle = "Promotion to ${after.rank.code}", now = now)
+            }
+            if (deeds.isNotEmpty()) {
+                repository.addPendingDeeds(deeds)
+                enqueueAwardPrompts(deeds)
+            }
+            showBanner(
+                if (pinned.size == 1) "${pinned[0].first.callsign} pinned ${pinned[0].second.rank.code}."
+                else "${pinned.size} soldiers pinned new ranks: " + pinned.joinToString { "${it.first.callsign} ${it.second.rank.code}" }
+            )
+        }
+    }
+
+    /** Session 33 (Option B): pin one soldier's next rank inside their tier. Free; XP has to be there first. */
+    fun pinPromotion(operatorId: String) {
+        val state = uiState.value
+        val op = state.operators.find { it.id == operatorId } ?: return
+        val next = op.pinEligibleRank
+        if (next == null) {
+            val target = OperatorRank.nextRank(op.rank)
+            showBanner(
+                if (target != null && op.xp < target.xpRequired) "${op.callsign} needs ${target.xpRequired - op.xp} more XP for ${target.code}."
+                else "${op.callsign} can't pin a new rank right now."
+            )
+            return
+        }
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val after = op.promotedTo(next)
+            repository.saveOperator(after)
+            val deeds = newlyEligibleAwardDeeds(before = op, after = after, state = state, reasonTitle = "Promotion to ${next.code}", now = now)
+            if (deeds.isNotEmpty()) {
+                repository.addPendingDeeds(deeds)
+                enqueueAwardPrompts(deeds)
+            }
+            showBanner("${op.callsign} pinned ${next.title} (${next.code} / ${next.payGrade}).")
+        }
+    }
+
     fun promoteOperator(
         operatorId: String,
         endorsementFocus: PromotionEndorsementFocus? = null
     ) {
         val state = uiState.value
         val op = state.operators.find { it.id == operatorId && it.unlocked && !it.status.isOutOfActiveService } ?: return
+        // Session 33: from SGT up, a rank inside the tier is pinned (free, XP-gated), not bought
+        if (op.pinnedRank != null && op.rank.tier != RankTier.SOLDIER) {
+            val next = OperatorRank.nextRank(op.rank)
+            if (next != null && !OperatorRank.isBoardGate(op.rank, next)) {
+                pinPromotion(operatorId)
+                return
+            }
+        }
         val boardEval = TacticalCalculator.evaluatePromotionBoard(
             operator = op,
             allOperators = state.operators,

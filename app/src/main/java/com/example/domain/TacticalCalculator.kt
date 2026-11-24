@@ -2252,7 +2252,9 @@ object TacticalCalculator {
         // Item 98: the guerrilla force and the Op Free Strait completion perk
         val freeStrait = ClandestineRules.guerrillaPassBonus(mission) + ClandestineRules.freeStraitSfBonus(mission) +
             ClandestineRules.nativeSfPassBonus(mission, selectedOperators) +
-            environmentPassBonus(mission, selectedOperators) + sniperPassBonus(mission, selectedOperators)
+            environmentPassBonus(mission, selectedOperators) + sniperPassBonus(mission, selectedOperators) +
+            // Session 33: Full Detachment / Full Squad rank mix
+            (SquadCompositionRules.teamBonus(mission, selectedOperators, squads)?.second ?: 0)
         return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan + talks + freeStrait)
             .coerceIn(minOdds, maxOdds)
     }
