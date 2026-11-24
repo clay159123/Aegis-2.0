@@ -285,7 +285,7 @@ fun DressAwardsScreen(
                                 modifier = Modifier.testTag("uniform_tab_mos")
                             ) {
                                 Text(
-                                    text = "${selectedOp.specialty.roleTag} • ${selectedOp.specialty.label}",
+                                    text = "${selectedOp.mosTag} • ${selectedOp.mosLabel}",
                                     style = MaterialTheme.typography.titleSmall,
                                     color = extra.signalsCyan,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -422,7 +422,7 @@ fun DressAwardsScreen(
                                     .padding(8.dp)
                             ) {
                                 Text(
-                                    text = selectedOp.specialty.roleTag,
+                                    text = selectedOp.mosTag,
                                     style = MaterialTheme.typography.labelLarge,
                                     color = extra.brassBright,
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp).testTag("uniform_portrait_mos")

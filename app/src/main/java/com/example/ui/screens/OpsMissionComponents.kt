@@ -1083,7 +1083,7 @@ internal fun HqStagingSheet(
                                     )
                                     Text(
                                         text = buildString {
-                                            append(op.specialty.label)
+                                            append(op.mosLabel)
                                             if (mission.risk.isTraining) {
                                                 append(" • Pass $opOdds%")
                                                 if (maxAttempts != null) append(" (${attemptsUsed}/$maxAttempts used)")

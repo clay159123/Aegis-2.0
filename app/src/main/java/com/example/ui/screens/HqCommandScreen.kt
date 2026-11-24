@@ -406,7 +406,7 @@ fun HqCommandScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "${op.specialty.label} • ${op.missionsCompleted} Ops Completed",
+                                    text = "${op.mosLabel} • ${op.missionsCompleted} Ops Completed",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = extra.textMuted
                                 )
@@ -813,7 +813,7 @@ private fun HqOccupiedBilletCard(
                     )
                 }
                 Text(
-                    text = "${operator.rank.title} ${operator.name} • ${operator.specialty.roleTag}",
+                    text = "${operator.rank.title} ${operator.name} • ${operator.mosTag}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

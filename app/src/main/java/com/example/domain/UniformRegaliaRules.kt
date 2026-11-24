@@ -1,5 +1,6 @@
 package com.example.domain
 
+import com.example.data.catalog.GameCatalog
 import com.example.domain.model.*
 
 /**
@@ -366,11 +367,33 @@ object UniformRegaliaRules {
 
     const val STAFF_CREST_ID = "insig_staff_crest"
 
+    /**
+     * Item 142: the one environment badge worn above the name plate, or null. No precedence between them:
+     * the badge matching the terrain of the soldier's combat patch campaign, else the terrain they've run
+     * the most missions in, else a fixed pick per soldier.
+     */
+    fun environmentBadgeFor(operator: Operator, ownedMedalIds: Set<String>): MedalDefinition? {
+        val earned = TacticalCalculator.ENVIRONMENT_SCHOOLS.filter { it.badgeId in ownedMedalIds }
+        if (earned.isEmpty()) return null
+        val pick = if (earned.size == 1) earned.first() else {
+            val patchTerrain = operator.combatPatchHistory.maxByOrNull { it.recordedAtMillis }?.campaignId
+                ?.let { id -> GameCatalog.campaigns.find { it.id == id }?.theater?.terrain }
+            earned.find { it.terrain == patchTerrain }
+                ?: earned.map { school ->
+                    school to operator.completedMissionIds.count { id -> GameCatalog.missions.find { it.id == id }?.theater?.terrain == school.terrain }
+                }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
+                ?: earned[Math.floorMod(operator.id.hashCode(), earned.size)]
+        }
+        return GameCatalog.medals.find { it.id == pick.badgeId }
+    }
+
     fun resolveChestBadgeSlots(
         operator: Operator,
-        ownedBadgeMedals: List<MedalDefinition>,
+        ownedBadgeMedalsAll: List<MedalDefinition>,
         overrides: UniformTailorOverrides
     ): List<MedalDefinition?> {
+        // Item 142: environment badges have their own spot above the name plate
+        val ownedBadgeMedals = ownedBadgeMedalsAll.filter { it.id !in TacticalCalculator.ENVIRONMENT_BADGE_IDS }
         val slots = listOf(
             ChestBadgeSlot.ABOVE_RACK to overrides.pinSlot1,
             ChestBadgeSlot.LEFT_POCKET to overrides.pinSlot2,
@@ -412,9 +435,9 @@ object UniformRegaliaRules {
                                 .firstOrNull { it.id in COMBAT_EXPERT_BADGE_IDS && it.id !in usedIds }
                             ?: chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
                                 .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS }
-                    // Slot 2: best skill badge not already worn
+                    // Slot 2: best skill badge not already worn; item 143: a sniper wears the Sniper Badge here
                     ChestBadgeSlot.LEFT_POCKET ->
-                        chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
+                        ownedById[TacticalCalculator.SNIPER_BADGE_ID]?.takeIf { it.id !in usedIds } ?: chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
                             .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS }
                     // Slot 3: an identification crest, else a catch-all for any unworn badge
                     // Item 92: the War College / General Staff crest always sits below the name tag, whatever the MOS

@@ -382,6 +382,10 @@ enum class OperatorSpecialty(val label: String, val roleTag: String, val recruit
     AVIATION("Army Aviation", "153A AVN", "Helicopter pilot flying insertions and support")
 }
 
+/** Item 143: the MOS name shown for a soldier: Sniper School graduates read "Sniper" (they count as 11B). */
+val Operator.mosLabel: String get() = if ("msn_sniper_school" in completedMissionIds) "Sniper" else specialty.label
+val Operator.mosTag: String get() = if ("msn_sniper_school" in completedMissionIds) "11B SNIPER" else specialty.roleTag
+
 /** Where a new recruit comes from (item 31). Each arrives at a set rank with that school's record. */
 enum class RecruitSource(
     val label: String,
@@ -406,10 +410,12 @@ data class SoldierEventBuffs(
     val opRequestType: com.example.domain.OpRequestType? = null,
     val opRequestUntilMillis: Long = 0L,
     val rifleQualBonusPct: Int = 0,
-    val leadsNextMission: Boolean = false
+    val leadsNextMission: Boolean = false,
+    /** Item 141: a banked Selection Prep bonus for the next SF School, Combat Diver or MFF try. */
+    val selectionPrepPct: Int = 0
 ) {
     fun toCsv(): String = listOf(
-        schoolDiscountUntilMillis, opRequestType?.name ?: "", opRequestUntilMillis, rifleQualBonusPct, leadsNextMission
+        schoolDiscountUntilMillis, opRequestType?.name ?: "", opRequestUntilMillis, rifleQualBonusPct, leadsNextMission, selectionPrepPct
     ).joinToString("|")
 
     companion object {
@@ -421,7 +427,8 @@ data class SoldierEventBuffs(
                 opRequestType = com.example.domain.OpRequestType.entries.find { it.name == p[1] },
                 opRequestUntilMillis = p[2].toLongOrNull() ?: 0L,
                 rifleQualBonusPct = p[3].toIntOrNull() ?: 0,
-                leadsNextMission = p[4] == "true"
+                leadsNextMission = p[4] == "true",
+                selectionPrepPct = p.getOrNull(5)?.toIntOrNull() ?: 0
             )
         }
     }
@@ -1142,7 +1149,12 @@ enum class InsigniaShape {
     SENIOR_AVIATOR_WINGS,
     MASTER_AVIATOR_WINGS,
     DIVER_BADGE,
-    MFF_WINGS
+    MFF_WINGS,
+    /** Items 142 and 143 */
+    MOUNTAIN_BADGE,
+    JUNGLE_BADGE,
+    ARCTIC_BADGE,
+    SNIPER_BADGE
 }
 
 enum class ChestBadgeSlot(val label: String, val ruleHint: String) {

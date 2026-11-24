@@ -100,6 +100,8 @@ fun OperatorUniformPreview(
     } else {
         emptyList()
     }
+    // Item 142: one environment school badge above the name plate and unit awards
+    val environmentBadge = UniformRegaliaRules.environmentBadgeFor(renderOperator, ownedIds)
     val combatPatch = UniformRegaliaRules.resolveCombatPatch(renderOperator)
     val sterileField = UniformRegaliaRules.isSfSquadMember(renderOperator, squads)
     val marksmanshipTier = UniformRegaliaRules.resolveMarksmanshipTier(renderOperator, equippedGear)
@@ -231,7 +233,8 @@ fun OperatorUniformPreview(
                     marksmanshipTier = marksmanshipTier,
                     leaderRole = leaderRole,
                     awardDevices = awardDevices,
-                    textMeasurer = textMeasurer
+                    textMeasurer = textMeasurer,
+                    environmentBadge = environmentBadge
                 )
                 WardrobeKit.ALPHAS, WardrobeKit.MESS -> drawDressUniformFigure(
                     w = w,
@@ -255,7 +258,8 @@ fun OperatorUniformPreview(
                     awardDevices = awardDevices,
                     textMeasurer = textMeasurer,
                     squads = squads,
-                    kit = inferredKit
+                    kit = inferredKit,
+                    environmentBadge = environmentBadge
                 )
             }
             }
@@ -291,7 +295,8 @@ private fun DrawScope.drawDressUniformFigure(
     awardDevices: Map<String, UniformRegaliaRules.AwardDeviceInfo>,
     textMeasurer: TextMeasurer,
     squads: List<TacticalSquad> = emptyList(),
-    kit: WardrobeKit = WardrobeKit.ALPHAS
+    kit: WardrobeKit = WardrobeKit.ALPHAS,
+    environmentBadge: MedalDefinition? = null
 ) {
     val style = operator.dressStyle
     val tunicCol = Color(style.tunicHex)
@@ -749,7 +754,8 @@ private fun DrawScope.drawDressUniformFigure(
         callsign = operator.callsign,
         unitAwards = unitAwards,
         leaderRole = leaderRole,
-        textMeasurer = textMeasurer
+        textMeasurer = textMeasurer,
+        environmentBadge = environmentBadge
     )
 
     // Center Brass Coat Buttons
@@ -1867,6 +1873,8 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 }
             }
         }
+        InsigniaShape.MOUNTAIN_BADGE, InsigniaShape.JUNGLE_BADGE, InsigniaShape.ARCTIC_BADGE, InsigniaShape.SNIPER_BADGE ->
+            drawEnvironmentOrSniperBadge(shape, center, badgeW, badgeH, col)
         InsigniaShape.MFF_WINGS -> {
             // Wings with a parachute and an upright dagger through the middle
             drawLine(col, Offset(cx - badgeW * 0.48f, cy + badgeH * 0.02f), Offset(cx + badgeW * 0.48f, cy + badgeH * 0.02f), strokeWidth = 2.2f, cap = StrokeCap.Round)

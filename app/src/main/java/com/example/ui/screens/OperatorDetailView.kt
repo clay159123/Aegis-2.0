@@ -168,7 +168,7 @@ fun OperatorDetailView(
                         }
                         Text(
                             text = buildString {
-                                append("${operator.rank.title} ${operator.name} • ${operator.specialty.roleTag}")
+                                append("${operator.rank.title} ${operator.name} • ${operator.mosTag}")
                                 if (operator.status == OperatorStatus.HQ_STAFF) {
                                     append(" • HQ ${operator.hqRole?.shortCode ?: "STAFF"}")
                                 }
@@ -587,9 +587,9 @@ fun OperatorDetailView(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = if (operator.status == OperatorStatus.HQ_STAFF) {
-                                "${operator.specialty.label} (${operator.specialty.roleTag}) • HQ Staff (${operator.staffOpsSupported} Ops Supported, ${operator.missionsCompleted} Field Ops) • ${awardedMedals.size} Honors"
+                                "${operator.mosLabel} (${operator.mosTag}) • HQ Staff (${operator.staffOpsSupported} Ops Supported, ${operator.missionsCompleted} Field Ops) • ${awardedMedals.size} Honors"
                             } else {
-                                "${operator.specialty.label} (${operator.specialty.roleTag}) • ${operator.missionsCompleted} Ops • ${awardedMedals.size} Honors"
+                                "${operator.mosLabel} (${operator.mosTag}) • ${operator.missionsCompleted} Ops • ${awardedMedals.size} Honors"
                             },
                             style = MaterialTheme.typography.labelMedium,
                             color = extra.brassBright

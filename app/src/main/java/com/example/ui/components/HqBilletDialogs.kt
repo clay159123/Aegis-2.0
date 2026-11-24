@@ -347,7 +347,7 @@ fun FillHqBilletCandidateDialog(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "${op.specialty.label} • ${op.missionsCompleted} Ops Completed",
+                                            text = "${op.mosLabel} • ${op.missionsCompleted} Ops Completed",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = extra.textMuted
                                         )

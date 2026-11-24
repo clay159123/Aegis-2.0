@@ -59,7 +59,9 @@ class TacticalCalculatorTest {
             "msn_ranger_school", "msn_sf_school", "msn_ocs_school",
             "msn_sapper_school", "msn_pathfinder_school", "msn_eib_testing", "msn_rifle_qual",
             "msn_flight_school", "msn_flight_hours", "msn_combat_diver_school", "msn_mff_school",
-            "msn_air_assault_school", "msn_sere_school", "msn_sf_aviation_school"
+            "msn_air_assault_school", "msn_sere_school", "msn_sf_aviation_school",
+            // Session 29: prep, environment and sniper schools are all outdoors
+            "msn_selection_prep", "msn_mountain_school", "msn_jungle_school", "msn_arctic_school", "msn_sniper_school"
         )
         GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }.forEach { school ->
             val expected = if (school.id in fieldSchools) WardrobeKit.FIELD else WardrobeKit.BRAVOS
@@ -1567,7 +1569,9 @@ class TacticalCalculatorTest {
                 "msn_air_assault_school",
                 "msn_sere_school",
                 "msn_sf_aviation_school",
-                "msn_language_school"
+                "msn_language_school",
+                // Session 29
+                "msn_selection_prep", "msn_mountain_school", "msn_jungle_school", "msn_arctic_school", "msn_sniper_school"
             ),
             schoolIds
         )
@@ -1868,10 +1872,10 @@ class TacticalCalculatorTest {
                 mos != OperatorSpecialty.AVIATION,
                 TacticalCalculator.canOperatorDeployOnMission(maxedOp(mos).copy(completedMissionIds = setOf("msn_basic_qual", "msn_night_qual")), rangerSchool, emptySet()).eligible
             )
-            // SFQC: combat MOS (Infantry, Recon, Engineer) plus Command and Medic; not Signals or Aviation
+            // SFQC: every ground MOS (item 139 added Signals); not Aviation
             assertEquals(
                 "SFQC MOS check for ${mos.name}",
-                mos != OperatorSpecialty.SIGNALS && mos != OperatorSpecialty.AVIATION,
+                mos != OperatorSpecialty.AVIATION,
                 TacticalCalculator.canOperatorDeployOnMission(maxedOp(mos), sfSchool, emptySet()).eligible
             )
         }
@@ -2724,7 +2728,7 @@ class TacticalCalculatorTest {
     @Test
     fun schoolsHaveNoEnrollmentCapButMissionsKeepTeamSizes() {
         val schools = GameCatalog.missions.filter { it.scope == MissionScope.TRAINING }
-        assertEquals(25, schools.size)
+        assertEquals(30, schools.size)
         schools.forEach { school ->
             assertFalse(school.id, school.hasClassCap)
             assertTrue(school.id, 15 in school.minOperators..school.maxOperators)

@@ -786,6 +786,8 @@ class CommandViewModel(
         passed: Boolean,
         flightHours: Int = TacticalCalculator.FLIGHT_HOURS_PER_SESSION
     ): Operator = when {
+        // Item 143: a Sniper School graduate becomes a Sniper, who counts as Infantry (11B)
+        passed && missionId == TacticalCalculator.SNIPER_SCHOOL_ID -> op.copy(specialty = OperatorSpecialty.ASSAULT)
         // Session 23: an OCS graduate commissions as a 2LT on the spot, the way WOCS makes a WO1
         passed && missionId == TacticalCalculator.OCS_MISSION_ID && op.rank.tier.isEnlisted -> commissionFromOcs(op)
         passed && missionId == TacticalCalculator.WOCS_MISSION_ID -> {
@@ -1295,7 +1297,14 @@ class CommandViewModel(
                     completedMissionIds = updatedCompletedIds,
                     schoolAttempts = updatedAttempts,
                     status = nextStatus,
-                    eventBuffs = if (isRifleQual) op.eventBuffs.copy(rifleQualBonusPct = 0) else op.eventBuffs,
+                    eventBuffs = when {
+                        isRifleQual -> op.eventBuffs.copy(rifleQualBonusPct = 0)
+                        // Item 141: a pass banks the prep; any try at a pipeline school uses it up
+                        mission.id == TacticalCalculator.SELECTION_PREP_ID && passed ->
+                            op.eventBuffs.copy(selectionPrepPct = TacticalCalculator.SELECTION_PREP_BONUS_PCT)
+                        mission.id in TacticalCalculator.SELECTION_PREP_SCHOOLS -> op.eventBuffs.copy(selectionPrepPct = 0)
+                        else -> op.eventBuffs
+                    },
                     languageRegions = if (passed && deployment.languageRegion != null) op.languageRegions + deployment.languageRegion else op.languageRegions
                 ).let { grad -> applyCareerSchoolEffects(grad, mission.id, passed, deployment.flightHours) }
                 newRank = graduatedOp.rank
@@ -2331,8 +2340,8 @@ class CommandViewModel(
                 )
             }
             showBanner(
-                if (source == RecruitSource.RECEPTION) "${recruit.rank.code} ${recruit.callsign} (${recruit.specialty.roleTag}) arrived post-Basic!"
-                else "${recruit.rank.code} ${recruit.callsign} (${recruit.specialty.roleTag}) reported from ${source.label}!"
+                if (source == RecruitSource.RECEPTION) "${recruit.rank.code} ${recruit.callsign} (${recruit.mosTag}) arrived post-Basic!"
+                else "${recruit.rank.code} ${recruit.callsign} (${recruit.mosTag}) reported from ${source.label}!"
             )
         }
     }
