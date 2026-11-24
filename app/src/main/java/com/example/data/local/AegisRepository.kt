@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 37
+        const val SAVE_FORMAT_VERSION = 38
     }
 
     private val commanderMutex = Mutex()
@@ -600,6 +600,7 @@ private fun encodeTailorOverridesCsv(o: UniformTailorOverrides): String {
         "med2:${o.medalSlot2}",
         "med3:${o.medalSlot3}",
         "med4:${o.medalSlot4}",
+        "env:${o.environmentSlot}",
         "cit:${if (o.showUnitCitation) "1" else "0"}",
         "str:${if (o.showServiceStripes) "1" else "0"}",
         "obars:${if (o.showOverseasBars) "1" else "0"}",
@@ -634,6 +635,7 @@ private fun decodeTailorOverridesCsv(csv: String): UniformTailorOverrides {
         medalSlot2 = map["med2"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
         medalSlot3 = map["med3"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
         medalSlot4 = map["med4"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
+        environmentSlot = map["env"]?.takeIf { it.isNotBlank() } ?: UniformTailorOverrides.SLOT_AUTO,
         showUnitCitation = map["cit"] != "0",
         showServiceStripes = map["str"] != "0",
         showOverseasBars = map["obars"] != "0",

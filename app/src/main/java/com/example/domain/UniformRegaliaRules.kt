@@ -375,6 +375,12 @@ object UniformRegaliaRules {
     fun environmentBadgeFor(operator: Operator, ownedMedalIds: Set<String>): MedalDefinition? {
         val earned = TacticalCalculator.ENVIRONMENT_SCHOOLS.filter { it.badgeId in ownedMedalIds }
         if (earned.isEmpty()) return null
+        // Tailor override: a chosen environment badge the soldier owns, or none at all
+        when (val slot = operator.tailorOverrides.environmentSlot) {
+            UniformTailorOverrides.SLOT_NONE -> return null
+            UniformTailorOverrides.SLOT_AUTO -> Unit
+            else -> earned.find { it.badgeId == slot }?.let { chosen -> return GameCatalog.medals.find { it.id == chosen.badgeId } }
+        }
         val pick = if (earned.size == 1) earned.first() else {
             val patchTerrain = operator.combatPatchHistory.maxByOrNull { it.recordedAtMillis }?.campaignId
                 ?.let { id -> GameCatalog.campaigns.find { it.id == id }?.theater?.terrain }

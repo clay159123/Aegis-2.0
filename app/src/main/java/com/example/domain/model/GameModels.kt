@@ -129,8 +129,21 @@ enum class FacilityType(
         baseRatePerSec = 0.0,
         baseCreditCost = 90.0,
         baseSupplyCost = 50.0,
-        perkDescription = "+1% school pass rate per level (+2% for SF, Ranger and EIB) • hosts Rifle Qualification and raises scores",
+        perkDescription = "+2% pass rate per level at Basics, Rifle Qual, EIB and Sniper • hosts Rifle Qualification and raises scores",
         unlockHqLevel = 3,
+        startLevel = 0
+    ),
+    /** Item 159: the Open Lot's building, modeled on Fort Benning's Airborne & Ranger Training Brigade. */
+    AIRBORNE_RANGER_CENTER(
+        id = "airborne_ranger_center",
+        title = "Airborne & Ranger Training Center",
+        subtitle = "Jump towers, rappel tower and Ranger lanes",
+        primaryResource = ResourceType.CREDITS,
+        baseRatePerSec = 0.0,
+        baseCreditCost = 95.0,
+        baseSupplyCost = 50.0,
+        perkDescription = "+2% pass rate per level at Airborne, Air Assault, Pathfinder, Ranger and Military Free Fall",
+        unlockHqLevel = 4,
         startLevel = 0
     ),
     AID_STATION(
@@ -956,6 +969,8 @@ data class UniformTailorOverrides(
     val medalSlot2: String = SLOT_AUTO,
     val medalSlot3: String = SLOT_AUTO,
     val medalSlot4: String = SLOT_AUTO,
+    /** Item 142: environment school badge above the name plate; Auto follows the combat patch, then most-deployed terrain. */
+    val environmentSlot: String = SLOT_AUTO,
     val showUnitCitation: Boolean = true,
     val showServiceStripes: Boolean = true,
     val showOverseasBars: Boolean = true,
@@ -1607,7 +1622,7 @@ data class UniformTailorRequest(
  * [accentArgb] gives each theater its own look on mission cards (item 48).
  */
 enum class TheaterRegion(val label: String, val terrain: Terrain, val accentArgb: Long) {
-    HQ_GROUNDS("FOB Training & Schools", Terrain.GARRISON, 0xFF8A93A0),
+    HQ_GROUNDS("Post Training & Schools", Terrain.GARRISON, 0xFF8A93A0),
     DIPLOMATIC_CORPS("Allied Diplomatic Wing", Terrain.GARRISON, 0xFFB9A46A),
     VERIDIAN_RIDGE("Veridian Ridge", Terrain.WOODLAND, 0xFF5E8C4A),
     KESTREL_STRAIT("Kestrel Strait", Terrain.COASTAL, 0xFF3F8FB5),

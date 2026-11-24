@@ -31,7 +31,7 @@ class Session15Test {
             "medal_sovereign_star", "medal_distinguished_cross", "medal_distinguished_service", "medal_silver_vanguard",
             "medal_legion_merit", "medal_flying_cross", "medal_soldiers", "medal_bronze_valor", "medal_purple_shield",
             "medal_air_medal", "medal_army_commendation", "medal_army_achievement", "medal_good_conduct",
-            "medal_national_defense", "medal_humanitarian", "medal_overseas_service", "medal_nato", "medal_un"
+            "medal_national_defense", "medal_humanitarian", "medal_overseas_service", "medal_un", "medal_nato"
         )
         val order = ids.map { medal(it).precedenceOrder }
         assertEquals(order.sorted(), order)

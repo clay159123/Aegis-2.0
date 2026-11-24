@@ -1181,7 +1181,7 @@ object GameCatalog {
             precedenceOrder = 2,
             description = "Second-highest Army combat decoration for extraordinary heroism in high-hazard sectors.",
             qualificationRule = "Survive High+ Combat Op, 6+ Combat Ops & Bronze/Silver Valor or Wound (or Fallen).",
-            ribbonStripeHexes = listOf(0xFF1A2A4A, 0xFFFFFFFF, 0xFF9C2D2D, 0xFFFFFFFF, 0xFF1A2A4A),
+            ribbonStripeHexes = listOf(0xFF9C2D2D, 0xFFFFFFFF, 0xFF1A2A4A, 0xFF1A2A4A, 0xFF1A2A4A, 0xFFFFFFFF, 0xFF9C2D2D),
             prestigeCost = 32,
             minMissionsRequired = 6,
             firepowerBonus = 5,
@@ -1311,7 +1311,7 @@ object GameCatalog {
             category = AwardCategory.RIBBON,
             tier = MedalTier.SERVICE,
             precedenceOrder = 9,
-            description = "Ribbon-only honor issued to Army troops deployed on combat missions beyond FOB perimeter.",
+            description = "Ribbon-only honor issued to Army troops deployed on combat missions away from the home installation.",
             qualificationRule = "Complete 1+ Field Combat Deployment (non-training).",
             ribbonStripeHexes = listOf(0xFF2D4F38, 0xFFD8B24C, 0xFF1F3654, 0xFFD8B24C, 0xFF2D4F38),
             prestigeCost = 8,
@@ -1332,7 +1332,7 @@ object GameCatalog {
             minTierRequired = RankTier.NCO,
             description = "Awarded upon graduating Army NCO leadership academies (Sergeant E-5 and above).",
             qualificationRule = "Requires NCO+ rank.",
-            ribbonStripeHexes = listOf(0xFF265C3B, 0xFFD8B24C, 0xFF1E3E66, 0xFFD8B24C, 0xFF265C3B),
+            ribbonStripeHexes = listOf(0xFFE0B84A, 0xFF1E3E66, 0xFFE0B84A, 0xFF2E6B3F, 0xFFE0B84A, 0xFF1E3E66, 0xFFE0B84A),
             prestigeCost = 7,
             minMissionsRequired = 0,
             firepowerBonus = 2,
@@ -1584,7 +1584,7 @@ object GameCatalog {
             isRightShoulder = false,
             description = "Oriental-blue & silver shoulder cord worn by Military Intelligence & Pathfinder reconnaissance graduates.",
             qualificationRule = "Graduate Military Intelligence & Pathfinder School.",
-            ribbonStripeHexes = listOf(0xFF1D3E5E, 0xFF63B8D6, 0xFF1D3E5E),
+            ribbonStripeHexes = listOf(0xFF1D3E5E, 0xFF63B8D6, 0xFFFFFFFF, 0xFF63B8D6, 0xFF1D3E5E),
             prestigeCost = 8,
             minMissionsRequired = 0,
             firepowerBonus = 0,
@@ -1604,7 +1604,7 @@ object GameCatalog {
             isRightShoulder = false,
             description = "Maroon-and-white shoulder cord honoring Army Combat Medics & Trauma Academy graduates.",
             qualificationRule = "Graduate Combat Medical & Trauma Academy.",
-            ribbonStripeHexes = listOf(0xFF8C2D42, 0xFFFFFFFF, 0xFF8C2D42),
+            ribbonStripeHexes = listOf(0xFF8C2D42, 0xFFFFFFFF, 0xFF8C2D42, 0xFFFFFFFF, 0xFF8C2D42),
             prestigeCost = 7,
             minMissionsRequired = 0,
             firepowerBonus = 0,
@@ -1772,7 +1772,7 @@ object GameCatalog {
             insigniaColorHex = 0xFF6AB7F5,
             description = "Curved Airborne shoulder tab worn above the unit patch by graduates of Army Airborne & Parachutist School.",
             qualificationRule = "Graduate Army Airborne & Parachutist School.",
-            ribbonStripeHexes = listOf(0xFF182233, 0xFF6AB7F5, 0xFF182233),
+            ribbonStripeHexes = listOf(0xFF182233, 0xFFF2C94C, 0xFF182233),
             prestigeCost = 9,
             minMissionsRequired = 1,
             firepowerBonus = 2,
@@ -1835,7 +1835,7 @@ object GameCatalog {
             allowedBadgeSlots = setOf(ChestBadgeSlot.LEFT_POCKET, ChestBadgeSlot.RIGHT_POCKET),
             description = "Oriental-blue & silver intelligence pocket crest for reconnaissance & telemetry analysts.",
             qualificationRule = "Graduate Military Intelligence & Pathfinder School.",
-            ribbonStripeHexes = listOf(0xFF1A3A59, 0xFF63B8D6, 0xFF1A3A59),
+            ribbonStripeHexes = listOf(0xFF63B8D6, 0xFF1A3A59, 0xFF63B8D6),
             prestigeCost = 8,
             minMissionsRequired = 1,
             firepowerBonus = 0,
@@ -1856,7 +1856,7 @@ object GameCatalog {
             allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
             description = "Silver winged-rotor school badge earned in fast-rope airmobile and sling-load operations.",
             qualificationRule = "Graduate Army Airborne & Parachutist School.",
-            ribbonStripeHexes = listOf(0xFF1E2D3D, 0xFFDDE3EC, 0xFF1E2D3D),
+            ribbonStripeHexes = listOf(0xFF4A5A3A, 0xFFDDE3EC, 0xFF4A5A3A),
             prestigeCost = 7,
             minMissionsRequired = 1,
             firepowerBonus = 2,
@@ -1877,7 +1877,7 @@ object GameCatalog {
             allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK),
             description = "Infantry-blue musket bar inside a silver oak wreath, for infantry who fought in ground combat.",
             qualificationRule = "Infantry or SF-qualified • Survive a field combat operation.",
-            ribbonStripeHexes = listOf(0xFF2C6FB8, 0xFFDDE3EC, 0xFF2C6FB8),
+            ribbonStripeHexes = listOf(0xFFC9A44A, 0xFF2C6FB8, 0xFFDDE3EC, 0xFF2C6FB8, 0xFFC9A44A),
             prestigeCost = 12,
             minMissionsRequired = 1,
             firepowerBonus = 5,
@@ -1898,7 +1898,7 @@ object GameCatalog {
             allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK),
             description = "Medical cross and caduceus inside a silver oak wreath, for medics who treated casualties in combat.",
             qualificationRule = "Medic • Survive a field combat operation.",
-            ribbonStripeHexes = listOf(0xFF2E4D3B, 0xFF7FD1AE, 0xFF2E4D3B),
+            ribbonStripeHexes = listOf(0xFFC9A44A, 0xFF2E4D3B, 0xFF7FD1AE, 0xFF2E4D3B, 0xFFC9A44A),
             prestigeCost = 12,
             minMissionsRequired = 1,
             firepowerBonus = 0,
@@ -2072,7 +2072,7 @@ object GameCatalog {
             allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
             description = "Aviator wings with a star above the shield. Replaces the basic Aviator Badge.",
             qualificationRule = "CW3+, Aviator Badge & ${TacticalCalculator.SENIOR_WINGS_FLIGHT_SKILL}+ flight skill.",
-            ribbonStripeHexes = listOf(0xFF2A4FA8, 0xFFE89A2B, 0xFF2A4FA8),
+            ribbonStripeHexes = listOf(0xFF2A4FA8, 0xFFDDE3EC, 0xFF2A4FA8, 0xFFDDE3EC, 0xFF2A4FA8),
             prestigeCost = 10,
             minMissionsRequired = 0,
             firepowerBonus = 0,
@@ -2114,7 +2114,7 @@ object GameCatalog {
             isRightShoulder = false,
             description = "Ultramarine blue and golden orange braided cord of the Army Aviation branch.",
             qualificationRule = "Graduate Flight School.",
-            ribbonStripeHexes = listOf(0xFF2A4FA8, 0xFFE89A2B, 0xFF2A4FA8),
+            ribbonStripeHexes = listOf(0xFF2A4FA8, 0xFFE89A2B, 0xFF2A4FA8, 0xFFE89A2B, 0xFF2A4FA8, 0xFFE89A2B, 0xFF2A4FA8),
             prestigeCost = 7,
             minMissionsRequired = 0,
             firepowerBonus = 0,
@@ -2153,7 +2153,7 @@ object GameCatalog {
             allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
             description = "Parachutist wings with an upright dagger, earned at Military Free Fall School.",
             qualificationRule = "Graduate Military Free Fall School (SF-qualified).",
-            ribbonStripeHexes = listOf(0xFF1B2433, 0xFFDDE3EC, 0xFF1B2433),
+            ribbonStripeHexes = listOf(0xFF1B2433, 0xFFDDE3EC, 0xFF8C2525, 0xFFDDE3EC, 0xFF1B2433),
             prestigeCost = 14,
             minMissionsRequired = 0,
             firepowerBonus = 2,
@@ -2174,7 +2174,7 @@ object GameCatalog {
             allowedBadgeSlots = setOf(ChestBadgeSlot.ABOVE_RACK, ChestBadgeSlot.LEFT_POCKET),
             description = "Silver dive helmet badge of the Special Forces Combat Diver Qualification Course.",
             qualificationRule = "Graduate Combat Diver Qualification (SF-qualified).",
-            ribbonStripeHexes = listOf(0xFF14365C, 0xFFDDE3EC, 0xFF14365C),
+            ribbonStripeHexes = listOf(0xFF14365C, 0xFF63B8D6, 0xFF14365C),
             prestigeCost = 14,
             minMissionsRequired = 0,
             firepowerBonus = 1,
@@ -2378,7 +2378,7 @@ object GameCatalog {
                 graduationRewardsSummary = "Grants +1 FP, +1 RS • Awards Army Service Ribbon & Infantry Cord"
             ),
             baseSuccessRatePct = 86,
-            briefing = "FOB range qualification, land navigation, and uniform inspection for post-Basic soldiers.",
+            briefing = "Post range qualification, land navigation, and uniform inspection for post-Basic soldiers.",
             durationSeconds = 15,
             minOperators = 1,
             maxOperators = MissionTemplate.NO_CLASS_CAP,
@@ -2544,7 +2544,7 @@ object GameCatalog {
             rewardXp = 75,
             commsFeed = listOf(
                 "Convoy load balancing & theater ammo manifest check.",
-                "Sling-load pallet rigging and FOB supply routing scored.",
+                "Sling-load pallet rigging and post supply routing scored.",
                 "Quartermaster Logistics Sustainment certificate issued!"
             )
         ),
@@ -2578,7 +2578,7 @@ object GameCatalog {
             rewardPrestige = 7.0,
             rewardXp = 80,
             commsFeed = listOf(
-                "Encrypting tactical mesh links across FOB towers.",
+                "Encrypting tactical mesh links across post towers.",
                 "EW specialists locating & nullifying hostile jammers.",
                 "Cyber & Signals Academy grading complete!"
             )
@@ -4994,4 +4994,27 @@ object GameCatalog {
 
     val campaignMissionsById: Map<String, MissionTemplate>
         get() = missions.filter { it.campaignId != null }.associateBy { it.id }
+
+    /** Item 155: school categories, in pipeline order. Each school appears in exactly one. */
+    data class SchoolCategory(val id: String, val title: String, val missionIds: List<String>)
+
+    val schoolCategories: List<SchoolCategory> = listOf(
+        SchoolCategory("basics", "Basics & Marksmanship", listOf(
+            "msn_basic_qual", "msn_rifle_qual", "msn_eib_testing", "msn_sniper_school")),
+        SchoolCategory("mos", "MOS Schools", listOf(
+            "msn_medical_school", "msn_engineer_school", "msn_sapper_school", "msn_signals_school",
+            "msn_intel_school", "msn_logistics_school")),
+        SchoolCategory("leadership", "Leadership & Commissioning", listOf(
+            "msn_nco_school", "msn_snco_school", "msn_ocs_school", "msn_wocs")),
+        SchoolCategory("airborne_ranger", "Airborne & Ranger", listOf(
+            "msn_night_qual", "msn_air_assault_school", "msn_pathfinder_school", "msn_ranger_school")),
+        SchoolCategory("environment", "Environment", listOf(
+            "msn_mountain_school", "msn_jungle_school", "msn_arctic_school")),
+        SchoolCategory("sf_pipeline", "SF Pipeline", listOf(
+            "msn_sere_school", "msn_selection_prep", "msn_sf_school", "msn_sere3_school",
+            "msn_mff_school", "msn_combat_diver_school")),
+        SchoolCategory("language", "Language", listOf("msn_language_school")),
+        SchoolCategory("aviation", "Aviation", listOf(
+            "msn_flight_school", "msn_flight_hours", "msn_sf_aviation_school"))
+    )
 }

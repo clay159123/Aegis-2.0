@@ -26,6 +26,8 @@ object PowRules {
     const val STAT_REDUCTION_PER_POINT = 0.01
     const val MAX_STAT_REDUCTION = 0.40
     const val SERE_CAPTURE_FACTOR = 0.6
+    /** SERE Level 3 graduates are harder still to capture. */
+    const val SERE3_CAPTURE_FACTOR = 0.4
     /** Item 62 (Session 21) will pass true when a clandestine cover is blown. */
     const val BLOWN_COVER_FACTOR = 3.0
 
@@ -39,7 +41,11 @@ object PowRules {
         val base = baseCaptureChancePct(mission.risk, missionSucceeded)
         val statPoints = (operator.baseStealth - 20).coerceAtLeast(0) + (operator.baseResilience - 20).coerceAtLeast(0)
         val statFactor = 1.0 - (statPoints * STAT_REDUCTION_PER_POINT).coerceAtMost(MAX_STAT_REDUCTION)
-        val sere = if (TacticalCalculator.isSereQualified(operator)) SERE_CAPTURE_FACTOR else 1.0
+        val sere = when {
+            TacticalCalculator.sereLevel(operator) >= 3 -> SERE3_CAPTURE_FACTOR
+            TacticalCalculator.isSereQualified(operator) -> SERE_CAPTURE_FACTOR
+            else -> 1.0
+        }
         val cover = if (blownCover) BLOWN_COVER_FACTOR else 1.0
         val sniper = if (TacticalCalculator.isSniper(operator)) TacticalCalculator.SNIPER_CAPTURE_FACTOR else 1.0
         return base * statFactor * sere * cover * sniper
