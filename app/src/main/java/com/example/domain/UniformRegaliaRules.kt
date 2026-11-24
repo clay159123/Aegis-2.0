@@ -461,16 +461,19 @@ object UniformRegaliaRules {
                             ?: ownedBadgeMedals.sortedBy { it.precedenceOrder }
                                 .firstOrNull { it.id in COMBAT_EXPERT_BADGE_IDS && it.id !in usedIds }
                             ?: chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
-                                .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS }
+                                .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS && it.id != STAFF_CREST_ID }
                     // Slot 2: best skill badge not already worn; item 143: a sniper wears the Sniper Badge here
                     ChestBadgeSlot.LEFT_POCKET ->
                         ownedById[TacticalCalculator.SNIPER_BADGE_ID]?.takeIf { it.id !in usedIds } ?: chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty)
-                            .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS }
+                            // Item 167: the staff crest only ever goes below the name tag
+                            .firstOrNull { it.id !in usedIds && it.id !in COMBAT_EXPERT_BADGE_IDS && it.id != STAFF_CREST_ID }
                     // Slot 3: an identification crest, else a catch-all for any unworn badge
-                    // Item 92: the War College / General Staff crest always sits below the name tag, whatever the MOS
+                    // Item 92: HQ staff wear the General Staff crest below the name tag, whatever the MOS.
+                    // Item 167: a CGSC graduate in the field wears their own MOS crest there; the staff crest
+                    // only fills the slot when nothing else does (or by a Tailor pick)
                     ChestBadgeSlot.RIGHT_POCKET ->
-                        ownedById[STAFF_CREST_ID]?.takeIf { it.id !in usedIds }
-                            ?: chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty).firstOrNull { it.id !in usedIds }
+                        ownedById[STAFF_CREST_ID]?.takeIf { it.id !in usedIds && operator.status == OperatorStatus.HQ_STAFF }
+                            ?: chestBadgesForSlot(ownedBadgeMedals, slot, operator.specialty).firstOrNull { it.id !in usedIds && it.id != STAFF_CREST_ID }
                             ?: ownedBadgeMedals.sortedBy { it.precedenceOrder }.firstOrNull { it.id !in usedIds }
                 }
                 if (pick != null) {
