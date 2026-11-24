@@ -3009,8 +3009,9 @@ class TacticalCalculatorTest {
             .copy(completedMissionIds = setOf("msn_basic_qual"))
         // Score: own firepower + Range + roll; gear plays no part
         val fp = TacticalCalculator.soldierStats(soldier, emptyList()).firepower
-        assertEquals(fp + 7, TacticalCalculator.rifleQualScore(soldier, emptyList(), facNoRange, 7))
-        assertEquals(fp + 5 + 7, TacticalCalculator.rifleQualScore(soldier, emptyList(), facRange5, 7))
+        // Item 148: +2 for an infantry MOS, and the Range adds half a point per level
+        assertEquals(fp + 2 + 7, TacticalCalculator.rifleQualScore(soldier, emptyList(), facNoRange, 7))
+        assertEquals(fp + 2 + 2 + 7, TacticalCalculator.rifleQualScore(soldier, emptyList(), facRange5, 7))
         // A better result waits for the player; the uniform shows nothing until it's awarded
         val (pendingOp, first) = TacticalCalculator.applyRifleQualification(soldier, SHARPSHOOTER_SCORE, 2)
         assertTrue(first.improved)

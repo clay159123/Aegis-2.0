@@ -418,6 +418,7 @@ class CommandViewModel(
                 repairStarterSchools(state)
                 repairCommandSeniority(state)
                 repairSfSquadNames(state)
+                repairSfTeamPatches(state)
                 resolveCaptivity(state, now)
                 // Item 62: covers that blow now; the clock drops and the team must choose
                 state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
@@ -851,6 +852,16 @@ class CommandViewModel(
      * Item 150 follow-up: saves from before the seniority rule can hold a Deputy who outranks the CO.
      * Swap them once so the senior officer commands (the Deputy cap would otherwise shrink the general).
      */
+    /** Item 120: SF squads saved before team patches get their team's arrowhead once. */
+    private suspend fun repairSfTeamPatches(state: CommandUiState) {
+        val fixed = mutableListOf<TacticalSquad>()
+        state.squads.filter { it.isSpecialForces && !it.standardPatch.isSfTeamPatch }.forEach { sq ->
+            val current = state.squads.map { o -> fixed.find { it.id == o.id } ?: o }
+            fixed += sq.copy(standardPatch = UnitPatchStyle.sfTeamPatchFor(sq, current))
+        }
+        if (fixed.isNotEmpty()) repository.saveSquads(fixed)
+    }
+
     /** Item 146: SF squads that still carry an auto-assigned NATO name become ODA 1, 2, 3 once. */
     private suspend fun repairSfSquadNames(state: CommandUiState) {
         val renamed = mutableListOf<TacticalSquad>()
@@ -3467,8 +3478,14 @@ class CommandViewModel(
             existing?.name ?: SquadCohesionRules.nextDefaultSquadName(state.squads.filter { it.id != squadId }, specialForces)
         }
         val now = System.currentTimeMillis()
-        // Squads always carry a division patch; a missing or non-division pick gets the first free one
-        val resolvedPatch = standard.patch.takeIf { it.isDivision }
+        // Squads always carry a division patch; a missing or non-division pick gets the first free one.
+        // Item 120: SF squads carry their team's arrowhead instead.
+        val resolvedPatch = if (specialForces) {
+            UnitPatchStyle.sfTeamPatchFor(
+                (existing ?: TacticalSquad("sq_new", resolvedName, validIds, null)).copy(name = resolvedName, isSpecialForces = true),
+                state.squads
+            )
+        } else standard.patch.takeIf { it.isDivision }
             ?: existing?.standardPatch?.takeIf { it.isDivision }
             ?: UnitPatchStyle.firstUnusedDivision(state.squads, excludingSquadId = existing?.id)
         val targetSquad = if (existing != null) {

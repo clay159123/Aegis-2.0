@@ -443,7 +443,7 @@ fun UnitPatchDropdown(
             if (isHqStaff) add(UnitPatchStyle.SUPREME_HQ)
             if (isAviator) add(UnitPatchStyle.AVIATION_BRIGADE)
             if (isSfAviator) add(UnitPatchStyle.SOA)
-            if (isSfSquad) add(UnitPatchStyle.SPECIAL_FORCES)
+            if (isSfSquad) addAll(UnitPatchStyle.SF_TEAM_PATCHES)
             add(UnitPatchStyle.UNASSIGNED)
             add(UnitPatchStyle.NONE)
         }

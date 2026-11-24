@@ -483,7 +483,7 @@ private fun UniformTab(
     }
     if (specialForces) {
         Text(
-            "Unit patch: ${UnitPatchStyle.SPECIAL_FORCES.label} (fixed for the SF squad; subdued on field uniforms)",
+            "Unit patch: SF arrowhead in this team's colors (ODA 1 red, ODA 2 green, ODA 3 gold; subdued on field uniforms)",
             style = MaterialTheme.typography.labelMedium,
             color = Color(SF_PATCH_RED_BRIGHT)
         )

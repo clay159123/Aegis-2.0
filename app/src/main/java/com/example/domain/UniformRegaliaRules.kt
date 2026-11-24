@@ -449,7 +449,8 @@ object UniformRegaliaRules {
         }
         val squad = squads.firstOrNull { operator.id in it.memberIds }
         // Item 58: the SF squad wears the SF arrowhead
-        if (squad?.isSpecialForces == true) return UnitPatchStyle.SPECIAL_FORCES
+        // Item 120: each SF team in its own colors
+        if (squad?.isSpecialForces == true) return UnitPatchStyle.sfTeamPatchFor(squad, squads)
         return squad?.standardPatch
             ?.takeIf { it.isDivision }
             ?: UnitPatchStyle.UNASSIGNED

@@ -187,7 +187,8 @@ enum class FacilityType(
 /** Random part of a rifle qualification score: 0 until this value. */
 const val RIFLE_QUAL_ROLL_MAX = 12
 const val SHARPSHOOTER_SCORE = 22
-const val EXPERT_SCORE = 30
+/** Item 148: raised from 30 so a first-try Expert isn't automatic at a maxed Training Range. */
+const val EXPERT_SCORE = 33
 
 fun rifleQualRank(tier: MarksmanshipBadgeTier?): Int =
     listOf(MarksmanshipBadgeTier.MARKSMAN, MarksmanshipBadgeTier.SHARPSHOOTER, MarksmanshipBadgeTier.EXPERT).indexOf(tier)
@@ -843,7 +844,10 @@ enum class UnitPatchStyle(
     DIVISION_6("6th Aegis Division", "Navy and silver shield with an eagle", 0xFF13213F, 0xFFC9D1DC),
     SUPREME_HQ("Aegis High Command", "Worn by HQ staff only", 0xFF141E33, 0xFFF5D576),
     /** Item 58: the SF squad's arrowhead patch (dagger and lightning), black and red; subdued in the field. */
-    SPECIAL_FORCES("Special Forces", "Black and red arrowhead with dagger and lightning; worn by the SF squad", 0xFF141414, 0xFFB3202A),
+    SPECIAL_FORCES("Special Forces (ODA 1)", "Black and red arrowhead with dagger and lightning; worn by the first SF team", 0xFF141414, 0xFFB3202A),
+    /** Item 120: each SF team wears the arrowhead in its own colors. */
+    SF_ODA2("Special Forces (ODA 2)", "Black and green arrowhead with dagger and lightning; worn by the second SF team", 0xFF141414, 0xFF2E9A4A),
+    SF_ODA3("Special Forces (ODA 3)", "Black and gold arrowhead with dagger and lightning; worn by the third SF team", 0xFF141414, 0xFFD8B24C),
     /** Item 111: SF aviators' patch. */
     SOA("Special Operations Aviation", "Black and gold shield with a night-sky moon and rotor; worn by SF aviators", 0xFF0F1116, 0xFFD8B24C),
     /** Item 100: the aviators' own unit patch. */
@@ -853,8 +857,22 @@ enum class UnitPatchStyle(
 
     val isDivision: Boolean get() = this in DIVISIONS
 
+    /** Item 120: one of the three SF team arrowheads. */
+    val isSfTeamPatch: Boolean get() = this in SF_TEAM_PATCHES
+
     companion object {
         val DIVISIONS: List<UnitPatchStyle> = listOf(DIVISION_1, DIVISION_2, DIVISION_3, DIVISION_4, DIVISION_5, DIVISION_6)
+        val SF_TEAM_PATCHES: List<UnitPatchStyle> = listOf(SPECIAL_FORCES, SF_ODA2, SF_ODA3)
+
+        /** Item 120: the SF team patch for a squad: its own if set, else the first one no other SF squad wears. */
+        fun sfTeamPatchFor(squad: TacticalSquad, squads: List<TacticalSquad>): UnitPatchStyle {
+            squad.standardPatch.takeIf { it.isSfTeamPatch }?.let { return it }
+            val used = squads.filter { it.id != squad.id && it.isSpecialForces }.map { it.standardPatch }.toSet()
+            // An ODA-numbered squad prefers its own number's colors
+            val byName = Regex("(?i)^oda (\\d)$").find(squad.name.trim())?.groupValues?.get(1)?.toIntOrNull()
+                ?.let { SF_TEAM_PATCHES.getOrNull(it - 1) }?.takeIf { it !in used }
+            return byName ?: SF_TEAM_PATCHES.firstOrNull { it !in used } ?: SPECIAL_FORCES
+        }
 
         /** First division patch no other squad is using, for a newly formed squad. */
         fun firstUnusedDivision(squads: List<TacticalSquad>, excludingSquadId: String? = null): UnitPatchStyle {

@@ -1125,10 +1125,22 @@ object TacticalCalculator {
 
     fun qualTierForScore(score: Int): MarksmanshipBadgeTier = rifleQualTierForScore(score)
 
-    /** Score: the soldier's own firepower (no gear) + Training Range bonus + [roll]. */
+    /** Item 148: shooting comes easier to combat MOS (Recon most, to offset their low firepower) and SF. */
+    fun rifleQualMosModifier(operator: Operator): Int = when (operator.specialty) {
+        OperatorSpecialty.ASSAULT, OperatorSpecialty.BREACHER -> 2
+        OperatorSpecialty.RECON -> 4
+        OperatorSpecialty.COMMAND -> 0
+        OperatorSpecialty.MEDIC -> -1
+        OperatorSpecialty.SIGNALS -> -2
+        OperatorSpecialty.AVIATION -> -3
+    } + if (isSfQualified(operator)) 2 else 0
+
+    /** Item 148: the Training Range adds half a point per level (+5 at level 10, was +10). */
+    fun rangeQualBonus(facilities: List<FacilityState>): Int = facilityLevel(facilities, FacilityType.TRAINING_RANGE).coerceAtLeast(0) / 2
+
+    /** Score: the soldier's own firepower (no gear) + Training Range bonus + MOS modifier + [roll]. */
     fun rifleQualScore(operator: Operator, citations: List<AwardedMedal>, facilities: List<FacilityState>, roll: Int): Int =
-        ((soldierStats(operator, citations).firepower +
-            facilityLevel(facilities, FacilityType.TRAINING_RANGE).coerceAtLeast(0) * RANGE_QUAL_BONUS_PER_LEVEL +
+        ((soldierStats(operator, citations).firepower + rangeQualBonus(facilities) + rifleQualMosModifier(operator) +
             roll.coerceIn(0, QUAL_ROLL_MAX)) * (100 + operator.eventBuffs.rifleQualBonusPct)) / 100
 
     /** The best badge the soldier holds or has waiting. */
