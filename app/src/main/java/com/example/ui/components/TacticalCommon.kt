@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.ResourceBundle
+import com.example.domain.model.ResourceType
 import com.example.ui.theme.LocalAegisColors
 import kotlin.math.roundToInt
 
@@ -53,7 +54,9 @@ fun ResourceHudBar(
     resources: ResourceBundle,
     rates: ResourceBundle,
     modifier: Modifier = Modifier,
-    onPrestigeClick: (() -> Unit)? = null
+    onPrestigeClick: (() -> Unit)? = null,
+    /** Testing build only: tapping CR, SUP or INT adds a stock of that resource (like the PRS tap). */
+    onResourceClick: ((ResourceType) -> Unit)? = null
 ) {
     val extra = LocalAegisColors.current
     Surface(
@@ -75,7 +78,8 @@ fun ResourceHudBar(
                 value = formatCompact(resources.credits),
                 rate = formatRate(rates.credits),
                 accent = extra.brass,
-                modifier = Modifier.weight(1f)
+                onClick = onResourceClick?.let { { it(ResourceType.CREDITS) } },
+                modifier = Modifier.weight(1f).testTag("hud_credits_chip")
             )
             ResourceChip(
                 icon = Icons.Filled.Inventory2,
@@ -83,7 +87,8 @@ fun ResourceHudBar(
                 value = formatCompact(resources.supplies),
                 rate = formatRate(rates.supplies),
                 accent = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f)
+                onClick = onResourceClick?.let { { it(ResourceType.SUPPLIES) } },
+                modifier = Modifier.weight(1f).testTag("hud_supplies_chip")
             )
             ResourceChip(
                 icon = Icons.Filled.Radar,
@@ -91,7 +96,8 @@ fun ResourceHudBar(
                 value = formatCompact(resources.intel),
                 rate = formatRate(rates.intel),
                 accent = extra.signalsCyan,
-                modifier = Modifier.weight(1f)
+                onClick = onResourceClick?.let { { it(ResourceType.INTEL) } },
+                modifier = Modifier.weight(1f).testTag("hud_intel_chip")
             )
             ResourceChip(
                 icon = Icons.Filled.MilitaryTech,

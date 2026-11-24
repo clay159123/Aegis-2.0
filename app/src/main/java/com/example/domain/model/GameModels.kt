@@ -368,6 +368,10 @@ enum class OperatorRank(
             return if (ceiling != null) xp.coerceAtMost(ceiling) else xp
         }
 
+        /** Session 33: the first rank of a tier, what a board grants on crossing into it. */
+        fun tierEntryRank(tier: RankTier): OperatorRank =
+            entries.first { it.tier == tier && !it.isWarrant && it != CSM }
+
         fun nextRank(current: OperatorRank): OperatorRank? {
             if (current.isWarrant) {
                 return if (current == CW5) null else forWarrantGrade(current.warrantGrade + 1)
@@ -1458,6 +1462,11 @@ data class Operator(
     val warrantGrade: Int = 0,
     /** Item 61: 1..4 for BG..GEN once promoted by a general's board; 0 means the rank follows XP. */
     val flagGrade: Int = 0,
+    /**
+     * Session 33 (Option B): from SGT up the player pins each rank; XP alone only makes a soldier promotable.
+     * Null means no pin recorded yet (soldier ranks, or a soldier not yet saved), so the rank follows XP.
+     */
+    val pinnedRank: OperatorRank? = null,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */
@@ -1509,13 +1518,42 @@ data class Operator(
     val bodyBuild: BodyBuild
         get() = bodyBuildOverride ?: BodyBuild.entries[Math.floorMod("$id#build".hashCode(), BodyBuild.entries.size)]
 
-    /** The rank this soldier's XP and boards have earned, before any HQ billet cap. */
+    /** The rank XP alone reaches inside the authorized tier (how every rank worked before Option B). */
+    val autoRank: OperatorRank
+        get() = OperatorRank.forXp(xp, authorizedTier)
+
+    /** The rank this soldier holds (XP, boards and pins), before any HQ billet cap. */
     val earnedRank: OperatorRank
         get() = when {
             authorizedTier == RankTier.WARRANT -> OperatorRank.forWarrantGrade(warrantGrade)
             // Item 61: generals hold their grade until the next board
             authorizedTier == RankTier.FLAG_OFFICER && flagGrade > 0 -> OperatorRank.forFlagGrade(flagGrade)
-            else -> OperatorRank.forXp(xp, authorizedTier)
+            else -> {
+                val auto = autoRank
+                val pin = pinnedRank
+                // Session 33: PV2-SPC stay automatic; from SGT up the soldier holds the pinned rank
+                if (pin == null || auto.tier == RankTier.SOLDIER) auto
+                else {
+                    val held = pin.takeIf { it.tier == auto.tier && !it.isWarrant && it != OperatorRank.CSM } ?: OperatorRank.tierEntryRank(auto.tier)
+                    if (auto.seniorityIndex < held.seniorityIndex) auto else held
+                }
+            }
+        }
+
+    /**
+     * Session 33: the next rank the player can pin right now, inside the current tier (no board): XP has reached
+     * it, the soldier is SGT or above, and no HQ billet cap stands in the way. Null otherwise.
+     */
+    val pinEligibleRank: OperatorRank?
+        get() {
+            if (!unlocked || status.isOutOfActiveService || pinnedRank == null) return null
+            val current = rank
+            if (current.tier == RankTier.SOLDIER || current.isWarrant || current.tier == RankTier.FLAG_OFFICER) return null
+            if (isAtHqRankCap) return null
+            val next = OperatorRank.nextRank(current) ?: return null
+            if (OperatorRank.isBoardGate(current, next)) return null
+            hqRankCap?.let { cap -> if (next.seniorityIndex > cap.seniorityIndex) return null }
+            return next.takeIf { xp >= it.xpRequired }
         }
 
     /** Item 107: the HQ billet's top rank for this soldier, if seated in one that has a cap. */
@@ -1554,6 +1592,7 @@ data class Operator(
     /** This soldier at [next] rank: XP raised to its floor, tier authorized, warrant grade set. */
     fun promotedTo(next: OperatorRank): Operator = copy(
         xp = maxOf(xp, next.xpRequired),
+        pinnedRank = if (next.tier == RankTier.SOLDIER || next.isWarrant) null else next,
         authorizedTier = if (next.isWarrant || next.tier.order > authorizedTier.order || authorizedTier == RankTier.WARRANT) next.tier else authorizedTier,
         warrantGrade = next.warrantGrade,
         flagGrade = next.flagGrade

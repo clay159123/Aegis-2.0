@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 38
+        const val SAVE_FORMAT_VERSION = 39
     }
 
     private val commanderMutex = Mutex()
@@ -451,6 +451,7 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     lastQualScore = lastQualScore,
     warrantGrade = warrantGrade,
     flagGrade = flagGrade,
+    pinnedRank = pinnedRankName?.let { n -> OperatorRank.entries.find { it.name == n } },
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
     combatJumps = combatJumps,
@@ -544,6 +545,8 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     lastQualScore = lastQualScore,
     warrantGrade = warrantGrade,
     flagGrade = flagGrade,
+    // Session 33: ranks already held are kept: a soldier saved without a pin holds the rank their XP gave them
+    pinnedRankName = (pinnedRank ?: autoRank.takeIf { it.tier != RankTier.SOLDIER && !it.isWarrant })?.name,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
     combatJumps = combatJumps,

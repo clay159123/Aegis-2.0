@@ -620,6 +620,29 @@ class CommandViewModel(
         }
     }
 
+    /** Testing build only: tapping CR, SUP or INT on the resource bar adds a stock of it. */
+    fun grantCheatResource(type: ResourceType) {
+        val state = uiState.value
+        if (state.isLoading) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            repository.updateCommanderState { cur ->
+                when (type) {
+                    ResourceType.CREDITS -> cur.copy(credits = cur.credits + CHEAT_CREDITS, lastSimulatedAtMillis = now)
+                    ResourceType.SUPPLIES -> cur.copy(supplies = cur.supplies + CHEAT_SUPPLIES, lastSimulatedAtMillis = now)
+                    ResourceType.INTEL -> cur.copy(intel = cur.intel + CHEAT_INTEL, lastSimulatedAtMillis = now)
+                    ResourceType.PRESTIGE -> cur.copy(prestige = cur.prestige + 100.0, lastSimulatedAtMillis = now)
+                }
+            }
+            showBanner(when (type) {
+                ResourceType.CREDITS -> "+${CHEAT_CREDITS.toInt()} CR (testing grant)."
+                ResourceType.SUPPLIES -> "+${CHEAT_SUPPLIES.toInt()} SUP (testing grant)."
+                ResourceType.INTEL -> "+${CHEAT_INTEL.toInt()} INT (testing grant)."
+                ResourceType.PRESTIGE -> "+100 PRS Directorate Contingency Grant."
+            })
+        }
+    }
+
     fun grantCheatPrestige() {
         val state = uiState.value
         if (state.isLoading) return
@@ -693,12 +716,117 @@ class CommandViewModel(
         showBanner(done.joinToString { "${it.type.title} Lv ${it.level}" } + " construction complete")
     }
 
+    /**
+     * Session 33 (Option B): pin the next rank for every soldier XP has made promotable (SGT and up, no board).
+     * One rank per soldier per press; a soldier with more XP stays promotable for the next press.
+     */
+    fun pinAllEligiblePromotions() {
+        val state = uiState.value
+        val eligible = state.operators.filter { it.pinEligibleRank != null }.sortedByDescending { it.rank.seniorityIndex }
+        if (eligible.isEmpty()) {
+            showBanner("No soldiers are ready to pin a new rank.")
+            return
+        }
+        // Each pin costs the same as the board-free promotion did; pin as many as the budget allows, senior first
+        var crLeft = state.resources.credits
+        var prsLeft = state.resources.prestige
+        val affordable = eligible.filter { op ->
+            val (cr, prs) = pinCost(op, state)
+            if (cr <= crLeft && prs <= prsLeft) { crLeft -= cr; prsLeft -= prs; true } else false
+        }
+        if (affordable.isEmpty()) {
+            val (cr, prs) = pinCost(eligible.first(), state)
+            showBanner("Need ${cr.toInt()} CR and $prs PRS to pin ${eligible.first().callsign}'s next rank.")
+            return
+        }
+        val spentCr = state.resources.credits - crLeft
+        val spentPrs = state.resources.prestige - prsLeft
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            repository.updateCommanderState { cur ->
+                cur.copy(
+                    credits = (cur.credits - spentCr).coerceAtLeast(0.0),
+                    prestige = (cur.prestige - spentPrs).coerceAtLeast(0.0),
+                    lastSimulatedAtMillis = now
+                )
+            }
+            val pinned = affordable.map { op -> op to op.promotedTo(op.pinEligibleRank!!) }
+            repository.saveOperators(pinned.map { it.second })
+            val deeds = pinned.flatMap { (before, after) ->
+                newlyEligibleAwardDeeds(before = before, after = after, state = state, reasonTitle = "Promotion to ${after.rank.code}", now = now)
+            }
+            if (deeds.isNotEmpty()) {
+                repository.addPendingDeeds(deeds)
+                enqueueAwardPrompts(deeds)
+            }
+            val short = eligible.size - affordable.size
+            showBanner(
+                (if (pinned.size == 1) "${pinned[0].first.callsign} pinned ${pinned[0].second.rank.code}"
+                else "${pinned.size} soldiers pinned new ranks: " + pinned.joinToString { "${it.first.callsign} ${it.second.rank.code}" }) +
+                    " (${spentCr.toInt()} CR / ${spentPrs.toInt()} PRS)" +
+                    if (short > 0) ". $short more waiting on resources." else "."
+            )
+        }
+    }
+
+    /** Session 33: a pin costs what the in-tier promotion costs (credits and prestige by tier, CSM discount applied). */
+    private fun pinCost(op: Operator, state: CommandUiState): Pair<Double, Int> {
+        val eval = TacticalCalculator.evaluatePromotionBoard(op, state.operators, state.citations, state.gearItems, state.facilities)
+        return eval.creditCost to eval.prestigeCost
+    }
+
+    /** Session 33 (Option B): pin one soldier's next rank inside their tier. XP has to be there first, and it costs CR and PRS. */
+    fun pinPromotion(operatorId: String) {
+        val state = uiState.value
+        val op = state.operators.find { it.id == operatorId } ?: return
+        val next = op.pinEligibleRank
+        if (next == null) {
+            val target = OperatorRank.nextRank(op.rank)
+            showBanner(
+                if (target != null && op.xp < target.xpRequired) "${op.callsign} needs ${target.xpRequired - op.xp} more XP for ${target.code}."
+                else "${op.callsign} can't pin a new rank right now."
+            )
+            return
+        }
+        val (crCost, prsCost) = pinCost(op, state)
+        if (state.resources.credits < crCost || state.resources.prestige < prsCost) {
+            showBanner("Need ${crCost.toInt()} CR and $prsCost PRS to pin ${op.callsign} as ${next.code}.")
+            return
+        }
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            repository.updateCommanderState { cur ->
+                cur.copy(
+                    credits = (cur.credits - crCost).coerceAtLeast(0.0),
+                    prestige = (cur.prestige - prsCost).coerceAtLeast(0.0),
+                    lastSimulatedAtMillis = now
+                )
+            }
+            val after = op.promotedTo(next)
+            repository.saveOperator(after)
+            val deeds = newlyEligibleAwardDeeds(before = op, after = after, state = state, reasonTitle = "Promotion to ${next.code}", now = now)
+            if (deeds.isNotEmpty()) {
+                repository.addPendingDeeds(deeds)
+                enqueueAwardPrompts(deeds)
+            }
+            showBanner("${op.callsign} pinned ${next.title} (${next.code} / ${next.payGrade}).")
+        }
+    }
+
     fun promoteOperator(
         operatorId: String,
         endorsementFocus: PromotionEndorsementFocus? = null
     ) {
         val state = uiState.value
         val op = state.operators.find { it.id == operatorId && it.unlocked && !it.status.isOutOfActiveService } ?: return
+        // Session 33: from SGT up, a rank inside the tier is pinned (free, XP-gated), not bought
+        if (op.pinnedRank != null && op.rank.tier != RankTier.SOLDIER) {
+            val next = OperatorRank.nextRank(op.rank)
+            if (next != null && !OperatorRank.isBoardGate(op.rank, next)) {
+                pinPromotion(operatorId)
+                return
+            }
+        }
         val boardEval = TacticalCalculator.evaluatePromotionBoard(
             operator = op,
             allOperators = state.operators,
@@ -3696,6 +3824,11 @@ class CommandViewModel(
     )
 
     companion object {
+        /** Testing build only: resource-bar tap grants. */
+        const val CHEAT_CREDITS = 1000.0
+        const val CHEAT_SUPPLIES = 500.0
+        const val CHEAT_INTEL = 250.0
+
         fun factory(repository: AegisRepository): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

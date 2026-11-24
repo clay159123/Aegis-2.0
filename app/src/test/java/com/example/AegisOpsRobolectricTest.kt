@@ -374,6 +374,10 @@ class AegisOpsRobolectricTest {
 
         composeTestRule.onNodeWithTag("ops_tab_schools").performScrollTo().assertIsDisplayed().performClick()
         composeTestRule.waitForIdle()
+        // School categories start collapsed; open Basics & Marksmanship
+        composeTestRule.onNodeWithTag("mission_card_msn_basic_qual").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("ops_section_school_basics").performScrollTo().performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("mission_card_msn_basic_qual").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithTag("mission_card_msn_ridge_patrol").assertDoesNotExist()
 
@@ -383,9 +387,11 @@ class AegisOpsRobolectricTest {
 
         composeTestRule.onNodeWithTag("ops_tab_all").performScrollTo().assertIsDisplayed().performClick()
         composeTestRule.waitForIdle()
+        // Sections start collapsed; tapping Field Combat Ops opens it
+        composeTestRule.onNodeWithTag("mission_card_msn_ridge_patrol").assertDoesNotExist()
         composeTestRule.onNodeWithTag("ops_section_combat").performScrollTo().assertIsDisplayed().performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("mission_card_msn_ridge_patrol").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("mission_card_msn_ridge_patrol").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -800,6 +806,8 @@ class AegisOpsRobolectricTest {
         composeTestRule.onNodeWithTag("ops_filter_ready").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("ops_tab_schools").performScrollTo().performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("ops_section_school_basics").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("mission_uniform_req_msn_basic_qual").performScrollTo().assertIsDisplayed()
 

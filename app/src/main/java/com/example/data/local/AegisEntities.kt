@@ -85,6 +85,8 @@ data class OperatorEntity(
     val lastQualScore: Int = 0,
     val warrantGrade: Int = 0,
     val flagGrade: Int = 0,
+    /** Session 33: the rank the player has pinned (SGT and up); null for soldier ranks. */
+    val pinnedRankName: String? = null,
     val flightSkill: Int = 0,
     val combatSortiesFlown: Int = 0,
     val combatJumps: Int = 0,

@@ -176,6 +176,8 @@ fun AegisCommandApp() {
         job.cancel()
     }
 
+    // Playtest fix: "Present Awards" opens the Uniform tab on the soldier with the first recommended award
+    var dressFocusOpId by remember { mutableStateOf<String?>(null) }
     val navigateTo: (String) -> Unit = { route ->
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) {
@@ -314,6 +316,8 @@ fun AegisCommandApp() {
                             resources = uiState.resources,
                             rates = uiState.ratesPerSec,
                             onPrestigeClick = viewModel::grantCheatPrestige,
+                            // Testing build only: tap a resource to add a stock of it (removed for release)
+                            onResourceClick = if (com.example.domain.GameTiming.MODE == com.example.domain.TimeMode.TESTING) viewModel::grantCheatResource else null,
                             modifier = Modifier.widthIn(max = 720.dp)
                         )
 
@@ -407,6 +411,9 @@ fun AegisCommandApp() {
                                     onToggleUniformMode = viewModel::toggleOperatorUniformMode,
                                     onToggleDressDisplayMode = viewModel::toggleDressDisplayMode,
                                     onPromoteOperator = viewModel::promoteOperator,
+                                    onPinAllPromotions = viewModel::pinAllEligiblePromotions,
+                                    focusOperatorId = dressFocusOpId,
+                                    onFocusConsumed = { dressFocusOpId = null },
                                     onCustomizeOperator = viewModel::customizeOperator,
                                     onAwardMedal = viewModel::awardMedal,
                                     onDismissDeed = viewModel::dismissPendingDeed,
@@ -530,6 +537,7 @@ fun AegisCommandApp() {
             debrief = debrief,
             onDismiss = viewModel::dismissDebrief,
             onGoToAwards = {
+                dressFocusOpId = debrief.operatorOutcomes.firstOrNull { it.recommendedMedalId != null }?.operatorId
                 viewModel.dismissDebrief()
                 navigateTo(ROUTE_DRESS)
             }

@@ -201,6 +201,20 @@ fun FieldSquadsSection(
                         trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     )
 
+                    // Session 33: rank-mix bonus status for this squad
+                    if (members.isNotEmpty()) {
+                        val compKind = com.example.domain.SquadCompositionRules.kindFor(members)
+                        val compGaps = com.example.domain.SquadCompositionRules.missing(members)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (compGaps.isEmpty()) "${compKind.label}: +${com.example.domain.SquadCompositionRules.BONUS_PCT}% Odds on field missions"
+                                else "${compKind.label} (+${com.example.domain.SquadCompositionRules.BONUS_PCT}%): ${compGaps.joinToString(" • ")}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (compGaps.isEmpty()) extra.brassBright else extra.textMuted,
+                            modifier = Modifier.testTag("squad_composition_${squad.id}")
+                        )
+                    }
+
                     if (members.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
