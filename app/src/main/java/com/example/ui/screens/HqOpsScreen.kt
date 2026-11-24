@@ -499,7 +499,10 @@ fun HqOpsScreen(
                         resources = uiState.resources,
                         nowMillis = uiState.nowMillis,
                         onUpgrade = onUpgradeFacility,
-                        onRush = onRushFacility
+                        onRush = onRushFacility,
+                        fallenCount = uiState.operators.count { it.status == OperatorStatus.FALLEN },
+                        completedCampaignIds = uiState.completedCampaignIds,
+                        operators = uiState.operators
                     )
 
                     TacticalPanelCard(

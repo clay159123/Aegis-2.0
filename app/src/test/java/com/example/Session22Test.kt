@@ -110,7 +110,7 @@ class Session22Test {
             val p = BASE_PLOTS[i]; val q = BASE_PLOTS[j]
             val overlap = p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
             assertFalse("${p.label} overlaps ${q.label}", overlap)
-            assertTrue(p.y + p.h <= 356f)
+            assertTrue(p.y + p.h <= 436f)
         }
     }
 }

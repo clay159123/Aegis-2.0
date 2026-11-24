@@ -40,9 +40,13 @@ fun HqCommandScreen(
     onNavigateToSquad: () -> Unit,
     onNavigateToDress: () -> Unit,
     onNavigateToOps: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Session 37: tapping the Memorial Wall on the base map opens the Honors Memorial. */
+    onOpenMemorial: () -> Unit = {}
 ) {
     val extra = LocalAegisColors.current
+    // Session 37 (item 177): Personnel and Base Map tabs
+    var hqView by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(HQ_VIEW_PERSONNEL) }
     var fillingRole by remember { mutableStateOf<HqStaffRole?>(null) }
     var pickingRoleForOpId by remember { mutableStateOf<String?>(null) }
     var dispatchingOpId by remember { mutableStateOf<String?>(null) }
@@ -109,6 +113,19 @@ fun HqCommandScreen(
         contentPadding = PaddingValues(top = 12.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item(key = "hq_view_selector") {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().testTag("hq_view_selector")) {
+                listOf(HQ_VIEW_PERSONNEL to "Personnel", HQ_VIEW_BASE to "Base Map").forEachIndexed { i, (key, label) ->
+                    SegmentedButton(
+                        selected = hqView == key,
+                        onClick = { hqView = key },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
+                        modifier = Modifier.testTag("hq_view_$key")
+                    ) { Text(label, maxLines = 1) }
+                }
+            }
+        }
+        if (hqView == HQ_VIEW_PERSONNEL) {
         // Directorate HQ Command Overview Card
         item {
             TacticalPanelCard(
@@ -497,12 +514,13 @@ fun HqCommandScreen(
             }
         }
 
+        }
+        if (hqView == HQ_VIEW_BASE) {
         // HQ Infrastructure Facilities
         item {
-            Spacer(modifier = Modifier.height(4.dp))
             SectionHeader(
                 title = "Base",
-                subtitle = "Tap a building to see its perks, build, upgrade or rush"
+                subtitle = "Tap a building to build, upgrade or rush • the Memorial Wall and Heritage Walk open their records"
             )
         }
         item {
@@ -511,8 +529,14 @@ fun HqCommandScreen(
                 resources = uiState.resources,
                 nowMillis = uiState.nowMillis,
                 onUpgrade = onUpgradeFacility,
-                onRush = onRushFacility
+                onRush = onRushFacility,
+                fallenCount = uiState.operators.count { it.status == OperatorStatus.FALLEN },
+                completedCampaignIds = uiState.completedCampaignIds,
+                operators = uiState.operators,
+                onOpenMemorial = onOpenMemorial,
+                zoomable = true
             )
+        }
         }
     }
 
@@ -1059,3 +1083,6 @@ private fun HqOpenBilletCard(
         }
     }
 }
+
+private const val HQ_VIEW_PERSONNEL = "personnel"
+private const val HQ_VIEW_BASE = "base"
