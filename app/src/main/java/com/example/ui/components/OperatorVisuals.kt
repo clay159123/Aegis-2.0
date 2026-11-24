@@ -3,6 +3,10 @@ package com.example.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -356,7 +360,9 @@ fun NameWithSfMarker(
     style: androidx.compose.ui.text.TextStyle,
     color: Color = Color.Unspecified,
     modifier: Modifier = Modifier,
-    sfTier: Int = 0
+    sfTier: Int = 0,
+    /** Session 31: when given, the badge opens the soldier's SF progress on tap. */
+    operator: com.example.domain.model.Operator? = null
 ) {
     Row(
         modifier = modifier,
@@ -371,6 +377,46 @@ fun NameWithSfMarker(
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
         )
-        if (sfQualified) SfMarker(tier = sfTier)
+        if (sfQualified) {
+            if (operator != null) SfTierBadge(operator) else SfMarker(tier = sfTier)
+        }
+    }
+}
+
+/** Session 31: the next SF tier's checklist, used on the soldier record and in the badge popup. */
+@Composable
+fun SfProgressList(operator: com.example.domain.model.Operator, modifier: Modifier = Modifier) {
+    val (next, steps) = com.example.domain.TacticalCalculator.sfNextTierChecklist(operator)
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (next == null) {
+            Text("SF3: top tier reached.", style = MaterialTheme.typography.bodySmall, color = Color(0xFFF0D77A))
+        } else {
+            Text("Next: SF$next", style = MaterialTheme.typography.labelLarge, color = Color(0xFFF0D77A))
+            steps.forEach { step ->
+                Text(
+                    (if (step.done) "✓ " else "✗ ") + step.label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (step.done) Color(0xFF8BC48A) else Color(0xFFE0A86A)
+                )
+            }
+        }
+    }
+}
+
+/** Session 31: the SF tier chip that opens the soldier's progress to the next tier. */
+@Composable
+fun SfTierBadge(operator: com.example.domain.model.Operator, modifier: Modifier = Modifier) {
+    var open by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    SfMarker(
+        tier = com.example.domain.TacticalCalculator.sfTier(operator),
+        modifier = modifier.clickable { open = true }.testTag("sf_badge_${operator.id}")
+    )
+    if (open) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { open = false },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { open = false }) { Text("Close") } },
+            title = { Text("${operator.rank.code} ${operator.callsign} • SF${com.example.domain.TacticalCalculator.sfTier(operator)}") },
+            text = { SfProgressList(operator) }
+        )
     }
 }

@@ -296,7 +296,8 @@ fun MissionPrepDialog(
                                     "${op.rank.code} ${op.callsign} • ${op.mosTag}",
                                     TacticalCalculator.isSfQualified(op),
                                     MaterialTheme.typography.bodySmall,
-                                    sfTier = TacticalCalculator.sfTier(op)
+                                    sfTier = TacticalCalculator.sfTier(op),
+                                    operator = op
                                 )
                                 Text(
                                     (squadOf(op.id)?.name ?: "No squad") + " • " +
@@ -329,7 +330,8 @@ fun MissionPrepDialog(
                                         TacticalCalculator.isSfQualified(cand),
                                         MaterialTheme.typography.labelSmall,
                                         modifier = Modifier.fillMaxWidth(),
-                                        sfTier = TacticalCalculator.sfTier(cand)
+                                        sfTier = TacticalCalculator.sfTier(cand),
+                                        operator = cand
                                     )
                                 }
                             }

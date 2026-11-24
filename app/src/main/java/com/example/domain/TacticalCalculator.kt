@@ -862,6 +862,28 @@ object TacticalCalculator {
         ) 3 else 2
     }
 
+    data class SfStep(val label: String, val done: Boolean)
+
+    /** Session 31: the next SF tier and what it still takes (null tier when already SF3 or not SF). */
+    fun sfNextTierChecklist(op: Operator): Pair<Int?, List<SfStep>> {
+        val tier = sfTier(op)
+        val sere3 = SfStep("SERE 3", SERE3_SCHOOL_ID in op.completedMissionIds)
+        return when (tier) {
+            1 -> 2 to listOf(sere3, SfStep("Successful SF missions ${op.sfMissionsSucceeded.coerceAtMost(SF2_MISSIONS)}/$SF2_MISSIONS", op.sfMissionsSucceeded >= SF2_MISSIONS))
+            2 -> 3 to listOf(
+                SfStep("Military Free Fall", isFreeFallQualified(op)),
+                SfStep("Combat Diver", isCombatDiver(op)),
+                SfStep(
+                    "A language" + ((listOfNotNull(op.nativeRegion) + op.languageRegions).firstOrNull()?.let { " (${it.label})" } ?: ""),
+                    op.languageRegions.isNotEmpty() || op.nativeRegion != null
+                ),
+                SfStep("High+ SF missions ${op.sfHighMissionsSucceeded.coerceAtMost(SF3_HIGH_MISSIONS)}/$SF3_HIGH_MISSIONS", op.sfHighMissionsSucceeded >= SF3_HIGH_MISSIONS),
+                SfStep("SGT or above", op.rank.seniorityIndex >= OperatorRank.SGT.seniorityIndex)
+            )
+            else -> null to emptyList()
+        }
+    }
+
     /** Tier an SF mission needs: Extreme SF3, High SF2, everything else SF1. */
     fun requiredSfTier(mission: MissionTemplate): Int = when {
         !isSfOperation(mission) -> 0
@@ -877,6 +899,41 @@ object TacticalCalculator {
     fun groupSfTier(ops: List<Operator>): Int {
         if (ops.isEmpty()) return 0
         return (3 downTo 1).firstOrNull { t -> ops.count { sfTier(it) >= t } >= sfTierQuota(ops.size) } ?: 0
+    }
+
+    /**
+     * Session 31 (smart Ready only): can these eligible soldiers form a team that passes every team rule
+     * (size, SF tier and ODA core, clandestine speakers, platoon squads and leader)? Tries the likeliest teams.
+     */
+    fun canFieldTeam(mission: MissionTemplate, eligible: List<Operator>, squads: List<TacticalSquad>): Boolean {
+        if (eligible.size < mission.minOperators) return false
+        val maxTeam = minOf(eligible.size, mission.maxOperators)
+        if (mission.requiresSfTeam) {
+            val need = requiredSfTier(mission)
+            val sf = eligible.filter { isSfQualified(it) }
+            val sfSquads = squads.filter { it.isSpecialForces }
+            if (sfSquads.isEmpty()) return false
+            val orderings = sfSquads.flatMap { anchor ->
+                val anchorFirst = compareByDescending<Operator> { it.id in anchor.memberIds }
+                listOf(
+                    sf.sortedWith(compareByDescending<Operator> { sfTier(it) >= need }.then(anchorFirst)),
+                    sf.sortedWith(compareByDescending<Operator> { ClandestineRules.knowsLanguage(it, mission.theater) }
+                        .thenByDescending { sfTier(it) >= need }.then(anchorFirst)),
+                    sf.sortedWith(anchorFirst.thenByDescending { sfTier(it) })
+                )
+            }
+            return (SF_MIN_TEAM..minOf(SF_MAX_TEAM, sf.size)).any { n ->
+                orderings.any { order -> teamBlocker(mission, order.take(n), squads) == null }
+            }
+        }
+        if (mission.requiredSquads >= 2) {
+            val bySquad = squads.map { sq -> eligible.filter { it.id in sq.memberIds } }.filter { it.size >= 2 }
+            if (bySquad.size < 2) return false
+            val team = bySquad.sortedByDescending { members -> members.any { it.rank.isCommissioned } }
+                .take(2).flatten().take(mission.maxOperators)
+            return teamBlocker(mission, team, squads) == null
+        }
+        return teamBlocker(mission, eligible.take(maxTeam), squads) == null
     }
 
     /** Squad card tier for an ODA. */

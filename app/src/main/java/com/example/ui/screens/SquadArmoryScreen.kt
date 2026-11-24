@@ -155,6 +155,14 @@ fun SquadArmoryScreen(
         openSections = if (id in openSections) openSections - id else openSections + id
         prefs.edit().putStringSet("squad_open_sections", openSections).apply()
     }
+    // Session 31: which view the Squad tab shows (squads, sf, hq, recruit), remembered between visits
+    var squadView by remember { mutableStateOf(prefs.getString("squad_view", "squads") ?: "squads") }
+    fun setSquadView(view: String) {
+        squadView = view
+        prefs.edit().putString("squad_view", view).apply()
+    }
+    val sfSquadIds = uiState.squads.filter { it.isSpecialForces }.map { it.id }.toSet()
+    val sfSquadMemberIds = uiState.squads.filter { it.isSpecialForces }.flatMap { it.memberIds }.toSet()
     val rosterSections = remember(groundOps, aviationPool, uiState.squads) {
         // Item 146: Squads A to D first, then the SF squads
         val squadSections = com.example.domain.SquadCohesionRules.displayOrder(uiState.squads).map { squad ->
@@ -184,9 +192,12 @@ fun SquadArmoryScreen(
         contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Session 31: one view at a time (Squads, SF, HQ, Recruit), remembered between visits
+        item { SquadTabSelector(selected = squadView, onSelect = { setSquadView(it) }) }
+        if (squadView == "squads" || squadView == "sf") {
         item {
             FieldSquadsSection(
-                squads = uiState.squads,
+                squads = if (squadView == "sf") uiState.squads.filter { it.isSpecialForces } else uiState.squads.filter { !it.isSpecialForces },
                 operators = uiState.operators,
                 deployedOpIds = deployedOpIds,
                 smartWardrobeEnabled = uiState.smartWardrobeEnabled,
@@ -205,7 +216,9 @@ fun SquadArmoryScreen(
 
         item {
             SectionHeader(
-                title = "Active Field Units (${barracksUsed}/${uiState.maxFieldRosterSlots}$compoundNote)",
+                title = if (squadView == "sf") {
+                    "Special Forces • ${sfSquadIds.size}/${com.example.domain.CompoundRules.sfSquadLimit(uiState.facilities)} ODAs$compoundNote"
+                } else "Active Field Units (${barracksUsed}/${uiState.maxFieldRosterSlots}$compoundNote)",
                 subtitle = "Soldiers, NCOs & Officers deployable on field ops • SGT+ eligible for Staff or Transfer"
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -399,7 +412,18 @@ fun SquadArmoryScreen(
             }
         }
 
-        rosterSections.forEach { section ->
+        // Session 31: the SF view lists ODAs and SF soldiers off an ODA; the Squads view everything else
+        val viewSections = if (squadView == "sf") {
+            val offOda = groundOps.filter { com.example.domain.TacticalCalculator.isSfQualified(it) && it.id !in sfSquadMemberIds }
+            rosterSections.filter { it.id.removePrefix("sq_") in sfSquadIds } + listOfNotNull(
+                RosterSection("sf_unassigned", "SF Soldiers Off an ODA", "${offOda.size} SF-qualified soldier${if (offOda.size == 1) "" else "s"} on regular squads or unassigned", offOda)
+                    .takeIf { offOda.isNotEmpty() }
+            )
+        } else rosterSections.filter { it.id.removePrefix("sq_") !in sfSquadIds }
+        if (squadView == "sf") item {
+            SfPipelineCard(uiState = uiState, deployedOpIds = deployedOpIds)
+        }
+        viewSections.forEach { section ->
         item(key = "roster_hdr_${section.id}") {
             CollapsibleRosterHeader(
                 title = section.title,
@@ -578,18 +602,10 @@ fun SquadArmoryScreen(
 
         }
 
+        }
+        if (squadView == "hq") {
         // HQ Staff Wing Section (SGT E-5+ Support Cadre)
         item {
-            Spacer(modifier = Modifier.height(6.dp))
-            CollapsibleRosterHeader(
-                title = "HQ Staff Wing",
-                summary = "${hqStaffOps.size}/${uiState.maxHqStaffSlots} billets filled",
-                expanded = "hq" in openSections,
-                onToggle = { toggleSection("hq") },
-                modifier = Modifier.testTag("roster_section_hq")
-            )
-        }
-        if ("hq" in openSections) item {
             SectionHeader(
                 title = "HQ Staff Wing (${hqStaffOps.size}/${uiState.maxHqStaffSlots})",
                 subtitle = if (hqStaffOps.isEmpty()) {
@@ -610,7 +626,7 @@ fun SquadArmoryScreen(
             )
         }
 
-        if ("hq" in openSections) items(hqStaffOps, key = { "staff_${it.id}" }) { op ->
+        items(hqStaffOps, key = { "staff_${it.id}" }) { op ->
             val opMedals = uiState.citations.filter { it.operatorId == op.id }
                 .mapNotNull { cit -> GameCatalog.medals.find { it.id == cit.medalId } }
                 .sortedBy { it.precedenceOrder }
@@ -696,17 +712,10 @@ fun SquadArmoryScreen(
             }
         }
 
+        }
+        if (squadView == "recruit") {
         // Recruiting (item 31): Reception Station PV2s, or leadership-school graduates at higher ranks
         item {
-            CollapsibleRosterHeader(
-                title = "Recruiting",
-                summary = "${barracksUsed}/${uiState.maxFieldRosterSlots} Barracks slots used$compoundNote • ${recruitableOps.size} cadre transfers waiting",
-                expanded = "recruiting" in openSections,
-                onToggle = { toggleSection("recruiting") },
-                modifier = Modifier.testTag("roster_section_recruiting")
-            )
-        }
-        if ("recruiting" in openSections) item {
             Spacer(modifier = Modifier.height(6.dp))
             SectionHeader(
                 title = "Recruiting • ${selectedRecruitSource.label}",
@@ -762,7 +771,7 @@ fun SquadArmoryScreen(
             }
         }
 
-        if (recruitableOps.isNotEmpty() && "recruiting" in openSections) {
+        if (recruitableOps.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(6.dp))
                 SectionHeader(
@@ -771,7 +780,7 @@ fun SquadArmoryScreen(
                 )
             }
 
-            if ("recruiting" in openSections) items(recruitableOps, key = { it.id }) { op ->
+            items(recruitableOps, key = { it.id }) { op ->
                 val canRecruit = !fieldSlotsFull &&
                     uiState.resources.credits >= op.recruitCreditCost &&
                     uiState.resources.intel >= op.recruitIntelCost
@@ -792,7 +801,7 @@ fun SquadArmoryScreen(
                                     style = MaterialTheme.typography.titleSmall,
                                     color = extra.brassBright
                                 )
-                                if (TacticalCalculator.isSfQualified(op)) SfMarker(tier = TacticalCalculator.sfTier(op))
+                                if (TacticalCalculator.isSfQualified(op)) SfTierBadge(op)
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -821,6 +830,7 @@ fun SquadArmoryScreen(
                     }
                 }
             }
+        }
         }
     }
 
@@ -1172,6 +1182,86 @@ private fun CollapsibleRosterHeader(
                 contentDescription = if (expanded) "Collapse $title" else "Expand $title",
                 tint = extra.textMuted
             )
+        }
+    }
+}
+
+/** Session 31: the four Squad tab views. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SquadTabSelector(selected: String, onSelect: (String) -> Unit) {
+    val views = listOf("squads" to "Squads", "sf" to "SF", "hq" to "HQ", "recruit" to "Recruit")
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().testTag("squad_view_selector")) {
+        views.forEachIndexed { i, (key, label) ->
+            SegmentedButton(
+                selected = selected == key,
+                onClick = { onSelect(key) },
+                shape = SegmentedButtonDefaults.itemShape(index = i, count = views.size),
+                modifier = Modifier.testTag("squad_view_$key")
+            ) { Text(label, maxLines = 1) }
+        }
+    }
+}
+
+/**
+ * Session 31: who can start each step of the SF pipeline right now, and each SF soldier's next tier.
+ */
+@Composable
+private fun SfPipelineCard(uiState: CommandUiState, deployedOpIds: Set<String>) {
+    val extra = LocalAegisColors.current
+    val steps = listOf(
+        "msn_sere_school" to "SERE 2",
+        com.example.domain.TacticalCalculator.SELECTION_PREP_ID to "Selection Prep",
+        "msn_sf_school" to "SF School",
+        com.example.domain.TacticalCalculator.SERE3_SCHOOL_ID to "SERE 3",
+        com.example.domain.TacticalCalculator.MFF_SCHOOL_ID to "Military Free Fall",
+        com.example.domain.TacticalCalculator.COMBAT_DIVER_SCHOOL_ID to "Combat Diver",
+        com.example.domain.ClandestineRules.LANGUAGE_SCHOOL_ID to "Language & Culture"
+    )
+    val ready = remember(uiState.operators, deployedOpIds, uiState.facilities) {
+        steps.map { (id, label) ->
+            val mission = com.example.data.catalog.GameCatalog.missions.first { it.id == id }
+            label to uiState.operators.filter { op ->
+                op.unlocked && com.example.domain.TacticalCalculator.canOperatorDeployOnMission(
+                    operator = op, mission = mission, deployedOpIds = deployedOpIds, gearItems = uiState.gearItems,
+                    citations = uiState.citations, facilities = uiState.facilities
+                ).eligible
+            }
+        }
+    }
+    val sfSoldiers = uiState.operators.filter {
+        it.unlocked && !it.status.isOutOfActiveService && com.example.domain.TacticalCalculator.isSfQualified(it) && !it.isAviator
+    }.sortedByDescending { com.example.domain.TacticalCalculator.sfTier(it) }
+    TacticalPanelCard(modifier = Modifier.testTag("sf_pipeline_card")) {
+        Text("SF Pipeline", style = MaterialTheme.typography.titleSmall, color = extra.brassBright)
+        Text("Basic > Airborne > SERE 2 > Selection Prep (optional) > SF School > SERE 3 > Free Fall, Diver, Language",
+            style = MaterialTheme.typography.labelSmall, color = extra.textMuted)
+        Spacer(Modifier.height(6.dp))
+        ready.forEach { (label, ops) ->
+            Text(
+                "$label: " + if (ops.isEmpty()) "nobody ready" else "${ops.size} ready • " + ops.take(6).joinToString(", ") { it.callsign },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (ops.isEmpty()) extra.textMuted else MaterialTheme.colorScheme.onSurface
+            )
+        }
+        if (sfSoldiers.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("Tier Progress", style = MaterialTheme.typography.titleSmall, color = extra.brassBright)
+            sfSoldiers.forEach { op ->
+                val (next, checklist) = com.example.domain.TacticalCalculator.sfNextTierChecklist(op)
+                val missing = checklist.filter { !it.done }.joinToString(" • ") { it.label }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SfTierBadge(op)
+                    Text(
+                        "${op.rank.code} ${op.callsign}: " + when {
+                            next == null -> "top tier"
+                            missing.isEmpty() -> "SF$next ready"
+                            else -> "SF$next needs $missing"
+                        },
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
         }
     }
 }

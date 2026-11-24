@@ -238,6 +238,7 @@ fun FieldSquadsSection(
                                             text = member.callsign,
                                             sfQualified = TacticalCalculator.isSfQualified(member),
                             sfTier = TacticalCalculator.sfTier(member),
+                            operator = member,
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )

@@ -86,7 +86,8 @@ fun HqOpsScreen(
     var showFacilities by remember { mutableStateOf(false) }
     var showActiveOps by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(OpsBoardTab.ALL) }
-    var readyOnly by remember { mutableStateOf(false) }
+    // Session 31: Ready only starts on, and checks full team rules
+    var readyOnly by remember { mutableStateOf(true) }
     var collapsedGroupIds by remember { mutableStateOf(setOf("campaigns")) }
     var expandedMissionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expandedCampaignIds by remember { mutableStateOf(setOf("camp_veridian")) }
@@ -155,6 +156,19 @@ fun HqOpsScreen(
         }
     }
 
+    // Session 31: a mission is ready only when the eligible soldiers can form a valid team
+    val readyByMissionId = remember(uiState.operators, deployedOpIds, uiState.gearItems, uiState.citations, uiState.facilities, uiState.squads) {
+        GameCatalog.missions.associate { mission ->
+            val eligible = uiState.operators.filter { op ->
+                TacticalCalculator.canOperatorDeployOnMission(
+                    operator = op, mission = mission, deployedOpIds = deployedOpIds, gearItems = uiState.gearItems,
+                    citations = uiState.citations, facilities = uiState.facilities
+                ).eligible
+            }
+            mission.id to TacticalCalculator.canFieldTeam(mission, eligible, uiState.squads)
+        }
+    }
+
     val activeRotatingSet = remember(uiState.rotatingMissionIds) {
         val ids = uiState.rotatingMissionIds
         if (ids.isNotEmpty()) {
@@ -203,7 +217,7 @@ fun HqOpsScreen(
         )
     }
 
-    val visibleCampaigns = remember(readyOnly, qualifiedByMissionId, uiState.completedCampaignStageIds, uiState.completedCampaignIds, sfUnlocked) {
+    val visibleCampaigns = remember(readyOnly, readyByMissionId, uiState.completedCampaignStageIds, uiState.completedCampaignIds, sfUnlocked) {
         val shownCampaigns = GameCatalog.campaigns.filter { !it.isSpecialForces || sfUnlocked }
         if (!readyOnly) {
             shownCampaigns
@@ -215,13 +229,13 @@ fun HqOpsScreen(
                         mission = mission,
                         completedStageIds = uiState.completedCampaignStageIds,
                         completedCampaignIds = uiState.completedCampaignIds
-                    ) && (qualifiedByMissionId[stageId] ?: 0) >= mission.minOperators
+                    ) && readyByMissionId[stageId] == true
                 }
             }
         }
     }
 
-    val visibleGroups = remember(selectedTab, readyOnly, qualifiedByMissionId, orderedGroups) {
+    val visibleGroups = remember(selectedTab, readyOnly, readyByMissionId, orderedGroups) {
         val scoped = when (selectedTab) {
             OpsBoardTab.ALL -> orderedGroups
             OpsBoardTab.CAMPAIGNS -> emptyList()
@@ -233,9 +247,7 @@ fun HqOpsScreen(
             scoped
         } else {
             scoped.mapNotNull { group ->
-                val readyMissions = group.missions.filter { m ->
-                    (qualifiedByMissionId[m.id] ?: 0) >= m.minOperators
-                }
+                val readyMissions = group.missions.filter { m -> readyByMissionId[m.id] == true }
                 if (readyMissions.isEmpty()) null else group.copy(missions = readyMissions)
             }
         }
