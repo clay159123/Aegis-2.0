@@ -453,6 +453,17 @@ object HqChain {
     /** Rank of the seated CO, or null when the CO seat is empty. */
     @Volatile var commanderRank: OperatorRank? = null
 
+    /** Everyone seated on HQ staff, for the "CO must be the senior officer" check. */
+    @Volatile var seatedStaff: List<Operator> = emptyList()
+
+    /** The seated officer who outranks [candidate] (by earned rank), which bars them from taking command. */
+    fun outrankingOfficer(candidate: Operator, seated: List<Operator> = seatedStaff): Operator? =
+        seated.filter {
+            it.id != candidate.id && it.unlocked && it.status == OperatorStatus.HQ_STAFF &&
+                it.hqRole != HqStaffRole.CO_COMMANDING_OFFICER && it.earnedRank.isCommissioned
+        }.filter { it.earnedRank.seniorityIndex > candidate.earnedRank.seniorityIndex }
+            .maxByOrNull { it.earnedRank.seniorityIndex }
+
     private val commissionedLadder = listOf(
         OperatorRank.LT2, OperatorRank.LT1, OperatorRank.CPT, OperatorRank.MAJ, OperatorRank.LTC,
         OperatorRank.COL, OperatorRank.BG, OperatorRank.MG, OperatorRank.LTG, OperatorRank.GEN

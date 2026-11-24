@@ -180,6 +180,7 @@ class CommandViewModel(
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.squads)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
             ClandestineRules.clearedStageIds = completedStages
+            HqChain.seatedStaff = data.operators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
             HqChain.commanderRank = data.operators.firstOrNull {
                 it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER
             }?.earnedRank
@@ -415,6 +416,7 @@ class CommandViewModel(
                 repairPowRecords(state, now)
                 repairOcsCommissions(state)
                 repairStarterSchools(state)
+                repairCommandSeniority(state)
                 resolveCaptivity(state, now)
                 // Item 62: covers that blow now; the clock drops and the team must choose
                 state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
@@ -865,6 +867,19 @@ class CommandViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * Item 150 follow-up: saves from before the seniority rule can hold a Deputy who outranks the CO.
+     * Swap them once so the senior officer commands (the Deputy cap would otherwise shrink the general).
+     */
+    private suspend fun repairCommandSeniority(state: CommandUiState) {
+        val seated = state.operators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
+        val co = seated.find { it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER } ?: return
+        val dcg = seated.find { it.hqRole == HqStaffRole.DEPUTY_COMMANDER } ?: return
+        if (dcg.earnedRank.seniorityIndex <= co.earnedRank.seniorityIndex) return
+        repository.saveOperators(listOf(dcg.copy(hqRole = HqStaffRole.CO_COMMANDING_OFFICER), co.copy(hqRole = HqStaffRole.DEPUTY_COMMANDER)))
+        showBanner("${dcg.earnedRank.code} ${dcg.callsign} takes command as CO; ${co.callsign} moves to Deputy.")
     }
 
     private fun applyTierProgressionOnRankUp(

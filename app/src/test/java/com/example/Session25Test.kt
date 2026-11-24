@@ -15,7 +15,23 @@ class Session25Test {
     private val base = GameCatalog.createPostBasicRecruit("op_s25", OperatorSpecialty.ASSAULT, emptySet(), 0)
     private val hq = listOf(FacilityState(FacilityType.COMMAND_HQ, 10), FacilityState(FacilityType.AIRFIELD, 1))
 
-    @After fun reset() { HqChain.commanderRank = null }
+    @After fun reset() { HqChain.commanderRank = null; HqChain.seatedStaff = emptyList() }
+
+    @Test
+    fun coMustBeTheSeniorOfficer() {
+        val dcg = base.copy(id = "op_dcg", xp = OperatorRank.LTG.xpRequired, authorizedTier = RankTier.FLAG_OFFICER, flagGrade = 3,
+            status = OperatorStatus.HQ_STAFF, hqRole = HqStaffRole.DEPUTY_COMMANDER, missionsCompleted = 40)
+        val col = base.copy(id = "op_col", xp = OperatorRank.COL.xpRequired, authorizedTier = RankTier.OFFICER, missionsCompleted = 40,
+            completedMissionIds = base.completedMissionIds + TacticalCalculator.OCS_MISSION_ID)
+        HqChain.seatedStaff = listOf(dcg)
+        val result = TacticalCalculator.evaluateHqRoleEligibility(HqStaffRole.CO_COMMANDING_OFFICER, col)
+        assertTrue(result.missingRequirements.any { it.startsWith("Outranked by the DCG") })
+        // The Deputy can step up
+        assertTrue(TacticalCalculator.evaluateHqRoleEligibility(HqStaffRole.CO_COMMANDING_OFFICER, dcg)
+            .missingRequirements.none { it.startsWith("Outranked") })
+        // A new BG can't take the open CO seat over a seated LTG
+        assertNull(TacticalCalculator.openGeneralBillet(col, listOf(col, dcg), hq))
+    }
 
     @Test
     fun deputyStaysOneRankBelowTheCo() {
