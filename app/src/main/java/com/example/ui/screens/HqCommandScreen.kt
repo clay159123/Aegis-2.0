@@ -727,7 +727,7 @@ private fun HqOccupiedBilletCard(
     val pinsRank = nextRank != null && !crossesTierCard && operator.pinnedRank != null && operator.rank.tier != RankTier.SOLDIER
     val canPromote = nextRank != null && when {
         crossesTierCard -> true
-        pinsRank -> operator.pinEligibleRank != null
+        pinsRank -> operator.pinEligibleRank != null && resources.credits >= crCost && resources.prestige >= prsCost
         else -> resources.credits >= crCost && resources.prestige >= prsCost
     }
 
@@ -881,7 +881,7 @@ private fun HqOccupiedBilletCard(
                             nextRank == null && promotionBlockedReason != null -> "Billet Top Rank"
                             nextRank == null -> "Max Rank (GEN)"
                             crossesTierCard -> "${nextRank.tier.shortLabel} Board (${nextRank.code})"
-                            pinsRank && operator.pinEligibleRank != null -> "Pin ${nextRank.code}"
+                            pinsRank && operator.pinEligibleRank != null -> "Pin ${nextRank.code} (${crCost.toInt()}C/${prsCost}P)"
                             pinsRank -> "${nextRank.code} at ${nextRank.xpRequired} XP"
                             else -> "Promote ${nextRank.code} (${crCost.toInt()}C/${prsCost}P)"
                         },

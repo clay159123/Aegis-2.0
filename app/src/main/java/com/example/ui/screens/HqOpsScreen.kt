@@ -102,7 +102,13 @@ fun HqOpsScreen(
     var selectedTab by remember { mutableStateOf(OpsBoardTab.ALL) }
     // Session 31: Ready only starts on, and checks full team rules
     var readyOnly by remember { mutableStateOf(true) }
-    var collapsedGroupIds by remember { mutableStateOf(setOf("campaigns")) }
+    // Playtest fix: every collapsible section starts collapsed
+    var collapsedGroupIds by remember {
+        mutableStateOf(
+            setOf("campaigns", "combat", "special_forces", "staff", "school_other") +
+                GameCatalog.schoolCategories.map { "school_${it.id}" }
+        )
+    }
     var expandedMissionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expandedCampaignIds by remember { mutableStateOf(setOf("camp_veridian")) }
     var flightHours by remember { mutableStateOf(TacticalCalculator.FLIGHT_HOURS_PER_SESSION) }

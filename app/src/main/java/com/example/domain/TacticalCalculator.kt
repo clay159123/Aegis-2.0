@@ -1736,10 +1736,17 @@ object TacticalCalculator {
                 RankTier.FLAG_OFFICER -> DressUniformStyle.FLAG_STAFF_FORMAL
                 RankTier.OFFICER, RankTier.WARRANT -> DressUniformStyle.OFFICER_SERVICE_BLUES
                 RankTier.SNCO, RankTier.NCO -> DressUniformStyle.NCO_PARADE_BLUES
-                RankTier.SOLDIER -> DressUniformStyle.ARMY_SERVICE_GREEN
+                // Playtest fix: junior soldiers default to the blue ASU (green AGSU marks SF squads)
+                RankTier.SOLDIER -> DressUniformStyle.ARMY_DRESS_BLUES
             }
         }
     }
+
+    /** Playtest fix: members of an SF squad wear the green AGSU on Auto, so SF soldiers stand out at a glance. */
+    fun autoServiceCoat(operator: Operator, squads: List<TacticalSquad>): DressUniformStyle? =
+        if (operator.rank.tier != RankTier.FLAG_OFFICER && standardSquadFor(operator, squads)?.isSpecialForces == true) {
+            DressUniformStyle.ARMY_SERVICE_GREEN
+        } else null
 
     /** Bravos beret Auto order, highest first: SF, Ranger, Airborne, then the black beret. */
     val BERET_LADDER: List<HeadgearStyle> = listOf(
@@ -1962,6 +1969,10 @@ object TacticalCalculator {
         val sashAllowed = allowFree || evaluateDressSashEligibility(operator, squads).eligible
         // Order for each item: the soldier's own Tailor pick, then the squad standard (if they qualify), then Auto
         val std = squadStandardFor(operator, squads, effectiveKit, ownedMedalIds)
+        // Playtest fix: Auto service coat: SF squads wear the green AGSU, everyone else the blue ASU family.
+        // A tier-default base coat counts as Auto; Tailor picks and squad standards still win.
+        val autoCoat = autoServiceCoat(operator, squads)
+        val baseServiceCoat = operator.dressStyle.takeIf { !it.isCutawayMess && !isTierDefaultCoat(it) }
 
         return when (effectiveKit) {
             WardrobeKit.FIELD -> operator.copy(
@@ -1984,7 +1995,7 @@ object TacticalCalculator {
                         WardrobeKit.BRAVOS,
                         operator.rank.tier,
                         settings.dressStyle ?: std.dressStyle ?: operator.wardrobe.alphas.dressStyle
-                            ?: operator.dressStyle.takeIf { !it.isCutawayMess }
+                            ?: autoCoat ?: baseServiceCoat
                     ),
                     headgearStyle = defaultHeadgearForKit(WardrobeKit.BRAVOS, operator, ownedMedalIds, settings.headgearStyle ?: std.headgear),
                     dressDisplayMode = bravosDisplay,
@@ -2002,7 +2013,7 @@ object TacticalCalculator {
                     dressStyle = defaultDressStyleForKit(
                         WardrobeKit.ALPHAS,
                         operator.rank.tier,
-                        settings.dressStyle ?: std.dressStyle ?: operator.dressStyle.takeIf { !it.isCutawayMess }
+                        settings.dressStyle ?: std.dressStyle ?: autoCoat ?: baseServiceCoat
                     ),
                     headgearStyle = defaultHeadgearForKit(
                         WardrobeKit.ALPHAS,

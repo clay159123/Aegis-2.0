@@ -57,7 +57,10 @@ fun DressAwardsScreen(
     onAwardAllEligible: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     /** Session 33: pin the next rank for every promotable soldier. */
-    onPinAllPromotions: () -> Unit = {}
+    onPinAllPromotions: () -> Unit = {},
+    /** Playtest fix: a soldier to open on (from the debrief's Present Awards), consumed once shown. */
+    focusOperatorId: String? = null,
+    onFocusConsumed: () -> Unit = {}
 ) {
     val extra = LocalAegisColors.current
     val unlockedOps = remember(uiState.operators) {
@@ -74,6 +77,12 @@ fun DressAwardsScreen(
         if (selectedOpId == null || unlockedOps.none { it.id == selectedOpId }) {
             selectedOpId = uiState.pendingDeeds.firstOrNull()?.operatorId
                 ?: unlockedOps.firstOrNull()?.id
+        }
+    }
+    LaunchedEffect(focusOperatorId) {
+        if (focusOperatorId != null && unlockedOps.any { it.id == focusOperatorId }) {
+            selectedOpId = focusOperatorId
+            onFocusConsumed()
         }
     }
     val selectedOp = unlockedOps.find { it.id == selectedOpId } ?: unlockedOps.firstOrNull()
@@ -246,7 +255,9 @@ fun DressAwardsScreen(
                         .defaultMinSize(minHeight = 48.dp)
                         .testTag("pin_all_promotions_button")
                 ) {
-                    Text("Promote all eligible ($promotableCount)")
+                    val totalCr = unlockedOps.filter { it.pinEligibleRank != null }.sumOf { it.rank.promotionCreditCost() }
+                    val totalPrs = unlockedOps.filter { it.pinEligibleRank != null }.sumOf { it.rank.promotionPrestigeCost() }
+                    Text("Promote all eligible ($promotableCount) • up to ${totalCr.toInt()} CR / $totalPrs PRS")
                 }
             }
         }
@@ -582,7 +593,7 @@ fun DressAwardsScreen(
                         } else if (pinsRank) {
                             Button(
                                 onClick = { onPromoteOperator(selectedOp.id, null) },
-                                enabled = selectedOp.pinEligibleRank != null,
+                                enabled = selectedOp.pinEligibleRank != null && canAfford,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .defaultMinSize(minHeight = 48.dp)
@@ -590,7 +601,7 @@ fun DressAwardsScreen(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                             ) {
                                 Text(
-                                    text = if (selectedOp.pinEligibleRank != null) "Pin ${nextRank.code} (${nextRank.payGrade})"
+                                    text = if (selectedOp.pinEligibleRank != null) "Pin ${nextRank.code} • ${promoCr.toInt()} CR / $promoPrs PRS"
                                         else "${nextRank.code} at ${nextRank.xpRequired} XP",
                                     style = MaterialTheme.typography.labelMedium,
                                     maxLines = 1

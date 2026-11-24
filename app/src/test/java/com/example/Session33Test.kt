@@ -98,6 +98,22 @@ class Session33Test {
     }
 
     @Test
+    fun sfSquadsWearGreenAndEveryoneElseBlueOnAuto() {
+        val sfNco = nco(true)
+        val regNco = nco()
+        val pvt = junior()
+        val oda = TacticalSquad("oda", "ODA 1", listOf(sfNco.id), sfNco.id, isSpecialForces = true)
+        val sqa = TacticalSquad("sqa", "Squad A", listOf(regNco.id, pvt.id), regNco.id)
+        fun coat(op: Operator) = TacticalCalculator.resolveKitAppearance(op, WardrobeKit.ALPHAS, listOf(oda, sqa)).dressStyle
+        assertEquals(DressUniformStyle.ARMY_SERVICE_GREEN, coat(sfNco))
+        assertEquals(DressUniformStyle.NCO_PARADE_BLUES, coat(regNco))
+        assertEquals(DressUniformStyle.ARMY_DRESS_BLUES, coat(pvt))
+        // A Tailor pick still wins
+        val picked = regNco.copy(wardrobe = regNco.wardrobe.withKit(WardrobeKit.ALPHAS, regNco.wardrobe.alphas.copy(dressStyle = DressUniformStyle.ARMY_SERVICE_GREEN)))
+        assertEquals(DressUniformStyle.ARMY_SERVICE_GREEN, coat(picked))
+    }
+
+    @Test
     fun aCommissionResetsThePinToTheNewTier() {
         val sgm = snco().copy(pinnedRank = OperatorRank.SGM, xp = OperatorRank.SGM.xpRequired)
         val lt = sgm.promotedTo(OperatorRank.LT2).copy(authorizedTier = RankTier.OFFICER)
