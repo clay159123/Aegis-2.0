@@ -1375,6 +1375,10 @@ object TacticalCalculator {
                 if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID && ClandestineRules.regionsToLearn(operator).isEmpty()) {
                     missing += "Already speaks every region's language"
                 }
+                // Item 152: seated HQ staff run the base; language training is for the field teams
+                if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID && operator.status == OperatorStatus.HQ_STAFF) {
+                    missing += "HQ staff don't need language training"
+                }
                 if (mission.id == RIFLE_QUAL_MISSION_ID && bestQualification(operator) == MarksmanshipBadgeTier.EXPERT) {
                     missing += "Already qualified Expert"
                 }
@@ -2198,7 +2202,11 @@ object TacticalCalculator {
         val unlocked = unlockedHqRoles(facilities)
         val taken = allOperators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.id != candidate.id }
             .mapNotNull { it.hqRole }.toSet()
-        return GENERAL_BILLETS.sortedBy { it.slotOrder }.firstOrNull { it in unlocked && it !in taken }
+        // Item 150: the Deputy only takes a new star when the CO sits above BG (the Deputy stays one rank below)
+        return GENERAL_BILLETS.sortedBy { it.slotOrder }.firstOrNull { role ->
+            role in unlocked && role !in taken &&
+                (role != HqStaffRole.DEPUTY_COMMANDER || HqChain.deputyCap().seniorityIndex >= OperatorRank.BG.seniorityIndex)
+        }
     }
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {

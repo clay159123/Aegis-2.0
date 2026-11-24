@@ -180,6 +180,9 @@ class CommandViewModel(
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.squads)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
             ClandestineRules.clearedStageIds = completedStages
+            HqChain.commanderRank = data.operators.firstOrNull {
+                it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER
+            }?.earnedRank
             CompoundRules.compoundLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.SF_COMPOUND)
             TacticalCalculator.tdyOperatorIds = TacticalCalculator.tdyOperatorIdsFor(data.deployments)
             val eventEffects = CommandEventEffects(

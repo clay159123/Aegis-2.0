@@ -925,7 +925,11 @@ fun HqOpsScreen(
 
     val missionToStage = stagingMission
     if (missionToStage != null) {
-        val stagingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        // Item 131: a stray swipe no longer throws away the team; close with the X, Cancel, Back or a tap outside
+        val stagingSheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+            confirmValueChange = { it != SheetValue.Hidden }
+        )
         ModalBottomSheet(
             onDismissRequest = {
                 stagingMission = null
@@ -965,6 +969,10 @@ fun HqOpsScreen(
                         squadMembers
                     }
                     selectedSquadId = if (missionToStage.requiredSquads > 1 && currentSquadId != null) currentSquadId else squad.id
+                },
+                onSetTeam = { ids ->
+                    selectedSquadId = null
+                    selectedOperatorIds = ids.distinct().take(missionToStage.maxOperators)
                 },
                 onToggleOperator = { opId ->
                     selectedSquadId = null
