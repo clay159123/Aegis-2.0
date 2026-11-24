@@ -2037,7 +2037,8 @@ object TacticalCalculator {
                         ownedMedalIds,
                         settings.headgearStyle ?: std.headgear
                     ),
-                    dressDisplayMode = settings.dressDisplayMode ?: operator.dressDisplayMode,
+                    // Playtest: Alphas wear ribbons on Auto; full medals are a Tailor (or toggle) choice
+                    dressDisplayMode = settings.dressDisplayMode ?: DressDisplayMode.RIBBONS,
                     hasWhiteGloves = settings.hasWhiteGloves ?: std.gloves ?: operator.hasWhiteGloves,
                     hasDressSash = rawSash && sashAllowed
                 )

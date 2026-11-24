@@ -65,7 +65,7 @@ object GameCatalog {
             baseTech = 12,
             baseResilience = 15,
             uniformMode = UniformMode.DRESS_UNIFORM,
-            dressDisplayMode = DressDisplayMode.FULL_MEDALS,
+            dressDisplayMode = DressDisplayMode.RIBBONS,
             camoPattern = CamoPattern.WOODLAND_OLIVE,
             dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
             headgearStyle = HeadgearStyle.OFFICER_PEAKED_CAP,
@@ -84,7 +84,6 @@ object GameCatalog {
                     hasDressSash = false
                 ),
                 alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS,
                     hasDressSash = true
                 ),
                 mess = WardrobeKitSettings(
@@ -115,7 +114,7 @@ object GameCatalog {
             baseTech = 13,
             baseResilience = 11,
             uniformMode = UniformMode.DRESS_UNIFORM,
-            dressDisplayMode = DressDisplayMode.FULL_MEDALS,
+            dressDisplayMode = DressDisplayMode.RIBBONS,
             camoPattern = CamoPattern.NIGHT_CHARCOAL,
             dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
             headgearStyle = HeadgearStyle.NCO_SERVICE_CAP,
@@ -133,9 +132,7 @@ object GameCatalog {
                     dressDisplayMode = DressDisplayMode.RIBBONS,
                     hasDressSash = false
                 ),
-                alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
-                ),
+                alphas = WardrobeKitSettings(),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
@@ -180,9 +177,7 @@ object GameCatalog {
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
-                alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
-                ),
+                alphas = WardrobeKitSettings(),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
@@ -226,7 +221,7 @@ object GameCatalog {
                     headgearStyle = HeadgearStyle.OBSIDIAN_BERET
                 ),
                 bravos = WardrobeKitSettings(dressDisplayMode = DressDisplayMode.RIBBONS),
-                alphas = WardrobeKitSettings(dressDisplayMode = DressDisplayMode.FULL_MEDALS),
+                alphas = WardrobeKitSettings(),
                 mess = WardrobeKitSettings(dressDisplayMode = DressDisplayMode.FULL_MEDALS)
             ),
             missionsCompleted = 0,
@@ -252,7 +247,7 @@ object GameCatalog {
             baseTech = 11,
             baseResilience = 18,
             uniformMode = UniformMode.DRESS_UNIFORM,
-            dressDisplayMode = DressDisplayMode.FULL_MEDALS,
+            dressDisplayMode = DressDisplayMode.RIBBONS,
             camoPattern = CamoPattern.ARID_SAND,
             dressStyle = DressUniformStyle.NCO_PARADE_BLUES,
             headgearStyle = HeadgearStyle.NCO_SERVICE_CAP,
@@ -269,9 +264,7 @@ object GameCatalog {
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
-                alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
-                ),
+                alphas = WardrobeKitSettings(),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
@@ -299,7 +292,7 @@ object GameCatalog {
             baseTech = 15,
             baseResilience = 19,
             uniformMode = UniformMode.DRESS_UNIFORM,
-            dressDisplayMode = DressDisplayMode.FULL_MEDALS,
+            dressDisplayMode = DressDisplayMode.RIBBONS,
             camoPattern = CamoPattern.ALPINE_FROST,
             dressStyle = DressUniformStyle.OFFICER_SERVICE_BLUES,
             headgearStyle = HeadgearStyle.OFFICER_PEAKED_CAP,
@@ -316,9 +309,7 @@ object GameCatalog {
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
-                alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
-                ),
+                alphas = WardrobeKitSettings(),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
@@ -346,7 +337,7 @@ object GameCatalog {
             baseTech = 15,
             baseResilience = 17,
             uniformMode = UniformMode.DRESS_UNIFORM,
-            dressDisplayMode = DressDisplayMode.FULL_MEDALS,
+            dressDisplayMode = DressDisplayMode.RIBBONS,
             camoPattern = CamoPattern.NIGHT_CHARCOAL,
             dressStyle = DressUniformStyle.FLAG_STAFF_FORMAL,
             headgearStyle = HeadgearStyle.FLAG_GENERAL_CAP,
@@ -363,9 +354,7 @@ object GameCatalog {
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
-                alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
-                ),
+                alphas = WardrobeKitSettings(),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )

@@ -101,3 +101,17 @@ class StaffCrestPlacementTest {
         assertEquals("insig_staff_crest", picked[2]?.id)
     }
 }
+
+class DressDisplayDefaultsTest {
+    @Test
+    fun alphasWearRibbonsAndMessWearsMiniatures() {
+        for (op in GameCatalog.initialOperators) {
+            assertEquals(op.id, DressDisplayMode.RIBBONS, TacticalCalculator.resolveKitAppearance(op, WardrobeKit.ALPHAS).dressDisplayMode)
+            assertEquals(op.id, DressDisplayMode.FULL_MEDALS, TacticalCalculator.resolveKitAppearance(op, WardrobeKit.MESS).dressDisplayMode)
+        }
+        // Full medals on Alphas stay a Tailor choice
+        val op = GameCatalog.initialOperators.first()
+        val medals = op.copy(wardrobe = op.wardrobe.withKit(WardrobeKit.ALPHAS, op.wardrobe.alphas.copy(dressDisplayMode = DressDisplayMode.FULL_MEDALS)))
+        assertEquals(DressDisplayMode.FULL_MEDALS, TacticalCalculator.resolveKitAppearance(medals, WardrobeKit.ALPHAS).dressDisplayMode)
+    }
+}
