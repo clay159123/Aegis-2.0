@@ -51,7 +51,9 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     callsign: String,
     unitAwards: List<Pair<UnitAwardType, Int>>,
     leaderRole: LeaderRole,
-    textMeasurer: TextMeasurer
+    textMeasurer: TextMeasurer,
+    /** Item 142: the environment school badge worn above the unit awards and name plate. */
+    environmentBadge: MedalDefinition? = null
 ) {
     val showLeaderPin = leaderRole != LeaderRole.NONE
     // 1. Unit award emblems in precedence order, side by side, shifted higher if the Leader Pin is present.
@@ -74,6 +76,21 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
                 drawRibbonDeviceOverlay(Offset(left, top), Size(emblemW, emblemH), UniformRegaliaRules.unitAwardDevices(count))
             }
         }
+    }
+
+    // 1b. Item 142: environment badge on top of the stack (above any unit awards, leader pin and name plate)
+    if (environmentBadge != null) {
+        val unitTop = if (unitAwards.isNotEmpty()) {
+            val baseTop = if (showLeaderPin) h * (0.514f - CHEST_LIFT) else h * (0.526f - CHEST_LIFT)
+            val rows = (unitAwards.take(6).size + 2) / 3
+            baseTop - (rows - 1) * (h * 0.018f + w * 0.004f)
+        } else if (showLeaderPin) h * (0.552f - CHEST_LIFT) - h * 0.0085f else h * (0.568f - CHEST_LIFT)
+        val badgeH = h * 0.030f
+        val badgeW = w * 0.060f
+        drawEnvironmentOrSniperBadge(
+            environmentBadge.insigniaShape ?: com.example.domain.model.InsigniaShape.MOUNTAIN_BADGE,
+            Offset(rightChestCenterX, unitTop - h * 0.006f - badgeH / 2f), badgeW, badgeH, Color(environmentBadge.insigniaColorHex)
+        )
     }
 
     // 2. Leader pin directly above the nameplate: Squad Leader crimson with a gold star,

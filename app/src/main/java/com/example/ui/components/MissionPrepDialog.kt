@@ -293,7 +293,7 @@ fun MissionPrepDialog(
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.weight(1f)) {
                                 NameWithSfMarker(
-                                    "${op.rank.code} ${op.callsign} • ${op.specialty.roleTag}",
+                                    "${op.rank.code} ${op.callsign} • ${op.mosTag}",
                                     TacticalCalculator.isSfQualified(op),
                                     MaterialTheme.typography.bodySmall
                                 )
@@ -324,7 +324,7 @@ fun MissionPrepDialog(
                                     modifier = Modifier.fillMaxWidth().testTag("prep_swap_in_${cand.id}")
                                 ) {
                                     NameWithSfMarker(
-                                        "${cand.rank.code} ${cand.callsign} • ${cand.specialty.roleTag} (${squadOf(cand.id)?.name ?: "no squad"})",
+                                        "${cand.rank.code} ${cand.callsign} • ${cand.mosTag} (${squadOf(cand.id)?.name ?: "no squad"})",
                                         TacticalCalculator.isSfQualified(cand),
                                         MaterialTheme.typography.labelSmall,
                                         modifier = Modifier.fillMaxWidth()

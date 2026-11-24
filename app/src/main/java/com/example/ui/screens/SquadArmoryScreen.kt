@@ -513,7 +513,7 @@ fun SquadArmoryScreen(
                         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             if (TacticalCalculator.isSfQualified(op)) SfMarker(modifier = Modifier.padding(top = 1.dp))
                             Text(
-                                text = "${op.rank.title} ${op.name} • ${op.specialty.roleTag}",
+                                text = "${op.rank.title} ${op.name} • ${op.mosTag}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -681,7 +681,7 @@ fun SquadArmoryScreen(
                         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             if (TacticalCalculator.isSfQualified(op)) SfMarker(modifier = Modifier.padding(top = 1.dp))
                             Text(
-                                text = "${op.rank.title} ${op.name} • ${op.hqRole?.title ?: op.specialty.label}",
+                                text = "${op.rank.title} ${op.name} • ${op.hqRole?.title ?: op.mosLabel}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

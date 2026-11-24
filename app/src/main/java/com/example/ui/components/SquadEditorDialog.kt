@@ -366,9 +366,9 @@ private fun RosterTab(
                     )
                     Text(
                         text = when {
-                            isLeader -> "★ Squad Leader • ${member.specialty.label}"
-                            isTeamLeader -> "Team Leader • ${member.specialty.label}"
-                            else -> member.specialty.label
+                            isLeader -> "★ Squad Leader • ${member.mosLabel}"
+                            isTeamLeader -> "Team Leader • ${member.mosLabel}"
+                            else -> member.mosLabel
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isLeader) extra.brass else if (isTeamLeader) extra.signalsCyan else extra.textMuted
@@ -443,13 +443,13 @@ private fun RosterTab(
                 Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         NameWithSfMarker(
-                            text = "${candidate.rank.code} ${candidate.callsign} • ${candidate.specialty.roleTag}",
+                            text = "${candidate.rank.code} ${candidate.callsign} • ${candidate.mosTag}",
                             sfQualified = TacticalCalculator.isSfQualified(candidate),
                             style = MaterialTheme.typography.labelLarge,
                             color = if (!full) MaterialTheme.colorScheme.onSurface else extra.textMuted
                         )
                         Text(
-                            text = if (existing != null) "Currently in $existing (will transfer)" else "${candidate.specialty.label} • Unassigned",
+                            text = if (existing != null) "Currently in $existing (will transfer)" else "${candidate.mosLabel} • Unassigned",
                             style = MaterialTheme.typography.labelSmall,
                             color = if (existing != null) extra.amberTelemetry else extra.textMuted
                         )

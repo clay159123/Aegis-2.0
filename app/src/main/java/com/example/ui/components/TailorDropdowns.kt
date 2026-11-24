@@ -242,7 +242,7 @@ fun DressStyleDropdown(
         selectedText = operator.dressStyle.label,
         selectedPrimaryColor = Color(operator.dressStyle.tunicHex),
         selectedTrimColor = Color(operator.dressStyle.trimHex),
-        supportingHint = "${operator.dressStyle.subtitle} • ${operator.specialty.label} Collar Brass",
+        supportingHint = "${operator.dressStyle.subtitle} • ${operator.mosLabel} Collar Brass",
         options = options,
         selectedValue = operator.dressStyle,
         onSelect = onSelect,

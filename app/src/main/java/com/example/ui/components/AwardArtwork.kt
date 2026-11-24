@@ -425,6 +425,8 @@ fun AwardVisualThumbnail(
                             drawStar(Offset(cx, h * 0.22f), h * 0.15f, h * 0.065f, Color(0xFFF2D272))
                         }
                     }
+                    InsigniaShape.MOUNTAIN_BADGE, InsigniaShape.JUNGLE_BADGE, InsigniaShape.ARCTIC_BADGE, InsigniaShape.SNIPER_BADGE ->
+                        drawEnvironmentOrSniperBadge(medal.insigniaShape!!, Offset(cx, cy), w * 0.9f, h * 0.9f, col)
                     InsigniaShape.MFF_WINGS -> {
                         drawLine(col, Offset(w * 0.06f, cy + h * 0.02f), Offset(w * 0.94f, cy + h * 0.02f), strokeWidth = (h * 0.10f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
                         drawLine(col, Offset(w * 0.16f, cy + h * 0.17f), Offset(w * 0.84f, cy + h * 0.17f), strokeWidth = (h * 0.075f).coerceAtLeast(2.2f), cap = StrokeCap.Round)
@@ -715,4 +717,68 @@ fun AwardInspectionDialog(
             }
         }
     )
+}
+
+/** Items 142 and 143: Mountain, Jungle, Arctic and Sniper badges, drawn for the uniform and the awards screen. */
+internal fun DrawScope.drawEnvironmentOrSniperBadge(shape: InsigniaShape, center: Offset, bw: Float, bh: Float, col: Color) {
+    val cx = center.x
+    val cy = center.y
+    val dark = Color(0xFF121722)
+    val sw = (bh * 0.07f).coerceAtLeast(1.0f)
+    when (shape) {
+        InsigniaShape.MOUNTAIN_BADGE -> {
+            // Two silver peaks with snow caps over crossed ice axes
+            drawLine(col, Offset(cx - bw * 0.36f, cy + bh * 0.42f), Offset(cx + bw * 0.36f, cy + bh * 0.12f), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx + bw * 0.36f, cy + bh * 0.42f), Offset(cx - bw * 0.36f, cy + bh * 0.12f), strokeWidth = sw, cap = StrokeCap.Round)
+            val back = Path().apply {
+                moveTo(cx - bw * 0.05f, cy + bh * 0.22f); lineTo(cx + bw * 0.20f, cy - bh * 0.30f); lineTo(cx + bw * 0.46f, cy + bh * 0.22f); close()
+            }
+            val front = Path().apply {
+                moveTo(cx - bw * 0.46f, cy + bh * 0.22f); lineTo(cx - bw * 0.12f, cy - bh * 0.44f); lineTo(cx + bw * 0.22f, cy + bh * 0.22f); close()
+            }
+            drawPath(back, col.copy(alpha = 0.75f))
+            drawPath(front, col)
+            drawPath(front, dark.copy(alpha = 0.5f), style = Stroke(width = sw * 0.5f))
+            val cap = Path().apply {
+                moveTo(cx - bw * 0.21f, cy - bh * 0.27f); lineTo(cx - bw * 0.12f, cy - bh * 0.44f); lineTo(cx - bw * 0.03f, cy - bh * 0.27f); close()
+            }
+            drawPath(cap, Color.White)
+        }
+        InsigniaShape.JUNGLE_BADGE -> {
+            // Green palm on a black oval
+            drawOval(dark, Offset(cx - bw * 0.46f, cy - bh * 0.46f), Size(bw * 0.92f, bh * 0.92f))
+            drawOval(col, Offset(cx - bw * 0.46f, cy - bh * 0.46f), Size(bw * 0.92f, bh * 0.92f), style = Stroke(width = sw * 0.7f))
+            drawLine(Color(0xFF9A7B4F), Offset(cx + bw * 0.04f, cy + bh * 0.38f), Offset(cx - bw * 0.02f, cy - bh * 0.12f), strokeWidth = sw * 1.2f, cap = StrokeCap.Round)
+            for ((dx, dy) in listOf(-0.34f to 0.06f, 0.34f to 0.04f, -0.24f to -0.30f, 0.26f to -0.30f, 0f to -0.40f)) {
+                val tip = Offset(cx + bw * dx, cy + bh * dy)
+                val frond = Path().apply {
+                    moveTo(cx - bw * 0.02f, cy - bh * 0.12f)
+                    quadraticTo((cx + tip.x) / 2f, (cy - bh * 0.30f + tip.y) / 2f, tip.x, tip.y)
+                }
+                drawPath(frond, col, style = Stroke(width = sw * 1.3f, cap = StrokeCap.Round))
+            }
+        }
+        InsigniaShape.ARCTIC_BADGE -> {
+            // White snowflake on an ice-blue disc
+            drawCircle(Color(0xFF2A4F78), radius = bh * 0.46f, center = center)
+            drawCircle(col, radius = bh * 0.46f, center = center, style = Stroke(width = sw * 0.6f))
+            for (k in 0 until 3) {
+                val a = Math.toRadians(90.0 + k * 60.0)
+                val dx = (kotlin.math.cos(a) * bh * 0.36f).toFloat()
+                val dy = (kotlin.math.sin(a) * bh * 0.36f).toFloat()
+                drawLine(Color.White, Offset(cx - dx, cy - dy), Offset(cx + dx, cy + dy), strokeWidth = sw, cap = StrokeCap.Round)
+            }
+            drawCircle(Color.White, radius = bh * 0.06f, center = center)
+        }
+        InsigniaShape.SNIPER_BADGE -> {
+            // Crosshairs over a rifle
+            drawLine(col, Offset(cx - bw * 0.48f, cy + bh * 0.10f), Offset(cx + bw * 0.48f, cy + bh * 0.10f), strokeWidth = sw * 1.2f, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx - bw * 0.48f, cy + bh * 0.10f), Offset(cx - bw * 0.36f, cy + bh * 0.30f), strokeWidth = sw * 1.4f, cap = StrokeCap.Round)
+            drawCircle(col, radius = bh * 0.34f, center = center, style = Stroke(width = sw))
+            drawLine(col, Offset(cx, cy - bh * 0.44f), Offset(cx, cy + bh * 0.44f), strokeWidth = sw * 0.6f)
+            drawLine(col, Offset(cx - bh * 0.44f, cy), Offset(cx + bh * 0.44f, cy), strokeWidth = sw * 0.6f)
+            drawCircle(Color(0xFFC8102E), radius = bh * 0.05f, center = center)
+        }
+        else -> Unit
+    }
 }

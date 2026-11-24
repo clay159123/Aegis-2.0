@@ -41,7 +41,8 @@ object PowRules {
         val statFactor = 1.0 - (statPoints * STAT_REDUCTION_PER_POINT).coerceAtMost(MAX_STAT_REDUCTION)
         val sere = if (TacticalCalculator.isSereQualified(operator)) SERE_CAPTURE_FACTOR else 1.0
         val cover = if (blownCover) BLOWN_COVER_FACTOR else 1.0
-        return base * statFactor * sere * cover
+        val sniper = if (TacticalCalculator.isSniper(operator)) TacticalCalculator.SNIPER_CAPTURE_FACTOR else 1.0
+        return base * statFactor * sere * cover * sniper
     }
 
     /** How long a held soldier waits before the captors release them (or they die in captivity). */

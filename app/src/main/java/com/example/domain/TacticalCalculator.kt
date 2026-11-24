@@ -408,7 +408,7 @@ object TacticalCalculator {
         }
         val resolvedPins = UniformRegaliaRules.resolveChestBadgeSlots(
             operator = operator,
-            ownedBadgeMedals = badgePool,
+            ownedBadgeMedalsAll = badgePool,
             overrides = overrides
         )
         val chestPinAboveRack = resolvedPins.getOrNull(0)
@@ -1357,7 +1357,8 @@ object TacticalCalculator {
         }
 
         if (mission.scope == MissionScope.TRAINING) {
-            val repeatable = mission.id == RIFLE_QUAL_MISSION_ID || mission.id == FLIGHT_HOURS_MISSION_ID || mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID
+            val repeatable = mission.id == RIFLE_QUAL_MISSION_ID || mission.id == FLIGHT_HOURS_MISSION_ID || mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID ||
+                mission.id == SELECTION_PREP_ID
             if (mission.id in operator.completedMissionIds && !repeatable) {
                 return EligibilityResult(false, listOf("Already Graduated"))
             }
@@ -1408,6 +1409,14 @@ object TacticalCalculator {
                 // Item 62: the Language school stays open until every region is learned
                 if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID && ClandestineRules.regionsToLearn(operator).isEmpty()) {
                     missing += "Already speaks every region's language"
+                }
+                // Item 141: one banked prep at a time
+                if (mission.id == SELECTION_PREP_ID && operator.eventBuffs.selectionPrepPct > 0) {
+                    missing += "Prep already banked for the next pipeline try"
+                }
+                // Item 143: Sniper School takes Expert marksmen only
+                if (mission.id == SNIPER_SCHOOL_ID && operator.marksmanshipQual != MarksmanshipBadgeTier.EXPERT) {
+                    missing += "Requires an Expert rifle qualification"
                 }
                 // Item 152: seated HQ staff run the base; language training is for the field teams
                 if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID && operator.status == OperatorStatus.HQ_STAFF) {
@@ -2011,8 +2020,50 @@ object TacticalCalculator {
             "msn_nco_school", "msn_snco_school" -> hqStaffSummary?.ncoSchoolPassBonusPct ?: 0
             else -> 0
         }
-        return (req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus + rangeBonus + airfieldBonus + billetBonus).coerceIn(15, maxCap)
+        // Item 141: a banked Selection Prep adds on top of the school's cap
+        val prep = if (mission.id in SELECTION_PREP_SCHOOLS) operator.eventBuffs.selectionPrepPct else 0
+        return ((req.basePassRatePct + rankBonus + mosFitBonus + statMargin + staffBonus + baselineBonus + rangeBonus + airfieldBonus + billetBonus)
+            .coerceIn(15, maxCap) + prep).coerceAtMost(95)
     }
+
+    // ---------- Items 141-143 (Session 29) ----------
+    const val SELECTION_PREP_ID = "msn_selection_prep"
+    const val SELECTION_PREP_BONUS_PCT = 10
+    /** Schools a banked Selection Prep helps (used up on the next try at any of them). */
+    val SELECTION_PREP_SCHOOLS: Set<String> = setOf("msn_sf_school", COMBAT_DIVER_SCHOOL_ID, MFF_SCHOOL_ID)
+
+    /** Item 142: each environment school, its terrain and its badge. */
+    data class EnvironmentSchool(val schoolId: String, val terrain: Terrain, val badgeId: String)
+    val ENVIRONMENT_SCHOOLS: List<EnvironmentSchool> = listOf(
+        EnvironmentSchool("msn_mountain_school", Terrain.MOUNTAIN, "insig_mountain"),
+        EnvironmentSchool("msn_jungle_school", Terrain.JUNGLE, "insig_jungle"),
+        EnvironmentSchool("msn_arctic_school", Terrain.ARCTIC, "insig_arctic")
+    )
+    val ENVIRONMENT_BADGE_IDS: Set<String> = ENVIRONMENT_SCHOOLS.map { it.badgeId }.toSet()
+    const val ENVIRONMENT_PASS_BONUS_PCT = 5
+
+    /** Item 142: +5% on field missions in a trained terrain, scaled by the share of the team trained for it. */
+    fun environmentPassBonus(mission: MissionTemplate, team: List<Operator>): Int {
+        if (mission.scope != MissionScope.FIELD_COMBAT || team.isEmpty()) return 0
+        val school = ENVIRONMENT_SCHOOLS.find { it.terrain == mission.theater.terrain } ?: return 0
+        val trained = team.count { school.schoolId in it.completedMissionIds }
+        return (ENVIRONMENT_PASS_BONUS_PCT * trained + team.size / 2) / team.size
+    }
+
+    const val SNIPER_SCHOOL_ID = "msn_sniper_school"
+    const val SNIPER_BADGE_ID = "insig_sniper"
+    const val SNIPER_PASS_BONUS_PCT = 4
+    /** Item 143: snipers often work alone, so they're easier to take prisoner (SERE still cuts it). */
+    const val SNIPER_CAPTURE_FACTOR = 1.5
+    private val sniperFocusWords = listOf("Recon", "Overwatch", "Surveillance", "Direct Action", "Raid", "Optics")
+
+    fun isSniper(op: Operator): Boolean = SNIPER_SCHOOL_ID in op.completedMissionIds
+
+    /** Item 143: Recon, Overwatch and Direct Action field missions with a sniper on the team. */
+    fun sniperPassBonus(mission: MissionTemplate, team: List<Operator>): Int =
+        if (mission.scope == MissionScope.FIELD_COMBAT && team.any(::isSniper) &&
+            (sniperFocusWords.any { mission.primaryFocus.contains(it, ignoreCase = true) } || mission.title.contains("Direct Action"))
+        ) SNIPER_PASS_BONUS_PCT else 0
 
     fun missionSuccessOddsPct(
         mission: MissionTemplate,
@@ -2074,7 +2125,8 @@ object TacticalCalculator {
         val talks = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) PowRules.talksModifierPct(selectedOperators, PowRules.activeTalksFailures) else 0
         // Item 98: the guerrilla force and the Op Free Strait completion perk
         val freeStrait = ClandestineRules.guerrillaPassBonus(mission) + ClandestineRules.freeStraitSfBonus(mission) +
-            ClandestineRules.nativeSfPassBonus(mission, selectedOperators)
+            ClandestineRules.nativeSfPassBonus(mission, selectedOperators) +
+            environmentPassBonus(mission, selectedOperators) + sniperPassBonus(mission, selectedOperators)
         return (mission.baseSuccessRatePct + effDelta + staffBonus + cohesionOddsBonus + kitOddsBonus + warrantBonus + mosBonus + insertionDelta + platoonBonus + theaterPerk + camo + sofBonus + ltPlan + talks + freeStrait)
             .coerceIn(minOdds, maxOdds)
     }
@@ -2841,6 +2893,13 @@ object TacticalCalculator {
             MFF_BADGE_ID -> {
                 if (MFF_SCHOOL_ID !in operator.completedMissionIds) missing += "Graduate Military Free Fall School"
             }
+            "insig_mountain", "insig_jungle", "insig_arctic" -> {
+                val school = ENVIRONMENT_SCHOOLS.first { it.badgeId == medal.id }
+                if (school.schoolId !in operator.completedMissionIds) missing += "Graduate the ${school.terrain.label} school"
+            }
+            SNIPER_BADGE_ID -> {
+                if (!isSniper(operator)) missing += "Graduate Sniper School"
+            }
             COMBAT_DIVER_BADGE_ID -> {
                 if (COMBAT_DIVER_SCHOOL_ID !in operator.completedMissionIds) {
                     missing += "Graduate Combat Diver Qualification"
@@ -3165,6 +3224,14 @@ object TacticalCalculator {
                                 val medalId = firstEligibleUnowned(listOf("insig_ranger_tab"), includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title} in small-unit tactics, mountaineering & patrol leadership — Tan Beret authorized."
                             }
+                            in ENVIRONMENT_SCHOOLS.map { it.schoolId } -> {
+                                val badge = ENVIRONMENT_SCHOOLS.first { it.schoolId == mission.id }.badgeId
+                                firstEligibleUnowned(listOf(badge), includeGeneralFallback = false) to "Graduated ${mission.title}."
+                            }
+                            SNIPER_SCHOOL_ID -> {
+                                firstEligibleUnowned(listOf(SNIPER_BADGE_ID), includeGeneralFallback = false) to "Graduated ${mission.title}. Now a Sniper."
+                            }
+                            SELECTION_PREP_ID -> null to "Finished ${mission.title}: +$SELECTION_PREP_BONUS_PCT% on the next pipeline try."
                             MFF_SCHOOL_ID -> {
                                 val medalId = firstEligibleUnowned(listOf(MFF_BADGE_ID), includeGeneralFallback = false)
                                 medalId to "Graduated ${mission.title}: night oxygen jumps with full combat equipment."

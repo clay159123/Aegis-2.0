@@ -35,7 +35,8 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     marksmanshipTier: MarksmanshipBadgeTier,
     leaderRole: LeaderRole,
     awardDevices: Map<String, UniformRegaliaRules.AwardDeviceInfo>,
-    textMeasurer: TextMeasurer
+    textMeasurer: TextMeasurer,
+    environmentBadge: MedalDefinition? = null
 ) {
     // Item 57: Bravos follow the uniform family. AGSU (green) at any rank: tan shirt and olive slacks.
     // Blue family: officers in sky-blue (flag officers pearl) with navy slacks and gold stripes; enlisted in
@@ -424,7 +425,8 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         callsign = operator.callsign,
         unitAwards = unitAwards,
         leaderRole = leaderRole,
-        textMeasurer = textMeasurer
+        textMeasurer = textMeasurer,
+        environmentBadge = environmentBadge
     )
 
     // 8. Left Chest: Ribbons ONLY (no full hanging medals in Bravos) + School Pins + Marksmanship

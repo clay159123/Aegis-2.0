@@ -140,7 +140,7 @@ fun FieldSquadsSection(
                             }
                             Text(
                                 text = if (leader != null) {
-                                    "★ Squad Leader: ${leader.rank.code} ${leader.callsign} (${leader.specialty.roleTag})"
+                                    "★ Squad Leader: ${leader.rank.code} ${leader.callsign} (${leader.mosTag})"
                                 } else {
                                     "No Squad Leader designated — tap Manage to assign"
                                 },
@@ -241,7 +241,7 @@ fun FieldSquadsSection(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = if (isDeployed && member.id in com.example.domain.TacticalCalculator.tdyOperatorIds) "TDY" else if (isDeployed) "DEPLOYED" else if (member.status == OperatorStatus.RECOVERING) "MEDBAY" else member.specialty.roleTag,
+                                            text = if (isDeployed && member.id in com.example.domain.TacticalCalculator.tdyOperatorIds) "TDY" else if (isDeployed) "DEPLOYED" else if (member.status == OperatorStatus.RECOVERING) "MEDBAY" else member.mosTag,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (isDeployed) extra.signalsCyan else extra.textMuted,
                                             maxLines = 1,

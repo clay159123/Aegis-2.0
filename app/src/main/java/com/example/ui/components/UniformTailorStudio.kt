@@ -584,7 +584,7 @@ fun UniformTailorStudioCard(
                     candidateMedals = aboveRackCatalog,
                     ownedMedalIds = ownedMedalIds,
                     autoTitle = "Auto (MOS Priority)",
-                    autoHint = "${operator.specialty.roleTag} priority • ${ChestBadgeSlot.ABOVE_RACK.ruleHint}",
+                    autoHint = "${operator.mosTag} priority • ${ChestBadgeSlot.ABOVE_RACK.ruleHint}",
                     noneSubtitle = "Leave space above ribbon rack empty",
                     recommendedIds = UniformRegaliaRules.primaryBadgeIdsForSlot(
                         operator.specialty,
@@ -600,7 +600,7 @@ fun UniformTailorStudioCard(
                     candidateMedals = leftPocketCatalog,
                     ownedMedalIds = ownedMedalIds,
                     autoTitle = "Auto (MOS Priority)",
-                    autoHint = "${operator.specialty.roleTag} priority • ${ChestBadgeSlot.LEFT_POCKET.ruleHint}",
+                    autoHint = "${operator.mosTag} priority • ${ChestBadgeSlot.LEFT_POCKET.ruleHint}",
                     noneSubtitle = "Leave left pocket plain",
                     recommendedIds = UniformRegaliaRules.primaryBadgeIdsForSlot(
                         operator.specialty,
@@ -616,7 +616,7 @@ fun UniformTailorStudioCard(
                     candidateMedals = rightPocketCatalog,
                     ownedMedalIds = ownedMedalIds,
                     autoTitle = "Auto (MOS Priority)",
-                    autoHint = "${operator.specialty.roleTag} priority • ${ChestBadgeSlot.RIGHT_POCKET.ruleHint}",
+                    autoHint = "${operator.mosTag} priority • ${ChestBadgeSlot.RIGHT_POCKET.ruleHint}",
                     noneSubtitle = "Leave right pocket plain",
                     recommendedIds = UniformRegaliaRules.primaryBadgeIdsForSlot(
                         operator.specialty,

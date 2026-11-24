@@ -189,14 +189,14 @@ internal fun resolveOperatorAssignmentSummary(
     isDeployed: Boolean
 ): String {
     if (operator.status == OperatorStatus.FALLEN) {
-        return "Memorial Roll • ${operator.specialty.roleTag}"
+        return "Memorial Roll • ${operator.mosTag}"
     }
     if (operator.status == OperatorStatus.HQ_STAFF) {
         val role = operator.hqRole
         return if (role != null) {
             "HQ Staff • ${role.shortCode} (${role.title})"
         } else {
-            "HQ Command Staff • ${operator.specialty.roleTag}"
+            "HQ Command Staff • ${operator.mosTag}"
         }
     }
     val squad = squads.find { operator.id in it.memberIds }
@@ -208,9 +208,9 @@ internal fun resolveOperatorAssignmentSummary(
     }
     return if (squad != null) {
         val leaderTag = if (squad.leaderId == operator.id) " ★ Leader" else ""
-        "${squad.name}$leaderTag • ${operator.specialty.roleTag}$statusSuffix"
+        "${squad.name}$leaderTag • ${operator.mosTag}$statusSuffix"
     } else {
-        "Field Roster • ${operator.specialty.roleTag}$statusSuffix"
+        "Field Roster • ${operator.mosTag}$statusSuffix"
     }
 }
 
@@ -588,8 +588,8 @@ fun DressPersonnelDirectorySheet(
             op.rank.code.lowercase().contains(normalizedQuery) ||
             op.rank.title.lowercase().contains(normalizedQuery) ||
             op.rank.payGrade.lowercase().contains(normalizedQuery) ||
-            op.specialty.label.lowercase().contains(normalizedQuery) ||
-            op.specialty.roleTag.lowercase().contains(normalizedQuery) ||
+            op.mosLabel.lowercase().contains(normalizedQuery) ||
+            op.mosTag.lowercase().contains(normalizedQuery) ||
             squadName.contains(normalizedQuery) ||
             hqCode.contains(normalizedQuery) ||
             hqTitle.contains(normalizedQuery)
