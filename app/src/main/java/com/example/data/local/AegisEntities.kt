@@ -28,7 +28,10 @@ data class CommanderStateEntity(
     val lastEventCheckAtMillis: Long = 0L,
     val heloGroundedUntilMillis: Long = 0L,
     val recruitDiscountPct: Int = 0,
-    val sfRehearsalBonusPct: Int = 0
+    val sfRehearsalBonusPct: Int = 0,
+    /** Session 38: Parade Ground activity times. */
+    val lastCookoutAtMillis: Long = 0L,
+    val lastParadeActivityAtMillis: Long = 0L
 )
 
 @Entity(tableName = "facilities")
@@ -87,6 +90,10 @@ data class OperatorEntity(
     val flagGrade: Int = 0,
     /** Session 33: the rank the player has pinned (SGT and up); null for soldier ranks. */
     val pinnedRankName: String? = null,
+    val morale: Int = 70,
+    val deployStreak: Int = 0,
+    val lastReturnAtMillis: Long = 0L,
+    val inspectionMoraleAtMillis: Long = 0L,
     val flightSkill: Int = 0,
     val combatSortiesFlown: Int = 0,
     val combatJumps: Int = 0,
@@ -182,7 +189,12 @@ data class SquadEntity(
     val standardMessHeadgearName: String? = null,
     val standardAlphasGloves: Boolean? = null,
     val standardMessGloves: Boolean? = null,
-    val isSpecialForces: Boolean = false
+    val isSpecialForces: Boolean = false,
+    val shakenForIdsCsv: String = "",
+    val ralliedForIdsCsv: String = "",
+    val leaveUntilMillis: Long = 0L,
+    val leaveReadyAtMillis: Long = 0L,
+    val lastRunAtMillis: Long = 0L
 )
 
 @Entity(tableName = "citations")

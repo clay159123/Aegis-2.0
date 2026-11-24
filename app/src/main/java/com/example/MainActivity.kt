@@ -374,7 +374,10 @@ fun AegisCommandApp() {
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },
                                     onNavigateToOps = { navigateTo(ROUTE_OPS) },
-                                    onOpenMemorial = { navigateTo(ROUTE_HONORS) }
+                                    onOpenMemorial = { navigateTo(ROUTE_HONORS) },
+                                    onUnitRun = viewModel::unitRun,
+                                    onCookout = viewModel::cookout,
+                                    onAwardFormation = viewModel::awardFormation
                                 )
                             }
                             composable(ROUTE_SQUAD) {
@@ -402,6 +405,7 @@ fun AegisCommandApp() {
                                         viewModel.conductUniformInspection(squadId = squadId)
                                     },
                                     onSwitchSquadKit = viewModel::switchSquadWardrobeKit,
+                                    onSendSquadOnLeave = viewModel::sendSquadOnLeave,
                                     onSelectWardrobeKit = viewModel::selectWardrobeKit,
                                     onNavigateToHq = { navigateTo(ROUTE_HQ) }
                                 )

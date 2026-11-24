@@ -9,6 +9,7 @@ import com.example.data.local.CommanderStateEntity
 import com.example.domain.PromotionEndorsementFocus
 import com.example.domain.SquadCohesionRules
 import com.example.domain.MosEffects
+import com.example.domain.MoraleRules
 import com.example.domain.GameTiming
 import com.example.domain.MissionNameGenerator
 import com.example.domain.MissionNames
@@ -69,7 +70,10 @@ data class CommandUiState(
     /** Item 69: the soldier event waiting for an answer, if any. */
     val pendingEvent: PendingSoldierEvent? = null,
     val lastEventCheckAtMillis: Long = 0L,
-    val eventEffects: CommandEventEffects = CommandEventEffects()
+    val eventEffects: CommandEventEffects = CommandEventEffects(),
+    /** Session 38: Parade Ground activity times. */
+    val lastCookoutAtMillis: Long = 0L,
+    val lastParadeActivityAtMillis: Long = 0L
 ) {
     fun eventContext(): SoldierEventContext = SoldierEventContext(operators, squads, deployments, facilities, resources, nowMillis)
 
@@ -194,6 +198,9 @@ class CommandViewModel(
             )
             SoldierEvents.effects = eventEffects
             TacticalCalculator.airfieldLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.AIRFIELD)
+            // Session 38: Main Gate recruit discount and the CSM's morale cushion
+            TacticalCalculator.mainGateLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.MAIN_GATE)
+            MoraleRules.csmSeated = data.operators.any { it.status == OperatorStatus.HQ_STAFF && it.hqRole == HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR }
             // Item 50: generated names for the current board, from the rotation time
             MissionNames.current = MissionNameGenerator.namesFor(
                 rotatingIds.mapNotNull { id -> GameCatalog.rotatingStandalonePool.find { it.id == id } },
@@ -239,7 +246,9 @@ class CommandViewModel(
                 rotationUpdatedAtMillis = data.commander.rotationUpdatedAtMillis,
                 pendingEvent = PendingSoldierEvent.fromCsv(data.commander.pendingEventCsv),
                 lastEventCheckAtMillis = data.commander.lastEventCheckAtMillis,
-                eventEffects = eventEffects
+                eventEffects = eventEffects,
+                lastCookoutAtMillis = data.commander.lastCookoutAtMillis,
+                lastParadeActivityAtMillis = data.commander.lastParadeActivityAtMillis
             )
         }
     }.stateIn(
@@ -404,6 +413,7 @@ class CommandViewModel(
                 }
 
                 finishCompletedUpgrades(state.facilities, now)
+                driftMorale(state, now)
 
                 // Item 69: soldiers back from leave or an event duty
                 val backFromLeave = state.operators.filter { it.status == OperatorStatus.ON_LEAVE && now >= it.recoveryUntilMillis }
@@ -498,9 +508,31 @@ class CommandViewModel(
                 PowRules.released(op, now, TacticalCalculator.aidRecoveryMultiplier(state.facilities))
             } else PowRules.diedInCaptivity(op)
         }
-        repository.saveOperators(updated)
-        val effective = state.operators.map { o -> updated.find { it.id == o.id } ?: o }
-        val squads = SquadCohesionRules.pruneUnavailableMembers(state.squads, effective).filter { sq -> state.squads.find { it.id == sq.id } != sq }
+        // Session 38: homecomings give squads their morale back; a death in captivity hits like a loss in action
+        val ops = LinkedHashMap<String, Operator>()
+        updated.forEach { ops[it.id] = it }
+        var moraleSquads = state.squads
+        val moraleChanged = mutableSetOf<String>()
+        for (u in updated) {
+            if (u.status == OperatorStatus.FALLEN) {
+                moraleSquads = moraleSquads.map { sq ->
+                    if (u.id !in sq.memberIds && u.id !in sq.shakenForIds && u.id !in sq.ralliedForIds) return@map sq
+                    sq.memberIds.filter { it != u.id }.forEach { mid ->
+                        (ops[mid] ?: state.operators.find { it.id == mid })?.let { ops[mid] = MoraleRules.adjust(it, MoraleRules.SQUADMATE_KILLED) }
+                    }
+                    moraleChanged += sq.id
+                    sq.copy(shakenForIds = sq.shakenForIds - u.id, ralliedForIds = sq.ralliedForIds - u.id)
+                }
+            } else {
+                val (sqs, changed) = homecoming(moraleSquads, u.id, ops, state)
+                moraleSquads = sqs
+                moraleChanged += changed
+            }
+        }
+        repository.saveOperators(ops.values.toList())
+        val effective = state.operators.map { o -> ops[o.id] ?: o }
+        val pruned = SquadCohesionRules.pruneUnavailableMembers(moraleSquads, effective)
+        val squads = pruned.filter { sq -> sq.id in moraleChanged || state.squads.find { it.id == sq.id } != sq }
         if (squads.isNotEmpty()) repository.saveSquads(squads)
         if (deeds.isNotEmpty()) {
             repository.addPendingDeeds(deeds)
@@ -710,6 +742,103 @@ class CommandViewModel(
         }
     }
 
+    // ---------- Session 38: Parade Ground activities and squad leave ----------
+
+    private fun onBase(op: Operator) = op.unlocked && (op.status == OperatorStatus.READY || op.status == OperatorStatus.HQ_STAFF)
+
+    /** Unit run: one squad, a few supplies, +3 morale for members on base. */
+    fun unitRun(squadId: String) {
+        val state = uiState.value
+        val now = System.currentTimeMillis()
+        val squad = state.squads.find { it.id == squadId } ?: return
+        val left = squad.lastRunAtMillis + GameTiming.millis(MoraleRules.UNIT_RUN_COOLDOWN_MILLIS) - now
+        if (squad.lastRunAtMillis > 0 && left > 0) { showBanner("${squad.name} ran recently: again in ${TacticalCalculator.formatBuildTime(left / 1000)}."); return }
+        if (state.resources.supplies < MoraleRules.UNIT_RUN_SUPPLIES) { showBanner("Need ${MoraleRules.UNIT_RUN_SUPPLIES.toInt()} SUP for a unit run."); return }
+        val runners = state.operators.filter { it.id in squad.memberIds && onBase(it) }
+        if (runners.isEmpty()) { showBanner("${squad.name} has nobody on base to run."); return }
+        viewModelScope.launch {
+            repository.updateCommanderState { it.copy(supplies = (it.supplies - MoraleRules.UNIT_RUN_SUPPLIES).coerceAtLeast(0.0), lastParadeActivityAtMillis = now, lastSimulatedAtMillis = now) }
+            repository.saveOperators(runners.map { MoraleRules.adjust(it, MoraleRules.UNIT_RUN_MORALE) })
+            repository.saveSquads(listOf(squad.copy(lastRunAtMillis = now)))
+            showBanner("${squad.name} ran the post: +${MoraleRules.UNIT_RUN_MORALE} morale for ${runners.size}.")
+        }
+    }
+
+    /** Cookout: the whole base, supplies plus credits by headcount, +5 morale for everyone on base. */
+    fun cookout() {
+        val state = uiState.value
+        val now = System.currentTimeMillis()
+        val left = state.lastCookoutAtMillis + GameTiming.millis(MoraleRules.COOKOUT_COOLDOWN_MILLIS) - now
+        if (state.lastCookoutAtMillis > 0 && left > 0) { showBanner("Next cookout in ${TacticalCalculator.formatBuildTime(left / 1000)}."); return }
+        val guests = state.operators.filter { onBase(it) }
+        val (sup, cr) = MoraleRules.cookoutCost(guests.size)
+        if (state.resources.supplies < sup || state.resources.credits < cr) { showBanner("Need ${sup.toInt()} SUP and ${cr.toInt()} CR for a cookout."); return }
+        viewModelScope.launch {
+            repository.updateCommanderState {
+                it.copy(supplies = (it.supplies - sup).coerceAtLeast(0.0), credits = (it.credits - cr).coerceAtLeast(0.0),
+                    lastCookoutAtMillis = now, lastParadeActivityAtMillis = now, lastSimulatedAtMillis = now)
+            }
+            repository.saveOperators(guests.map { MoraleRules.adjust(it, MoraleRules.COOKOUT_MORALE) })
+            showBanner("Cookout on the Parade Ground: +${MoraleRules.COOKOUT_MORALE} morale for ${guests.size} soldiers.")
+        }
+    }
+
+    /** Award formation: every pending award at once (same prestige as one by one), +2 morale each, squads +cohesion. */
+    fun awardFormation() {
+        val state = uiState.value
+        if (state.pendingDeeds.isEmpty()) { showBanner("No pending awards to present."); return }
+        val awarded = awardAll(state.pendingDeeds, formation = true)
+        if (awarded.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val honored = state.pendingDeeds.filter { it.id in awarded }.map { it.operatorId }.toSet()
+        val squads = state.squads.filter { sq -> sq.memberIds.any { it in honored } }
+            .map { it.copy(cohesionXp = (it.cohesionXp + MoraleRules.FORMATION_COHESION_XP).coerceAtMost(MAX_SQUAD_COHESION_XP)) }
+        viewModelScope.launch {
+            repository.updateCommanderState { it.copy(lastParadeActivityAtMillis = now) }
+            if (squads.isNotEmpty()) repository.saveSquads(squads)
+            awarded.forEach { repository.dismissPendingDeed(it) }
+        }
+    }
+
+    /** Squad leave: the whole squad away for a while, +25 morale each; then a cooldown before the next. */
+    fun sendSquadOnLeave(squadId: String) {
+        val state = uiState.value
+        val now = System.currentTimeMillis()
+        val squad = state.squads.find { it.id == squadId } ?: return
+        val members = state.operators.filter { it.id in squad.memberIds }
+        if (members.isEmpty()) return
+        if (squad.leaveReadyAtMillis > now) {
+            showBanner("${squad.name} can take leave again in ${TacticalCalculator.formatBuildTime((squad.leaveReadyAtMillis - now) / 1000)}."); return
+        }
+        val busy = members.filter { it.status != OperatorStatus.READY }
+        if (busy.isNotEmpty()) { showBanner("${squad.name} isn't all home: ${busy.joinToString { "${it.callsign} (${it.status.label})" }}."); return }
+        val cost = MoraleRules.SQUAD_LEAVE_CREDITS_PER_SOLDIER * members.size
+        if (state.resources.credits < cost) { showBanner("Need ${cost.toInt()} CR to send ${squad.name} on leave."); return }
+        val until = now + GameTiming.millis(MoraleRules.SQUAD_LEAVE_MILLIS)
+        viewModelScope.launch {
+            repository.updateCommanderState { it.copy(credits = (it.credits - cost).coerceAtLeast(0.0), lastSimulatedAtMillis = now) }
+            repository.saveOperators(members.map {
+                MoraleRules.adjust(it, MoraleRules.SQUAD_LEAVE_MORALE).copy(status = OperatorStatus.ON_LEAVE, recoveryUntilMillis = until, deployStreak = 0)
+            })
+            repository.saveSquads(listOf(squad.copy(leaveUntilMillis = until, leaveReadyAtMillis = until + GameTiming.millis(MoraleRules.SQUAD_LEAVE_COOLDOWN_MILLIS))))
+            showBanner("${squad.name} is on leave: +${MoraleRules.SQUAD_LEAVE_MORALE} morale; back in ${TacticalCalculator.formatBuildTime((until - now) / 1000)}.")
+        }
+    }
+
+    /** Session 38: morale drifts one point per step back toward the base's baseline. */
+    private var lastMoraleDriftAt = 0L
+
+    private suspend fun driftMorale(state: CommandUiState, now: Long) {
+        if (lastMoraleDriftAt == 0L) { lastMoraleDriftAt = now; return }
+        val steps = ((now - lastMoraleDriftAt) / MoraleRules.DRIFT_STEP_MILLIS).toInt()
+        if (steps < 1) return
+        lastMoraleDriftAt += steps * MoraleRules.DRIFT_STEP_MILLIS
+        val baseline = MoraleRules.baseline(state.facilities, state.lastParadeActivityAtMillis, now)
+        if (state.operators.any { it.unlocked && !it.status.isOutOfActiveService && it.morale != baseline }) {
+            repository.driftMorale(baseline, steps)
+        }
+    }
+
     private suspend fun finishCompletedUpgrades(facilities: List<FacilityState>, now: Long) {
         val done = TacticalCalculator.completedUpgrades(facilities, now)
         if (done.isEmpty()) return
@@ -751,7 +880,8 @@ class CommandViewModel(
                     lastSimulatedAtMillis = now
                 )
             }
-            val pinned = affordable.map { op -> op to op.promotedTo(op.pinEligibleRank!!) }
+            // Session 38: a new rank lifts morale
+            val pinned = affordable.map { op -> op to MoraleRules.adjust(op.promotedTo(op.pinEligibleRank!!), MoraleRules.RANK_PINNED) }
             repository.saveOperators(pinned.map { it.second })
             val deeds = pinned.flatMap { (before, after) ->
                 newlyEligibleAwardDeeds(before = before, after = after, state = state, reasonTitle = "Promotion to ${after.rank.code}", now = now)
@@ -803,7 +933,7 @@ class CommandViewModel(
                     lastSimulatedAtMillis = now
                 )
             }
-            val after = op.promotedTo(next)
+            val after = MoraleRules.adjust(op.promotedTo(next), MoraleRules.RANK_PINNED)
             repository.saveOperator(after)
             val deeds = newlyEligibleAwardDeeds(before = op, after = after, state = state, reasonTitle = "Promotion to ${next.code}", now = now)
             if (deeds.isNotEmpty()) {
@@ -886,7 +1016,7 @@ class CommandViewModel(
                     lastSimulatedAtMillis = now
                 )
             }
-            repository.saveOperator(progressedOp)
+            repository.saveOperator(MoraleRules.adjust(progressedOp, MoraleRules.RANK_PINNED))
             val promotionDeeds = newlyEligibleAwardDeeds(
                 before = op,
                 after = progressedOp,
@@ -1561,7 +1691,12 @@ class CommandViewModel(
             )
             // Item 62: a blown cover makes the fight harder
             val blownPenalty = if (deployment.coverBlown) ClandestineRules.BLOWN_COVER_PASS_PENALTY else 0
-            missionSucceeded = Random.nextInt(100) < (successOdds - blownPenalty).coerceAtLeast(5)
+            // Session 38: a squad that rallied for this captive fights harder to bring them home
+            val rallyBonus = deployment.targetOperatorId?.let { target ->
+                if (PowRules.isPowOperation(mission) && state.squads.any { sq -> target in sq.ralliedForIds && groundOps.any { it.id in sq.memberIds } })
+                    MoraleRules.RALLY_RESCUE_PASS_PCT else 0
+            } ?: 0
+            missionSucceeded = Random.nextInt(100) < (successOdds - blownPenalty + rallyBonus).coerceAtLeast(5)
             val activeCohesionBonus = SquadCohesionRules.evaluateActiveBonus(groundOps, state.squads, mission.requiredSquads > 1)
             val cohesionSurvBonus = activeCohesionBonus?.survivalBonusPct ?: 0
             val camoSurvBonus = TacticalCalculator.teamCamoEffect(mission, groundOps, state.squads, state.smartWardrobeEnabled).survivalDelta
@@ -1679,7 +1814,7 @@ class CommandViewModel(
                     !op.transferRequested &&
                     !op.retirementRequested
                 ) {
-                    (Random.nextInt(100) < (6 * TacticalCalculator.dfacPetitionFactor(state.facilities)).roundToInt()).also { triggered ->
+                    (Random.nextInt(100) < (6 * TacticalCalculator.dfacPetitionFactor(state.facilities) * MoraleRules.petitionFactor(op)).roundToInt()).also { triggered ->
                         if (triggered) petitionAlreadyActive = true
                     }
                 } else {
@@ -1703,7 +1838,7 @@ class CommandViewModel(
                     !op.retirementRequested &&
                     TacticalCalculator.evaluateRetirementEligibility(postMissionCandidate).eligible
                 ) {
-                    (Random.nextInt(100) < (7 * TacticalCalculator.dfacPetitionFactor(state.facilities)).roundToInt()).also { triggered ->
+                    (Random.nextInt(100) < (7 * TacticalCalculator.dfacPetitionFactor(state.facilities) * MoraleRules.petitionFactor(op)).roundToInt()).also { triggered ->
                         if (triggered) petitionAlreadyActive = true
                     }
                 } else {
@@ -1913,7 +2048,7 @@ class CommandViewModel(
                 staffTotalOps >= TacticalCalculator.MIN_HQ_STAFF_RETIREMENT_TOTAL_OPS &&
                 TacticalCalculator.evaluateRetirementEligibility(candidateStaff).eligible
             ) {
-                (Random.nextInt(100) < (5 * TacticalCalculator.dfacPetitionFactor(state.facilities)).roundToInt()).also { triggered ->
+                (Random.nextInt(100) < (5 * TacticalCalculator.dfacPetitionFactor(state.facilities) * MoraleRules.petitionFactor(staff)).roundToInt()).also { triggered ->
                     if (triggered) staffPetitionBlocked = true
                 }
             } else {
@@ -2031,7 +2166,9 @@ class CommandViewModel(
                 gainMultiplier = TacticalCalculator.dfacCohesionMultiplier(state.facilities) *
                     (1.0 + state.hqStaffSummary.cohesionGainBonusPct / 100.0) *
                     // Item 165: a Command soldier on the team speeds cohesion
-                    MosEffects.cohesionFactor(targetOps)
+                    MosEffects.cohesionFactor(targetOps) *
+                    // Session 38: so does a high-morale team
+                    MoraleRules.cohesionFactor(targetOps)
             )
         }
         val postMissionDeployed = targetOps.map { updatedOpsById[it.id] ?: it }
@@ -2200,11 +2337,16 @@ class CommandViewModel(
         newDeeds.clear()
         newDeeds.addAll(uniqueDeeds)
         enqueueAwardPrompts(newDeeds)
+        // Session 38: morale from this mission (results, wounds, losses, captures, homecomings, streaks)
+        val (moraleOps, moraleSquads, moraleNote) = applyMissionMorale(
+            state, mission, deployment, missionSucceeded, outcomes, updatedOperators, sanitizedSquadsToSave, now
+        )
+        moraleNote?.let { showBanner(it) }
         viewModelScope.launch {
             repository.removeDeployment(deployment.id)
-            repository.saveOperators(updatedOperators)
-            if (sanitizedSquadsToSave.isNotEmpty()) {
-                repository.saveSquads(sanitizedSquadsToSave)
+            repository.saveOperators(moraleOps)
+            if (moraleSquads.isNotEmpty()) {
+                repository.saveSquads(moraleSquads)
             }
             if (updatedGear.isNotEmpty()) {
                 repository.saveGearList(updatedGear)
@@ -2252,6 +2394,108 @@ class CommandViewModel(
                 campaignProgressNote = campaignProgressNote
             )
         }
+    }
+
+    /**
+     * Session 38 (item 70): morale after a mission. Each soldier back from the field gains or loses morale for the
+     * result, a wound, and a long run of deployments without rest. Each squad loses morale for a member killed;
+     * for a member captured it rolls: shaken (-5, given back when they come home) or rallied (+5 and a rescue
+     * bonus). Soldiers freed on this mission bring their squads' morale back. School graduates gain a little.
+     */
+    private fun applyMissionMorale(
+        state: CommandUiState,
+        mission: MissionTemplate,
+        deployment: ActiveDeployment,
+        missionSucceeded: Boolean,
+        outcomes: List<OperatorDebriefOutcome>,
+        updatedOperators: List<Operator>,
+        squadsToSave: List<TacticalSquad>,
+        now: Long
+    ): Triple<List<Operator>, List<TacticalSquad>, String?> {
+        val ops = LinkedHashMap<String, Operator>()
+        updatedOperators.forEach { ops[it.id] = it }
+        fun current(id: String): Operator? = ops[id] ?: state.operators.find { it.id == id }
+        val outcomeById = outcomes.associateBy { it.operatorId }
+        val notes = mutableListOf<String>()
+
+        for (id in deployment.operatorIds) {
+            val op = ops[id] ?: continue
+            val o = outcomeById[id]?.outcome ?: continue
+            if (o == OperatorOutcomeType.FALLEN || o == OperatorOutcomeType.CAPTURED) continue
+            var next = op
+            if (mission.scope == MissionScope.TRAINING) {
+                if (o == OperatorOutcomeType.TRAINING_PASSED) next = MoraleRules.adjust(next, MoraleRules.SCHOOL_PASSED)
+            } else {
+                next = MoraleRules.adjust(next, if (missionSucceeded) MoraleRules.MISSION_SUCCESS else MoraleRules.MISSION_FAILURE)
+                if (o == OperatorOutcomeType.WOUNDED) next = MoraleRules.adjust(next, MoraleRules.WOUNDED)
+                if (mission.scope == MissionScope.FIELD_COMBAT) {
+                    val streak = MoraleRules.nextStreak(op, deployment.startedAtMillis)
+                    next = MoraleRules.adjust(next.copy(deployStreak = streak), MoraleRules.streakPenalty(streak))
+                }
+            }
+            ops[id] = next.copy(lastReturnAtMillis = now)
+        }
+
+        // Squad-wide effects
+        val squads = LinkedHashMap<String, TacticalSquad>()
+        state.squads.forEach { sq -> squads[sq.id] = squadsToSave.find { it.id == sq.id } ?: sq }
+        val changedSquadIds = squadsToSave.map { it.id }.toMutableSet()
+        val fallenIds = outcomes.filter { it.outcome == OperatorOutcomeType.FALLEN }.map { it.operatorId }
+        val capturedIds = outcomes.filter { it.outcome == OperatorOutcomeType.CAPTURED }.map { it.operatorId }
+        for (sq in state.squads) {
+            val lost = fallenIds.filter { it in sq.memberIds }
+            if (lost.isNotEmpty()) {
+                sq.memberIds.filter { it !in fallenIds && it !in capturedIds }.forEach { mid ->
+                    current(mid)?.let { ops[mid] = MoraleRules.adjust(it, MoraleRules.SQUADMATE_KILLED * lost.size) }
+                }
+                notes += "${sq.name} mourns ${lost.size} lost."
+            }
+            for (cap in capturedIds.filter { it in sq.memberIds }) {
+                val rallied = Random.nextBoolean()
+                val delta = if (rallied) MoraleRules.RALLIED else MoraleRules.SQUADMATE_CAPTURED
+                sq.memberIds.filter { it != cap && it !in fallenIds }.forEach { mid ->
+                    current(mid)?.let { ops[mid] = MoraleRules.adjust(it, delta) }
+                }
+                val s = squads[sq.id]!!
+                squads[sq.id] = if (rallied) s.copy(ralliedForIds = s.ralliedForIds + cap) else s.copy(shakenForIds = s.shakenForIds + cap)
+                changedSquadIds += sq.id
+                val name = current(cap)?.callsign ?: "a squadmate"
+                notes += if (rallied) "${sq.name} rallied to bring $name home." else "${sq.name} is shaken by $name's capture."
+            }
+        }
+        // Homecomings: anyone freed on this mission
+        val freedIds = updatedOperators.filter { it.id !in deployment.operatorIds && state.operators.find { s -> s.id == it.id }?.status == OperatorStatus.CAPTURED && it.status != OperatorStatus.CAPTURED }.map { it.id }
+        for (freed in freedIds) {
+            val (sqs, changed) = homecoming(squads.values.toList(), freed, ops, state)
+            sqs.forEach { squads[it.id] = it }
+            changedSquadIds += changed
+        }
+        val squadList = squads.values.filter { it.id in changedSquadIds }
+        return Triple(ops.values.toList(), squadList, notes.takeIf { it.isNotEmpty() }?.joinToString(" "))
+    }
+
+    /**
+     * Session 38: a captured soldier is home. Squads shaken by the capture get their morale back; the rally ends.
+     * Returns the updated squads and which changed; morale changes are written into [ops].
+     */
+    private fun homecoming(
+        squads: List<TacticalSquad>,
+        freedId: String,
+        ops: MutableMap<String, Operator>,
+        state: CommandUiState
+    ): Pair<List<TacticalSquad>, Set<String>> {
+        val changed = mutableSetOf<String>()
+        val out = squads.map { sq ->
+            if (freedId !in sq.shakenForIds && freedId !in sq.ralliedForIds) return@map sq
+            changed += sq.id
+            if (freedId in sq.shakenForIds) {
+                sq.memberIds.filter { it != freedId }.forEach { mid ->
+                    (ops[mid] ?: state.operators.find { it.id == mid })?.let { ops[mid] = MoraleRules.adjust(it, -MoraleRules.SQUADMATE_CAPTURED) }
+                }
+            }
+            sq.copy(shakenForIds = sq.shakenForIds - freedId, ralliedForIds = sq.ralliedForIds - freedId)
+        }
+        return out to changed
     }
 
     /**
@@ -2705,8 +2949,9 @@ class CommandViewModel(
         val op = state.operators.find { it.id == operatorId && it.transferRequested } ?: return
         val cooldownTarget = op.missionsCompleted + op.staffOpsSupported + TacticalCalculator.PETITION_COOLDOWN_OPS
         viewModelScope.launch {
+            // Session 38: a declined request costs morale
             repository.saveOperator(
-                op.copy(
+                MoraleRules.adjust(op, MoraleRules.REQUEST_DECLINED).copy(
                     transferRequested = false,
                     petitionCooldownUntilOps = cooldownTarget
                 )
@@ -2786,7 +3031,7 @@ class CommandViewModel(
         val cooldownTarget = op.missionsCompleted + op.staffOpsSupported + TacticalCalculator.PETITION_COOLDOWN_OPS
         viewModelScope.launch {
             repository.saveOperator(
-                op.copy(
+                MoraleRules.adjust(op, MoraleRules.REQUEST_DECLINED).copy(
                     retirementRequested = false,
                     petitionCooldownUntilOps = cooldownTarget
                 )
@@ -3331,7 +3576,8 @@ class CommandViewModel(
                     awardedAtMillis = now
                 )
             )
-            val cord = afterAward(operator, medal, ownedMedalIds + medalId, now)
+            // Session 38: a presented award lifts morale
+            val cord = afterAward(MoraleRules.adjust(operator, MoraleRules.AWARD_PRESENTED), medal, ownedMedalIds + medalId, now)
             showBanner(
                 "Awarded ${medal.name} to ${operator.rank.code} ${operator.callsign}!" +
                     (cord?.let { " The ${it.shortName} cord comes with it." } ?: "")
@@ -3369,7 +3615,8 @@ class CommandViewModel(
                 )
             )
         }
-        // Newly awarded cords show through Auto at render time; just bring the soldier into dress uniform
+        // Newly awarded cords show through Auto at render time; just bring the soldier into dress uniform.
+        // Session 38: always save, so the morale the caller added is kept.
         if (medal.category == AwardCategory.SHOULDER_CORD || cord != null) {
             repository.saveOperator(
                 operator.copy(
@@ -3377,6 +3624,8 @@ class CommandViewModel(
                     activeWardrobeKit = if (operator.activeWardrobeKit == WardrobeKit.FIELD) WardrobeKit.ALPHAS else operator.activeWardrobeKit
                 )
             )
+        } else {
+            repository.saveOperator(operator)
         }
         return cord
     }
@@ -3385,7 +3634,7 @@ class CommandViewModel(
      * Item 51: grants every listed award that isn't a repeat, in order, while prestige lasts. Stops and
      * says so when prestige runs out. Returns the ids of the deeds it awarded.
      */
-    fun awardAll(deeds: List<PendingDeed>): Set<String> {
+    fun awardAll(deeds: List<PendingDeed>, formation: Boolean = false): Set<String> {
         val state = uiState.value
         var prestige = state.resources.prestige
         val owned = state.citations.groupBy { it.operatorId }.mapValues { (_, c) -> c.map { it.medalId }.toMutableSet() }.toMutableMap()
@@ -3413,7 +3662,12 @@ class CommandViewModel(
                 cur.copy(prestige = (cur.prestige - spent).coerceAtLeast(0.0), lastSimulatedAtMillis = now)
             }
             var cords = 0
-            for ((deed, op, medal) in picks) {
+            // Session 38: each award lifts morale; at a Parade Ground formation it lifts it a little more
+            val boosted = mutableMapOf<String, Operator>()
+            val perAward = MoraleRules.AWARD_PRESENTED + if (formation) MoraleRules.FORMATION_MORALE_PER_AWARD else 0
+            for ((deed, op0, medal) in picks) {
+                val op = MoraleRules.adjust(boosted[op0.id] ?: op0, perAward)
+                boosted[op0.id] = op
                 repository.addCitation(
                     AwardedMedal(
                         id = "cit_${UUID.randomUUID().toString().take(8)}",
@@ -3787,6 +4041,12 @@ class CommandViewModel(
             inspectedKit = inspectedKit
         )
         val buffUntil = now + report.buffDurationSec * 1000L
+        // Session 38: a good grade lifts morale, once per soldier per cooldown
+        val moraleGain = MoraleRules.inspectionMorale(report.gradeLetter)
+        val boosted = if (moraleGain > 0) subjects.filter {
+            now - it.inspectionMoraleAtMillis >= GameTiming.millis(MoraleRules.INSPECTION_COOLDOWN_MILLIS)
+        }.map { MoraleRules.adjust(it, moraleGain).copy(inspectionMoraleAtMillis = now) } else emptyList()
+        val finalReport = report.copy(moraleGain = if (boosted.isEmpty()) 0 else moraleGain, moraleSoldiers = boosted.size)
         viewModelScope.launch {
             repository.updateCommanderState { cur ->
                 cur.copy(
@@ -3796,8 +4056,10 @@ class CommandViewModel(
                     lastSimulatedAtMillis = now
                 )
             }
-            _lastInspectionReport.value = report
-            showBanner("Inspection ${report.gradeLetter}: +${report.prestigeEarned} PRS • +8% Eff / +10% PRS for 3m.")
+            if (boosted.isNotEmpty()) repository.saveOperators(boosted)
+            _lastInspectionReport.value = finalReport
+            showBanner("Inspection ${report.gradeLetter}: +${report.prestigeEarned} PRS • +8% Eff / +10% PRS for 3m." +
+                if (boosted.isNotEmpty()) " Morale +$moraleGain for ${boosted.size}." else "")
         }
     }
 

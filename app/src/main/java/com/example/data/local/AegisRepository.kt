@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 39
+        const val SAVE_FORMAT_VERSION = 40
     }
 
     private val commanderMutex = Mutex()
@@ -285,6 +285,9 @@ class AegisRepository(private val dao: AegisDao) {
         }
     }
 
+    /** Session 38: every active soldier's morale moves [steps] points toward [baseline]. */
+    suspend fun driftMorale(baseline: Int, steps: Int) = dao.driftMorale(baseline, steps)
+
     suspend fun updateCommanderState(
         transform: (CommanderStateEntity) -> CommanderStateEntity
     ): CommanderStateEntity = commanderMutex.withLock {
@@ -452,6 +455,10 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     warrantGrade = warrantGrade,
     flagGrade = flagGrade,
     pinnedRank = pinnedRankName?.let { n -> OperatorRank.entries.find { it.name == n } },
+    morale = morale,
+    deployStreak = deployStreak,
+    lastReturnAtMillis = lastReturnAtMillis,
+    inspectionMoraleAtMillis = inspectionMoraleAtMillis,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
     combatJumps = combatJumps,
@@ -547,6 +554,10 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     flagGrade = flagGrade,
     // Session 33: ranks already held are kept: a soldier saved without a pin holds the rank their XP gave them
     pinnedRankName = (pinnedRank ?: autoRank.takeIf { it.tier != RankTier.SOLDIER && !it.isWarrant })?.name,
+    morale = morale.coerceIn(0, 100),
+    deployStreak = deployStreak,
+    lastReturnAtMillis = lastReturnAtMillis,
+    inspectionMoraleAtMillis = inspectionMoraleAtMillis,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
     combatJumps = combatJumps,
@@ -874,7 +885,12 @@ private fun SquadEntity.toDomain(): TacticalSquad {
         standardMessHeadgear = standardMessHeadgearName?.let { n -> HeadgearStyle.entries.find { it.name == n } },
         standardAlphasGloves = standardAlphasGloves,
         standardMessGloves = standardMessGloves,
-        isSpecialForces = isSpecialForces
+        isSpecialForces = isSpecialForces,
+        shakenForIds = shakenForIdsCsv.split(",").filter { it.isNotBlank() }.toSet(),
+        ralliedForIds = ralliedForIdsCsv.split(",").filter { it.isNotBlank() }.toSet(),
+        leaveUntilMillis = leaveUntilMillis,
+        leaveReadyAtMillis = leaveReadyAtMillis,
+        lastRunAtMillis = lastRunAtMillis
     )
 }
 
@@ -900,7 +916,12 @@ private fun TacticalSquad.toEntity(): SquadEntity {
         standardMessHeadgearName = standardMessHeadgear?.name,
         standardAlphasGloves = standardAlphasGloves,
         standardMessGloves = standardMessGloves,
-        isSpecialForces = isSpecialForces
+        isSpecialForces = isSpecialForces,
+        shakenForIdsCsv = shakenForIds.joinToString(","),
+        ralliedForIdsCsv = ralliedForIds.joinToString(","),
+        leaveUntilMillis = leaveUntilMillis,
+        leaveReadyAtMillis = leaveReadyAtMillis,
+        lastRunAtMillis = lastRunAtMillis
     )
 }
 

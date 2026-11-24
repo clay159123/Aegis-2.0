@@ -60,6 +60,8 @@ fun SquadArmoryScreen(
     onAwardMarksmanship: (String) -> Unit = {},
     onConductSquadInspection: (String) -> Unit = {},
     onSwitchSquadKit: (String, WardrobeKit) -> Unit = { _, _ -> },
+    /** Session 38: send a whole squad on leave. */
+    onSendSquadOnLeave: (String) -> Unit = {},
     onSelectWardrobeKit: (String, WardrobeKit) -> Unit = { _, _ -> },
     onNavigateToHq: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -210,7 +212,9 @@ fun SquadArmoryScreen(
                     showSquadDialog = true
                 },
                 onConductSquadInspection = onConductSquadInspection,
-                onSwitchSquadKit = onSwitchSquadKit
+                onSwitchSquadKit = onSwitchSquadKit,
+                onSendSquadOnLeave = onSendSquadOnLeave,
+                nowMillis = uiState.nowMillis
             )
         }
 

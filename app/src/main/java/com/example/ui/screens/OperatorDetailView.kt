@@ -594,6 +594,16 @@ fun OperatorDetailView(
                             style = MaterialTheme.typography.labelMedium,
                             color = extra.brassBright
                         )
+                        // Session 38: morale (a number in the testing build)
+                        val moraleBand = com.example.domain.MoraleRules.band(operator)
+                        Text(
+                            text = "Morale ${operator.morale} (${moraleBand.label})" +
+                                (if (moraleBand.teamOddsPct != 0) " • ${if (moraleBand.teamOddsPct > 0) "+" else ""}${moraleBand.teamOddsPct}% team odds" else "") +
+                                (if (operator.deployStreak > com.example.domain.MoraleRules.STREAK_FREE) " • needs rest" else ""),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (moraleBand == com.example.domain.MoraleRules.Band.LOW || moraleBand == com.example.domain.MoraleRules.Band.BROKEN) extra.amberTelemetry else extra.textMuted,
+                            modifier = Modifier.testTag("record_morale")
+                        )
                         // Session 31: progress to the next SF tier
                         if (TacticalCalculator.isSfQualified(operator) && !operator.isAviator) {
                             Spacer(modifier = Modifier.height(8.dp))

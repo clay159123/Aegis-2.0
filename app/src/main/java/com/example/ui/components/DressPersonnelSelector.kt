@@ -244,7 +244,9 @@ fun DressPersonnelSwitcherCard(
     }
     // Session 33: soldiers XP has made promotable (the "P"), counted with board-ready soldiers in Action Needed
     val promotableIds = remember(unlockedOps) { unlockedOps.filter { it.pinEligibleRank != null }.map { it.id }.toSet() }
-    val boardReadyIds = promotableIds + remember(unlockedOps, citations, gearItems, facilities) {
+    // Session 38: low or broken morale also counts as needing attention
+    val lowMoraleIds = remember(unlockedOps) { unlockedOps.filter { it.morale < com.example.domain.MoraleRules.STEADY_AT }.map { it.id }.toSet() }
+    val boardReadyIds = promotableIds + lowMoraleIds + remember(unlockedOps, citations, gearItems, facilities) {
         unlockedOps.filter { op ->
             val next = OperatorRank.nextRank(op.rank)
             if (next == null || next.tier == op.rank.tier || op.status == OperatorStatus.FALLEN) {
@@ -576,6 +578,7 @@ fun DressPersonnelDirectorySheet(
     var sortMode by rememberSaveable { mutableStateOf(RosterSortMode.BY_BILLET) }
     var onlyNeedsAttention by rememberSaveable { mutableStateOf(false) }
     val promotableIds = remember(allOperators) { allOperators.filter { it.pinEligibleRank != null }.map { it.id }.toSet() }
+    val lowMoraleIds = remember(allOperators) { allOperators.filter { it.morale < com.example.domain.MoraleRules.STEADY_AT }.map { it.id }.toSet() }
 
     val normalizedQuery = searchQuery.trim().lowercase()
     fun matchesOperator(op: Operator): Boolean {
@@ -761,7 +764,7 @@ fun DressPersonnelDirectorySheet(
                                     ),
                                     isSquadLeader = squads.any { it.leaderId == op.id && op.status != OperatorStatus.HQ_STAFF },
                                     pendingDeedCount = deedCountsByOp[op.id] ?: 0,
-                                    isBoardReady = op.id in boardReadyIds && op.id !in promotableIds,
+                                    isBoardReady = op.id in boardReadyIds && op.id !in promotableIds && op.id !in lowMoraleIds,
                                     isPromotable = op.id in promotableIds,
                                     honorCount = honorCountsByOp[op.id] ?: 0,
                                     onClick = { onSelectOperator(op.id) }
@@ -801,7 +804,7 @@ fun DressPersonnelDirectorySheet(
                                 ),
                                 isSquadLeader = squads.any { it.leaderId == op.id && op.status != OperatorStatus.HQ_STAFF },
                                 pendingDeedCount = deedCountsByOp[op.id] ?: 0,
-                                isBoardReady = op.id in boardReadyIds && op.id !in promotableIds,
+                                isBoardReady = op.id in boardReadyIds && op.id !in promotableIds && op.id !in lowMoraleIds,
                                 isPromotable = op.id in promotableIds,
                                 honorCount = honorCountsByOp[op.id] ?: 0,
                                 onClick = { onSelectOperator(op.id) }
@@ -987,7 +990,8 @@ private fun PersonnelDirectoryRow(
                     }
                 }
                 Text(
-                    text = "$honorCount Honors • ${operator.activeWardrobeKit.shortLabelFor(operator)}",
+                    // Session 38: morale (a number in the testing build)
+                    text = "Morale ${operator.morale} • $honorCount Honors • ${operator.activeWardrobeKit.shortLabelFor(operator)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = extra.textMuted,
                     maxLines = 1

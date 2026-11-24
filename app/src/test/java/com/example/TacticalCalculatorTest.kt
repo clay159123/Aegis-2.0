@@ -2458,7 +2458,8 @@ class TacticalCalculatorTest {
         val alphasLook = TacticalCalculator.resolveKitAppearance(decoratedSquadLeader, WardrobeKit.ALPHAS, listOf(alphaSquad))
         assertTrue(alphasLook.headgearStyle.kind != HeadgearKind.BERET)
         assertFalse(alphasLook.dressStyle.isCutawayMess)
-        assertTrue(alphasLook.hasWhiteGloves)
+        // Session 38: white gloves are a Mess item; the squad leader wears the sash on Auto
+        assertFalse(alphasLook.hasWhiteGloves)
         assertTrue(alphasLook.hasDressSash)
         assertEquals("cord_infantry_blue", alphasLook.equippedLeftCordId)
 

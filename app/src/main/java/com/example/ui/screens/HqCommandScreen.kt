@@ -42,8 +42,13 @@ fun HqCommandScreen(
     onNavigateToOps: () -> Unit,
     modifier: Modifier = Modifier,
     /** Session 37: tapping the Memorial Wall on the base map opens the Honors Memorial. */
-    onOpenMemorial: () -> Unit = {}
+    onOpenMemorial: () -> Unit = {},
+    /** Session 38: Parade Ground activities. */
+    onUnitRun: (String) -> Unit = {},
+    onCookout: () -> Unit = {},
+    onAwardFormation: () -> Unit = {}
 ) {
+    var showParade by remember { mutableStateOf(false) }
     val extra = LocalAegisColors.current
     // Session 37 (item 177): Personnel and Base Map tabs
     var hqView by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(HQ_VIEW_PERSONNEL) }
@@ -534,10 +539,22 @@ fun HqCommandScreen(
                 completedCampaignIds = uiState.completedCampaignIds,
                 operators = uiState.operators,
                 onOpenMemorial = onOpenMemorial,
+                onOpenParadeGround = { showParade = true },
                 zoomable = true
             )
         }
         }
+    }
+
+    if (showParade) {
+        com.example.ui.components.ParadeGroundDialog(
+            uiState = uiState,
+            onUnitRun = onUnitRun,
+            onCookout = onCookout,
+            onAwardFormation = { onAwardFormation(); showParade = false },
+            onOpenMemorial = { showParade = false; onOpenMemorial() },
+            onDismiss = { showParade = false }
+        )
     }
 
     val roleToFill = fillingRole

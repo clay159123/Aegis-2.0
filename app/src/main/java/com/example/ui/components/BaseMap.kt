@@ -62,7 +62,7 @@ internal val BASE_PLOTS = listOf(
     BasePlot(null, PARADE_LABEL, 10f, 294f, 117f, 76f),
     BasePlot(null, HERITAGE_LABEL, 132f, 294f, 58f, 76f),
     BasePlot(FacilityType.SF_COMPOUND, "SF Compound", 10f, 378f, 119f, 56f),
-    BasePlot(null, "Gate", 132f, 378f, 58f, 56f)
+    BasePlot(FacilityType.MAIN_GATE, "Main Gate", 132f, 378f, 58f, 56f)
 )
 
 internal const val PARADE_LABEL = "Parade Ground"
@@ -103,6 +103,7 @@ fun facilityPerkSummary(type: FacilityType, level: Int): String {
         FacilityType.DFAC -> "Cohesion gains +${5 * level}% • requests -${6 * level}%"
         FacilityType.TRAINING_RANGE -> "Basics, Rifle Qual, EIB, Sniper +${2 * level}%"
         FacilityType.AIRBORNE_RANGER_CENTER -> "Airborne, Air Assault, Pathfinder, Ranger, MFF +${2 * level}%"
+        FacilityType.MAIN_GATE -> "Morale baseline +$level • recruits -${com.example.domain.TacticalCalculator.GATE_RECRUIT_DISCOUNT_PER_LEVEL * level}%"
         FacilityType.AID_STATION -> "Recovery -${7 * level}% • ${5 * level}% casualty save"
         FacilityType.AIRFIELD -> com.example.domain.TacticalCalculator.airfieldPerkSummary(level)
     }
@@ -128,6 +129,8 @@ fun BaseMapCard(
     operators: List<Operator> = emptyList(),
     /** Tapping the Memorial Wall opens the Honors Memorial. */
     onOpenMemorial: (() -> Unit)? = null,
+    /** Session 38: tapping the Parade Ground opens its activities (and the Memorial from there). */
+    onOpenParadeGround: (() -> Unit)? = null,
     /** Session 37: the HQ Base Map tab lets the map zoom (scroll sideways when zoomed). */
     zoomable: Boolean = false
 ) {
@@ -175,9 +178,9 @@ fun BaseMapCard(
             }
             // Session 37: the Memorial Wall and the Heritage Walk are tappable too
             val density = androidx.compose.ui.platform.LocalDensity.current
-            BASE_PLOTS.filter { it.type == null && it.label != "Gate" }.forEach { plot ->
+            BASE_PLOTS.filter { it.type == null }.forEach { plot ->
                 val enabled = when (plot.label) {
-                    PARADE_LABEL -> fallenCount > 0 && onOpenMemorial != null
+                    PARADE_LABEL -> onOpenParadeGround != null || (fallenCount > 0 && onOpenMemorial != null)
                     else -> true
                 }
                 if (enabled) with(density) {
@@ -185,8 +188,10 @@ fun BaseMapCard(
                         modifier = Modifier
                             .offset(x = (plot.x * unitPx).toDp(), y = (plot.y * unitPx).toDp())
                             .size((plot.w * unitPx).toDp(), (plot.h * unitPx).toDp())
-                            .clickable { if (plot.label == PARADE_LABEL) onOpenMemorial?.invoke() else showHeritage = true }
-                            .semantics { contentDescription = if (plot.label == PARADE_LABEL) "Memorial Wall, $fallenCount names" else "Heritage Walk, ${monuments.size} monuments" }
+                            .clickable {
+                                if (plot.label == PARADE_LABEL) (onOpenParadeGround ?: onOpenMemorial)?.invoke() else showHeritage = true
+                            }
+                            .semantics { contentDescription = if (plot.label == PARADE_LABEL) "Parade Ground and Memorial Wall, $fallenCount names" else "Heritage Walk, ${monuments.size} monuments" }
                             .testTag(if (plot.label == PARADE_LABEL) "base_memorial_wall" else "base_heritage_walk")
                     )
                 }
@@ -468,8 +473,7 @@ private fun DrawScope.drawBase(
         if (type == null) {
             when (plot.label) {
                 PARADE_LABEL -> drawParadeGround(rect, u, band, fallenCount)
-                HERITAGE_LABEL -> drawHeritageWalk(rect, u, monumentCampaigns)
-                else -> drawGate(rect, u, band)
+                else -> drawHeritageWalk(rect, u, monumentCampaigns)
             }
             drawPlotLabel(tm, if (plot.label == PARADE_LABEL && fallenCount > 0) "Parade Ground • Memorial" else plot.label, rect, u, Label)
             return@forEach
@@ -494,6 +498,8 @@ private fun DrawScope.drawBase(
             }
             else -> {
                 if (type == FacilityType.AIRFIELD) drawAirfield(rect, u, buildingArtStage(state.level.coerceAtLeast(1)))
+                // Session 38: the Main Gate's own art (guard shack, MP station, hardened gate)
+                else if (type == FacilityType.MAIN_GATE) drawGate(rect, u, buildingArtStage(state.level.coerceAtLeast(1)))
                 else drawBuilding(type, rect, u, buildingArtStage(state.level.coerceAtLeast(1)))
                 if (state.isUpgrading) drawConstruction(rect, u, state, now)
                 drawPlotLabel(tm, "${plot.label} ${state.level}", rect, u, Label)
@@ -680,16 +686,38 @@ private fun DrawScope.drawAirfield(rect: Rect, u: Float, stage: Int) {
     if (stage == 4) drawRect(Concrete, Offset(rect.left + 3 * u, rect.top + 3 * u), Size(rect.width - 6 * u, rect.height - 14 * u), style = Stroke(1.2f * u))
 }
 
-private fun DrawScope.drawGate(rect: Rect, u: Float, band: Int) {
+/** Session 38 (item 72): the Access Control Point by art stage: 1 guard shack, 2-3 MP station, 4 hardened gate. */
+private fun DrawScope.drawGate(rect: Rect, u: Float, stage: Int) {
     val cx = rect.center.x
     val base = rect.bottom - 14 * u
     drawLine(Color(0xFFDADADA), Offset(cx, base), Offset(cx, base - 28 * u), strokeWidth = 0.8f * u)
     drawRect(Color(0xFF2F5FA6), Offset(cx, base - 28 * u), Size(10 * u, 6 * u))
-    // Entry control point: barrier arm and a guard shack that firms up with the base
+    // Barrier arm
     drawLine(Color(0xFFD8D3C0), Offset(rect.left + 6 * u, base), Offset(rect.right - 18 * u, base), strokeWidth = 1.4f * u)
     for (i in 0..4) drawLine(Color(0xFFC0322B), Offset(rect.left + 8 * u + i * 6 * u, base), Offset(rect.left + 10 * u + i * 6 * u, base), strokeWidth = 1.4f * u)
-    val shack = if (band == 1) Canvas1 else if (band == 2) Wood else Block
-    drawRect(shack, Offset(rect.right - 16 * u, base - 10 * u), Size(10 * u, 10 * u))
+    when (stage) {
+        1 -> {
+            // Guard shack
+            drawRect(Wood, Offset(rect.right - 16 * u, base - 10 * u), Size(10 * u, 10 * u))
+            drawRect(WoodRoof, Offset(rect.right - 17 * u, base - 12 * u), Size(12 * u, 2.4f * u))
+        }
+        2, 3 -> {
+            // MP station: a block building with a blue light bar and "MP" stripe
+            drawRect(Block, Offset(rect.right - 20 * u, base - 14 * u), Size(16 * u, 14 * u))
+            drawRect(BlockRoof, Offset(rect.right - 21 * u, base - 16 * u), Size(18 * u, 2.6f * u))
+            drawRect(Color(0xFF1F2A3A), Offset(rect.right - 18 * u, base - 11 * u), Size(12 * u, 3 * u))
+            drawRect(Color(0xFF4A8BE0), Offset(rect.right - 15 * u, base - 18 * u), Size(6 * u, 1.6f * u))
+            if (stage == 3) drawRect(Color(0xFF9DA39A), Offset(rect.left + 6 * u, base - 4 * u), Size(rect.width - 28 * u, 0.8f * u))
+        }
+        else -> {
+            // Hardened gate: concrete overwatch, a canopy over the lanes and vehicle barriers
+            drawRect(Concrete, Offset(rect.right - 20 * u, base - 18 * u), Size(16 * u, 18 * u))
+            drawRect(Ink.copy(alpha = 0.5f), Offset(rect.right - 18 * u, base - 15 * u), Size(12 * u, 2.6f * u))
+            drawRect(Color(0xFF4A8BE0), Offset(rect.right - 15 * u, base - 20 * u), Size(6 * u, 1.6f * u))
+            drawRect(Color(0xFF6E7378), Offset(rect.left + 4 * u, base - 22 * u), Size(rect.width - 26 * u, 2.4f * u))
+            for (i in 0..3) drawRect(Concrete, Offset(rect.left + 6 * u + i * 8 * u, base + 2.5f * u), Size(5 * u, 3 * u))
+        }
+    }
 }
 
 private fun DrawScope.drawConstruction(rect: Rect, u: Float, state: FacilityState, now: Long) {
