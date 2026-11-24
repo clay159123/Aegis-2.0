@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -507,6 +508,8 @@ internal fun HqStagingSheet(
     selectedOperatorIds: List<String>,
     selectedSquadId: String? = null,
     onSelectSquad: (TacticalSquad) -> Unit = {},
+    /** Items 145 and 153: replace the whole team (Clear, HQ quick-select, removing a squad). */
+    onSetTeam: (List<String>) -> Unit = {},
     onToggleOperator: (String) -> Unit,
     onSwitchOperatorsToKit: (List<String>, WardrobeKit) -> Unit = { _, _ -> },
     onEditKits: () -> Unit,
@@ -613,6 +616,10 @@ internal fun HqStagingSheet(
                 modifier = Modifier.defaultMinSize(minHeight = 48.dp)
             ) {
                 Text("Edit Loadouts")
+            }
+            // Item 131: swiping no longer closes the sheet, so it gets a close button
+            IconButton(onClick = onCancel, modifier = Modifier.testTag("stage_close")) {
+                Icon(Icons.Filled.Close, contentDescription = "Close")
             }
         }
 
@@ -741,18 +748,71 @@ internal fun HqStagingSheet(
 
         // Item 82: aviator-only training (Flight Hours) has no squads to pick
         val aviatorsOnly = mission.schoolRequirements?.allowedSpecialties == setOf(OperatorSpecialty.AVIATION)
-        if (uiState.squads.isNotEmpty() && readyOperators.isNotEmpty() && !aviatorsOnly) {
-            Text(
-                text = "SELECT SQUAD (ONE-TAP TEAM • LEADER FIRST)",
-                style = MaterialTheme.typography.labelSmall,
-                color = extra.textMuted
-            )
+        // Item 145: staff and diplomatic ops (including POW talks) offer a one-tap HQ team, senior billets first
+        val readyHq = if (mission.scope == MissionScope.STAFF_DIPLOMATIC) {
+            readyOperators.filter { it.status == OperatorStatus.HQ_STAFF }
+                .sortedBy { it.hqRole?.slotOrder ?: Int.MAX_VALUE }
+                .take(mission.maxOperators)
+        } else emptyList()
+        val showSquadRow = (uiState.squads.isNotEmpty() || readyHq.isNotEmpty()) && readyOperators.isNotEmpty() && !aviatorsOnly
+        if (showSquadRow || selectedOperatorIds.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = if (showSquadRow) "SELECT SQUAD (ONE-TAP TEAM • TAP AGAIN TO REMOVE)" else "TEAM",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = extra.textMuted,
+                    modifier = Modifier.weight(1f)
+                )
+                // Item 153: empty the team in one tap
+                if (selectedOperatorIds.isNotEmpty()) {
+                    TextButton(
+                        onClick = { onSetTeam(emptyList()) },
+                        modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("stage_clear_team")
+                    ) { Text("Clear (${selectedOperatorIds.size})") }
+                }
+            }
+        }
+        if (showSquadRow) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (readyHq.isNotEmpty()) {
+                    val hqIds = readyHq.map { it.id }
+                    val hqSelected = selectedOperatorIds.toSet().containsAll(hqIds)
+                    Surface(
+                        modifier = Modifier
+                            .widthIn(min = 160.dp)
+                            .defaultMinSize(minHeight = 56.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable {
+                                onSetTeam(if (hqSelected) selectedOperatorIds - hqIds.toSet() else hqIds)
+                            }
+                            .testTag("stage_hq_team"),
+                        color = if (hqSelected) extra.brassContainer.copy(alpha = 0.72f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        border = BorderStroke(if (hqSelected) 1.5.dp else 1.dp, if (hqSelected) extra.brassBright else extra.brass)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text("HQ Staff", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                            Text(
+                                "${readyHq.size} Ready • " + readyHq.joinToString(" ") { it.hqRole?.shortCode ?: "" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = extra.signalsCyan,
+                                maxLines = 1
+                            )
+                            Text("Senior billets first", style = MaterialTheme.typography.labelSmall, color = extra.brassBright)
+                        }
+                    }
+                }
                 uiState.squads.forEach { squad ->
                     val deployableForSquad = SquadCohesionRules.orderedMembersForDeployment(
                         squad = squad,
@@ -760,8 +820,8 @@ internal fun HqStagingSheet(
                         maxCount = mission.maxOperators
                     )
                     val leaderOp = squad.leaderId?.let { id -> uiState.operators.find { it.id == id } }
-                    val isSquadSelected = selectedSquadId == squad.id ||
-                        (deployableForSquad.isNotEmpty() && deployableForSquad.toSet() == selectedOperatorIds.toSet())
+                    // Item 153: a squad counts as picked when all its ready members are on the team (platoons too)
+                    val isSquadSelected = deployableForSquad.isNotEmpty() && selectedOperatorIds.toSet().containsAll(deployableForSquad)
                     val canDeploySquad = deployableForSquad.size >= mission.minOperators ||
                         (squad.isSpecialForces && mission.requiresSfTeam && deployableForSquad.size >= TacticalCalculator.SF_SQUAD_CORE)
                     val sfRed = Color(SF_PATCH_RED_BRIGHT)
@@ -771,7 +831,9 @@ internal fun HqStagingSheet(
                             .widthIn(min = 160.dp)
                             .defaultMinSize(minHeight = 56.dp)
                             .clip(MaterialTheme.shapes.small)
-                            .clickable(enabled = canDeploySquad) { onSelectSquad(squad) }
+                            .clickable(enabled = canDeploySquad || isSquadSelected) {
+                                if (isSquadSelected) onSetTeam(selectedOperatorIds - squad.memberIds.toSet()) else onSelectSquad(squad)
+                            }
                             .testTag("stage_squad_${squad.id}"),
                         color = if (isSquadSelected) {
                             extra.brassContainer.copy(alpha = 0.72f)
@@ -1027,6 +1089,15 @@ internal fun HqStagingSheet(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (opOdds >= 80) MaterialTheme.colorScheme.primary else extra.amberTelemetry
                                     )
+                                    // Item 132: each pilot's logbook on the Flight Hours launcher
+                                    if (mission.id == TacticalCalculator.FLIGHT_HOURS_MISSION_ID) {
+                                        Text(
+                                            "${op.flightHoursLogged} h logged • Flight skill ${op.flightSkill}/${TacticalCalculator.MAX_FLIGHT_SKILL}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = extra.brassBright,
+                                            modifier = Modifier.testTag("stage_flight_hours_${op.id}")
+                                        )
+                                    }
                                 }
                             }
                             Checkbox(

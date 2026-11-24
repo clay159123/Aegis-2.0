@@ -97,11 +97,9 @@ object PromotionBoardEvaluator {
         // Item 107: an HQ billet's top rank ends promotions there (treated like having no next rank).
         // Item 135: a COL capped as XO can still go before the general board when a general billet is open.
         val seatedRole = operator.hqRole.takeIf { operator.status == OperatorStatus.HQ_STAFF }
-        val generalBilletOpen = nextRank == OperatorRank.BG &&
-            TacticalCalculator.openGeneralBillet(operator, allOperators, facilities) != null
         val blockedReason = when {
             nextRank == null -> null
-            operator.isAtHqRankCap && !generalBilletOpen ->
+            operator.isAtHqRankCap ->
                 "${seatedRole?.shortCode ?: "Billet"} tops out at ${operator.hqRankCap?.code}. Move to a senior billet or the field to rise further."
             // Item 126: the S-3 and CSM are enlisted billets; a commission means leaving them
             seatedRole?.isEnlistedOnly == true && !nextRank.tier.isEnlisted ->
@@ -322,11 +320,17 @@ object PromotionBoardEvaluator {
                     satisfied = honorsFlagOk
                 )
                 // Item 135: generals serve only on HQ staff, so a star needs a general billet to fill
-                val generalBillet = TacticalCalculator.openGeneralBillet(operator, allOperators, facilities)
+                // Item 135: seat them as CO or Deputy first; the XO and other billets top out below BG
+                val generalBillet = TacticalCalculator.seatedGeneralBillet(operator)
                 meritChecks += PromotionMeritCheck(
                     id = "billet_flag",
                     label = "General Officer Billet",
-                    statusText = generalBillet?.let { "${it.shortCode} billet available" } ?: "Needs an open CO or Deputy Commander billet",
+                    statusText = when {
+                        generalBillet != null -> "Seated as ${generalBillet.shortCode}"
+                        operator.status == OperatorStatus.HQ_STAFF && operator.hqRole == HqStaffRole.DEPUTY_COMMANDER ->
+                            "Deputy tops out at ${HqChain.deputyCap().code} under the current CO"
+                        else -> "Must hold the CO or Deputy Commander billet"
+                    },
                     satisfied = generalBillet != null
                 )
             }

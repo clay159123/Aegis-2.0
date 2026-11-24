@@ -1251,6 +1251,12 @@ object TacticalCalculator {
         if (role.requiresSfQualified && !isSfQualified(operator)) {
             missing += "Requires Special Forces qualification"
         }
+        // Item 150 follow-up: the CO must be the senior officer at HQ
+        if (role == HqStaffRole.CO_COMMANDING_OFFICER) {
+            HqChain.outrankingOfficer(operator)?.let { senior ->
+                missing += "Outranked by the ${senior.hqRole?.shortCode} (${senior.earnedRank.code} ${senior.callsign}). Seat them as CO instead"
+            }
+        }
         if (role.isEnlistedOnly && !operator.rank.tier.isEnlisted) {
             missing += "Enlisted only (${role.title})"
         }
@@ -1374,6 +1380,10 @@ object TacticalCalculator {
                 // Item 62: the Language school stays open until every region is learned
                 if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID && ClandestineRules.regionsToLearn(operator).isEmpty()) {
                     missing += "Already speaks every region's language"
+                }
+                // Item 152: seated HQ staff run the base; language training is for the field teams
+                if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID && operator.status == OperatorStatus.HQ_STAFF) {
+                    missing += "HQ staff don't need language training"
                 }
                 if (mission.id == RIFLE_QUAL_MISSION_ID && bestQualification(operator) == MarksmanshipBadgeTier.EXPERT) {
                     missing += "Already qualified Expert"
@@ -2192,13 +2202,15 @@ object TacticalCalculator {
     /** Item 135: billets a general can hold (no rank cap below the flag grades). */
     val GENERAL_BILLETS = setOf(HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.DEPUTY_COMMANDER)
 
-    /** Item 135: the general billet a COL's star would fill, or null when none is open to them. */
-    fun openGeneralBillet(candidate: Operator, allOperators: List<Operator>, facilities: List<FacilityState>): HqStaffRole? {
-        if (candidate.status == OperatorStatus.HQ_STAFF && candidate.hqRole in GENERAL_BILLETS) return candidate.hqRole
-        val unlocked = unlockedHqRoles(facilities)
-        val taken = allOperators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.id != candidate.id }
-            .mapNotNull { it.hqRole }.toSet()
-        return GENERAL_BILLETS.sortedBy { it.slotOrder }.firstOrNull { it in unlocked && it !in taken }
+    /**
+     * Item 135: generals serve only on HQ staff. A star needs the soldier already seated in a billet that
+     * allows one (CO, or Deputy when the CO sits above BG); the XO tops out at COL. Returns that billet or null.
+     */
+    fun seatedGeneralBillet(candidate: Operator): HqStaffRole? {
+        if (candidate.status != OperatorStatus.HQ_STAFF) return null
+        val role = candidate.hqRole?.takeIf { it in GENERAL_BILLETS } ?: return null
+        val cap = role.rankCapFor(candidate.earnedRank)
+        return role.takeIf { cap == null || cap.seniorityIndex >= OperatorRank.BG.seniorityIndex }
     }
 
     fun maxHqStaffSlots(facilities: List<FacilityState>): Int {

@@ -625,7 +625,12 @@ class AegisOpsRobolectricTest {
         composeTestRule.onNodeWithTag("assemble_mission_msn_ridge_patrol").performScrollTo().performClick()
         composeTestRule.waitForIdle()
 
+        // The sheet opens with the matching squad picked; item 153: tapping it removes it, tapping again restores it
+        composeTestRule.onNodeWithTag("stage_clear_team").assertExists()
         composeTestRule.onNodeWithTag("stage_squad_sq_alpha").performScrollTo().assertIsDisplayed().performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("stage_clear_team").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("stage_squad_sq_alpha").performScrollTo().performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("staging_cohesion_bonus_banner").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithTag("launch_mission_msn_ridge_patrol").performScrollTo().performClick()

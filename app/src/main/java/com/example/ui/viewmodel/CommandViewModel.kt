@@ -180,6 +180,10 @@ class CommandViewModel(
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.squads)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
             ClandestineRules.clearedStageIds = completedStages
+            HqChain.seatedStaff = data.operators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
+            HqChain.commanderRank = data.operators.firstOrNull {
+                it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER
+            }?.earnedRank
             CompoundRules.compoundLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.SF_COMPOUND)
             TacticalCalculator.tdyOperatorIds = TacticalCalculator.tdyOperatorIdsFor(data.deployments)
             val eventEffects = CommandEventEffects(
@@ -412,6 +416,7 @@ class CommandViewModel(
                 repairPowRecords(state, now)
                 repairOcsCommissions(state)
                 repairStarterSchools(state)
+                repairCommandSeniority(state)
                 resolveCaptivity(state, now)
                 // Item 62: covers that blow now; the clock drops and the team must choose
                 state.deployments.filter { ClandestineRules.coverBlowsNow(it, now) }.forEach { d ->
@@ -728,22 +733,7 @@ class CommandViewModel(
             op.authorizedTier
         }
         val bonus = if (tierChanged) endorsementFocus?.statBonus else null
-        // Item 135: a new general takes the open general billet (CO first, then Deputy Commander)
-        val generalBillet = if (nextRank.tier == RankTier.FLAG_OFFICER) {
-            TacticalCalculator.openGeneralBillet(op, state.operators, state.facilities)
-        } else null
-        val seatedForStar = if (generalBillet != null && op.hqRole != generalBillet) {
-            op.copy(
-                equippedGearIds = emptyMap(),
-                status = OperatorStatus.HQ_STAFF,
-                hqRole = generalBillet,
-                transferRequested = false,
-                retirementRequested = false,
-                uniformMode = UniformMode.DRESS_UNIFORM,
-                activeWardrobeKit = WardrobeKit.ALPHAS
-            )
-        } else op
-        val promoted = seatedForStar.promotedTo(nextRank)
+        val promoted = op.promotedTo(nextRank)
         val progressedOp = applyTierProgressionOnRankUp(
             op = promoted.copy(
                 authorizedTier = if (nextRank.isWarrant) RankTier.WARRANT else nextAuthorizedTier,
@@ -766,13 +756,6 @@ class CommandViewModel(
                 )
             }
             repository.saveOperator(progressedOp)
-            if (seatedForStar !== op) {
-                val prunedSquads = SquadCohesionRules.pruneUnavailableMembers(
-                    squads = state.squads,
-                    operators = state.operators.map { if (it.id == op.id) progressedOp else it }
-                ).filter { updated -> state.squads.find { it.id == updated.id } != updated }
-                if (prunedSquads.isNotEmpty()) repository.saveSquads(prunedSquads)
-            }
             val promotionDeeds = newlyEligibleAwardDeeds(
                 before = op,
                 after = progressedOp,
@@ -786,8 +769,7 @@ class CommandViewModel(
             }
             val msg = if (tierChanged) {
                 val focusNote = endorsementFocus?.let { " • Endorsed: ${it.title}" } ?: ""
-                val seatNote = if (seatedForStar !== op) " Now seated as ${generalBillet?.shortCode}." else ""
-                "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!$seatNote"
+                "${op.callsign} pinned ${nextRank.title} (${nextRank.payGrade}) — ${nextRank.tier.shortLabel} Dress unlocked$focusNote!"
             } else {
                 "${op.callsign} promoted to ${nextRank.title} (${nextRank.code} / ${nextRank.payGrade})."
             }
@@ -862,6 +844,19 @@ class CommandViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * Item 150 follow-up: saves from before the seniority rule can hold a Deputy who outranks the CO.
+     * Swap them once so the senior officer commands (the Deputy cap would otherwise shrink the general).
+     */
+    private suspend fun repairCommandSeniority(state: CommandUiState) {
+        val seated = state.operators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
+        val co = seated.find { it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER } ?: return
+        val dcg = seated.find { it.hqRole == HqStaffRole.DEPUTY_COMMANDER } ?: return
+        if (dcg.earnedRank.seniorityIndex <= co.earnedRank.seniorityIndex) return
+        repository.saveOperators(listOf(dcg.copy(hqRole = HqStaffRole.CO_COMMANDING_OFFICER), co.copy(hqRole = HqStaffRole.DEPUTY_COMMANDER)))
+        showBanner("${dcg.earnedRank.code} ${dcg.callsign} takes command as CO; ${co.callsign} moves to Deputy.")
     }
 
     private fun applyTierProgressionOnRankUp(

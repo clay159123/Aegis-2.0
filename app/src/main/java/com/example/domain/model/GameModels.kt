@@ -448,9 +448,39 @@ enum class OperatorStatus(val label: String) {
  * CO, Deputy Commander and Command Chief Warrant Officer have no cap. The S-3 is the Operations Sergeant
  * Major (enlisted only) and stops at SGM.
  */
+/** Item 150: chain of command state the rank caps need, set from the live roster by the view model. */
+object HqChain {
+    /** Rank of the seated CO, or null when the CO seat is empty. */
+    @Volatile var commanderRank: OperatorRank? = null
+
+    /** Everyone seated on HQ staff, for the "CO must be the senior officer" check. */
+    @Volatile var seatedStaff: List<Operator> = emptyList()
+
+    /** The seated officer who outranks [candidate] (by earned rank), which bars them from taking command. */
+    fun outrankingOfficer(candidate: Operator, seated: List<Operator> = seatedStaff): Operator? =
+        seated.filter {
+            it.id != candidate.id && it.unlocked && it.status == OperatorStatus.HQ_STAFF &&
+                it.hqRole != HqStaffRole.CO_COMMANDING_OFFICER && it.earnedRank.isCommissioned
+        }.filter { it.earnedRank.seniorityIndex > candidate.earnedRank.seniorityIndex }
+            .maxByOrNull { it.earnedRank.seniorityIndex }
+
+    private val commissionedLadder = listOf(
+        OperatorRank.LT2, OperatorRank.LT1, OperatorRank.CPT, OperatorRank.MAJ, OperatorRank.LTC,
+        OperatorRank.COL, OperatorRank.BG, OperatorRank.MG, OperatorRank.LTG, OperatorRank.GEN
+    )
+
+    /** The Deputy Commander tops out one rank below the CO (LTG while the CO seat is empty). */
+    fun deputyCap(): OperatorRank {
+        val co = commanderRank ?: return OperatorRank.LTG
+        val idx = commissionedLadder.indexOf(co)
+        return if (idx > 0) commissionedLadder[idx - 1] else commissionedLadder.first()
+    }
+}
+
 fun HqStaffRole.rankCapFor(rank: OperatorRank): OperatorRank? = when (this) {
-    HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.DEPUTY_COMMANDER, HqStaffRole.CCWO_COMMAND_CHIEF_WARRANT,
+    HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.CCWO_COMMAND_CHIEF_WARRANT,
     HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR -> null
+    HqStaffRole.DEPUTY_COMMANDER -> HqChain.deputyCap()
     HqStaffRole.XO_CHIEF_OF_STAFF -> OperatorRank.COL
     HqStaffRole.S3_OPS_DIRECTOR -> if (rank.tier.isEnlisted) OperatorRank.SGM else null
     HqStaffRole.AIR_OPS_OFFICER -> if (rank.isWarrant) OperatorRank.CW4 else OperatorRank.MAJ
