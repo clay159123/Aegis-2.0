@@ -465,7 +465,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     }
 
     wornRegalia.chestPinAboveRack?.let { insig ->
-        val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * (0.368f - CHEST_LIFT), h * (0.502f - CHEST_LIFT))
+        val aboveY = (topDecorationY - h * 0.035f).coerceIn(h * (0.368f - CHEST_LIFT), h * (0.502f - CHEST_LIFT))
         drawBravosContrastSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
             center = Offset(leftChestCenterX, aboveY),
@@ -554,21 +554,7 @@ private fun DrawScope.drawBravosContrastSchoolBadge(
     col: Color,
     combatJumps: Int = 0
 ) {
-    val shadow = Color(0xFF1B1F26).copy(alpha = 0.55f)
-    drawDetailedChestSchoolBadge(
-        shape = shape,
-        center = Offset(center.x + badgeW * 0.025f, center.y + badgeH * 0.05f),
-        badgeW = badgeW * 1.06f,
-        badgeH = badgeH * 1.08f,
-        col = shadow
-    )
-    val bodyCol = if (col.luminance() > 0.45f) lerp(col, Color(0xFF4F5A6B), 0.35f) else col
-    drawDetailedChestSchoolBadge(
-        shape = shape,
-        center = center,
-        badgeW = badgeW,
-        badgeH = badgeH,
-        col = bodyCol,
-        combatJumps = combatJumps
-    )
+    // Art 6b: on the light Bravos shirt the badge gets darker silver and a stronger outline, wreaths included
+    val bodyCol = if (col.luminance() > 0.45f) lerp(col, Color(0xFF4F5A6B), 0.30f) else col
+    drawDetailedChestSchoolBadge(shape = shape, center = center, badgeW = badgeW, badgeH = badgeH, col = bodyCol, combatJumps = combatJumps, onLight = true)
 }

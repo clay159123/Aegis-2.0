@@ -18,6 +18,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.domain.UniformRegaliaRules
@@ -852,4 +853,46 @@ internal fun DrawScope.drawSfTierPin(center: Offset, halfW: Float, halfH: Float,
     drawRect(Color(0xFF20262E), Offset(center.x - halfW * 0.36f, center.y + halfH * 0.18f), Size(halfW * 0.72f, bladeW))
     // Highlight on the upper left face
     drawLine(shine, Offset(center.x - halfW * 0.15f, center.y - halfH * 0.7f), Offset(center.x - halfW * 0.7f, center.y + halfH * 0.25f), strokeWidth = 1.0f)
+}
+
+/**
+ * Art 6b: draws [block] as struck metal: a thin dark outline around every shape (so badges read on light shirts)
+ * and a sheen running from light at the upper left to shadow at the lower right.
+ */
+internal fun DrawScope.metalFinish(bounds: androidx.compose.ui.geometry.Rect, outlineStrength: Float = 1f, outline: Boolean = true, block: DrawScope.() -> Unit) {
+    val pad = 4f
+    val layer = androidx.compose.ui.geometry.Rect(bounds.left - pad, bounds.top - pad, bounds.right + pad, bounds.bottom + pad)
+    // A hairline edge, not a cartoon outline: about half a pixel at card size, under a pixel when drawn large
+    val o = ((bounds.height * 0.015f).coerceIn(0.35f, 0.75f)) * outlineStrength
+    drawIntoCanvas { c ->
+        if (outline) {
+            val dark = androidx.compose.ui.graphics.Paint().apply {
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color(0xFF0E1218), androidx.compose.ui.graphics.BlendMode.SrcIn)
+                alpha = (0.30f * outlineStrength).coerceAtMost(0.55f)
+            }
+            c.saveLayer(layer, dark)
+            for ((dx, dy) in listOf(o to 0f, -o to 0f, 0f to o, 0f to -o, o * 0.8f to o * 1.2f)) {
+                c.save(); c.translate(dx, dy); block(); c.restore()
+            }
+            c.restore()
+        }
+        c.saveLayer(layer, androidx.compose.ui.graphics.Paint())
+        block()
+        drawRect(
+            Brush.linearGradient(
+                0f to Color.White.copy(alpha = 0.34f), 0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.30f),
+                start = bounds.topLeft, end = bounds.bottomRight
+            ),
+            layer.topLeft, layer.size, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop
+        )
+        c.restore()
+    }
+}
+
+/** Art 6b: a medal's suspension ribbon: a woven ribbon bar with the fold over the brooch showing near the top. */
+internal fun DrawScope.drawMedalDrape(topLeft: Offset, size: Size, stripes: List<Long>) {
+    drawRibbonBar(topLeft, size, stripes)
+    val foldY = topLeft.y + size.height * 0.20f
+    drawLine(Color.Black.copy(alpha = 0.35f), Offset(topLeft.x, foldY), Offset(topLeft.x + size.width, foldY), strokeWidth = (size.height * 0.06f).coerceAtLeast(0.6f))
+    drawLine(Color.White.copy(alpha = 0.22f), Offset(topLeft.x, foldY - 1f), Offset(topLeft.x + size.width, foldY - 1f), strokeWidth = 0.6f)
 }

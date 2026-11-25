@@ -1044,7 +1044,7 @@ private fun DrawScope.drawDressUniformFigure(
             drawRect(trimCol, Offset(mx - 1f, my), Size(medW + 2f, broochH))
 
             val ribTopY = my + broochH
-            drawRibbonBar(Offset(mx, ribTopY), Size(medW, ribH), medal.ribbonStripeHexes)
+            drawMedalDrape(Offset(mx, ribTopY), Size(medW, ribH), medal.ribbonStripeHexes)
             awardDevices[medal.id]?.let { dev ->
                 if (dev.hasAnyDevice) {
                     drawRibbonDeviceOverlay(
@@ -1112,7 +1112,7 @@ private fun DrawScope.drawDressUniformFigure(
 
     // 13. Positional Specialty School Insignia Badges (Slot 1: Above Rack, Slot 2: Left Pocket, Slot 3: Right Pocket)
     wornRegalia.chestPinAboveRack?.let { insig ->
-        val aboveY = (topDecorationY - h * 0.030f).coerceIn(h * (0.368f - CHEST_LIFT), h * (0.502f - CHEST_LIFT))
+        val aboveY = (topDecorationY - h * 0.035f).coerceIn(h * (0.368f - CHEST_LIFT), h * (0.502f - CHEST_LIFT))
         drawDetailedChestSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
             center = Offset(leftChestCenterX, aboveY),
@@ -1777,6 +1777,10 @@ private fun DrawScope.drawWrappedServiceStripes(
     }
 }
 
+/**
+ * Art 6b: every chest badge is finished as metal: a thin dark outline so it reads on any fabric (light Bravos
+ * shirts included) and a sheen from the upper left. [onLight] darkens the silver and strengthens the outline.
+ */
 internal fun DrawScope.drawDetailedChestSchoolBadge(
     shape: InsigniaShape,
     center: Offset,
@@ -1784,11 +1788,26 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
     badgeH: Float,
     col: Color,
     /** Item 39: combat jump stars on jump wings (0..5). */
-    combatJumps: Int = 0
+    combatJumps: Int = 0,
+    onLight: Boolean = false
+) {
+    val bounds = androidx.compose.ui.geometry.Rect(center.x - badgeW * 0.62f, center.y - badgeH * 0.80f, center.x + badgeW * 0.62f, center.y + badgeH * 0.70f)
+    metalFinish(bounds, outlineStrength = if (onLight) 1.4f else 1f) {
+        drawChestBadgeShapes(shape, center, badgeW, badgeH, col, combatJumps, if (onLight) Color(0xFFB4BCC8) else Color(0xFFDCE2EA))
+    }
+}
+
+private fun DrawScope.drawChestBadgeShapes(
+    shape: InsigniaShape,
+    center: Offset,
+    badgeW: Float,
+    badgeH: Float,
+    col: Color,
+    combatJumps: Int,
+    silver: Color
 ) {
     val cx = center.x
     val cy = center.y
-    val silver = Color(0xFFE0E6F0)
     val gold = Color(0xFFF2D272)
     val darkBack = Color(0xFF121722)
 
@@ -1812,16 +1831,16 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 style = Stroke(1.2f)
             )
             // Musket barrel, bayonet & curved stock
-            drawLine(silver, Offset(cx - badgeW * 0.34f, cy + badgeH * 0.03f), Offset(cx + badgeW * 0.34f, cy - badgeH * 0.03f), strokeWidth = 1.9f, cap = StrokeCap.Round)
-            drawLine(silver, Offset(cx - badgeW * 0.32f, cy + badgeH * 0.12f), Offset(cx - badgeW * 0.16f, cy + badgeH * 0.02f), strokeWidth = 2.2f, cap = StrokeCap.Round)
+            drawLine(silver, Offset(cx - badgeW * 0.34f, cy + badgeH * 0.03f), Offset(cx + badgeW * 0.34f, cy - badgeH * 0.03f), strokeWidth = maxOf(1.9f, badgeH * 0.0864f), cap = StrokeCap.Round)
+            drawLine(silver, Offset(cx - badgeW * 0.32f, cy + badgeH * 0.12f), Offset(cx - badgeW * 0.16f, cy + badgeH * 0.02f), strokeWidth = maxOf(2.2f, badgeH * 0.1000f), cap = StrokeCap.Round)
         }
         // CAB: bayonet over a grenade inside an oak wreath
         InsigniaShape.CAB_BADGE -> {
             drawLaurelWreathArcs(center, badgeH * 0.62f, silver, (badgeH * 0.11f).coerceAtLeast(1.3f))
             drawOval(col, topLeft = Offset(cx - badgeH * 0.17f, cy - badgeH * 0.06f), size = Size(badgeH * 0.34f, badgeH * 0.40f))
             drawOval(silver, topLeft = Offset(cx - badgeH * 0.17f, cy - badgeH * 0.06f), size = Size(badgeH * 0.34f, badgeH * 0.40f), style = Stroke(1.0f))
-            drawLine(silver, Offset(cx, cy - badgeH * 0.46f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = 1.8f, cap = StrokeCap.Round)
-            drawLine(silver, Offset(cx - badgeH * 0.12f, cy - badgeH * 0.12f), Offset(cx + badgeH * 0.12f, cy - badgeH * 0.12f), strokeWidth = 1.4f, cap = StrokeCap.Round)
+            drawLine(silver, Offset(cx, cy - badgeH * 0.46f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = maxOf(1.8f, badgeH * 0.0818f), cap = StrokeCap.Round)
+            drawLine(silver, Offset(cx - badgeH * 0.12f, cy - badgeH * 0.12f), Offset(cx + badgeH * 0.12f, cy - badgeH * 0.12f), strokeWidth = maxOf(1.4f, badgeH * 0.0636f), cap = StrokeCap.Round)
         }
         // EFMB: medical cross over a stretcher, no wreath. CMB: cross and caduceus inside an oak wreath.
         InsigniaShape.MEDICAL_BADGE, InsigniaShape.COMBAT_MEDICAL_BADGE -> {
@@ -1830,36 +1849,27 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 drawLaurelWreathArcs(center, badgeH * 0.58f, silver, (badgeH * 0.11f).coerceAtLeast(1.3f))
             } else {
                 // Stretcher: two poles with handles behind the cross
-                drawLine(silver, Offset(cx - badgeW * 0.44f, cy - badgeH * 0.10f), Offset(cx + badgeW * 0.44f, cy - badgeH * 0.10f), strokeWidth = 1.4f, cap = StrokeCap.Round)
-                drawLine(silver, Offset(cx - badgeW * 0.44f, cy + badgeH * 0.10f), Offset(cx + badgeW * 0.44f, cy + badgeH * 0.10f), strokeWidth = 1.4f, cap = StrokeCap.Round)
+                drawLine(silver, Offset(cx - badgeW * 0.44f, cy - badgeH * 0.10f), Offset(cx + badgeW * 0.44f, cy - badgeH * 0.10f), strokeWidth = maxOf(1.4f, badgeH * 0.0636f), cap = StrokeCap.Round)
+                drawLine(silver, Offset(cx - badgeW * 0.44f, cy + badgeH * 0.10f), Offset(cx + badgeW * 0.44f, cy + badgeH * 0.10f), strokeWidth = maxOf(1.4f, badgeH * 0.0636f), cap = StrokeCap.Round)
             }
             drawCircle(darkBack, radius = badgeH * 0.42f, center = center)
             drawCircle(col, radius = badgeH * 0.42f, center = center, style = Stroke(1.2f))
-            drawLine(col, Offset(cx, cy - badgeH * 0.26f), Offset(cx, cy + badgeH * 0.26f), strokeWidth = 2.4f)
-            drawLine(col, Offset(cx - badgeH * 0.26f, cy), Offset(cx + badgeH * 0.26f, cy), strokeWidth = 2.4f)
+            drawLine(col, Offset(cx, cy - badgeH * 0.26f), Offset(cx, cy + badgeH * 0.26f), strokeWidth = maxOf(2.4f, badgeH * 0.1091f))
+            drawLine(col, Offset(cx - badgeH * 0.26f, cy), Offset(cx + badgeH * 0.26f, cy), strokeWidth = maxOf(2.4f, badgeH * 0.1091f))
             if (combat) {
                 // Caduceus: gold staff with a wing bar and a coiled snake
-                drawLine(gold, Offset(cx, cy - badgeH * 0.34f), Offset(cx, cy + badgeH * 0.34f), strokeWidth = 1.2f)
-                drawLine(gold, Offset(cx - badgeH * 0.14f, cy - badgeH * 0.28f), Offset(cx + badgeH * 0.14f, cy - badgeH * 0.28f), strokeWidth = 1.1f, cap = StrokeCap.Round)
+                drawLine(gold, Offset(cx, cy - badgeH * 0.34f), Offset(cx, cy + badgeH * 0.34f), strokeWidth = maxOf(1.2f, badgeH * 0.0545f))
+                drawLine(gold, Offset(cx - badgeH * 0.14f, cy - badgeH * 0.28f), Offset(cx + badgeH * 0.14f, cy - badgeH * 0.28f), strokeWidth = maxOf(1.1f, badgeH * 0.0500f), cap = StrokeCap.Round)
                 drawArc(gold, startAngle = 90f, sweepAngle = 180f, useCenter = false, topLeft = Offset(cx - badgeH * 0.08f, cy - badgeH * 0.18f), size = Size(badgeH * 0.16f, badgeH * 0.16f), style = Stroke(1.0f))
                 drawArc(gold, startAngle = -90f, sweepAngle = 180f, useCenter = false, topLeft = Offset(cx - badgeH * 0.08f, cy - badgeH * 0.02f), size = Size(badgeH * 0.16f, badgeH * 0.16f), style = Stroke(1.0f))
             }
         }
         InsigniaShape.WINGS, InsigniaShape.STAR_WINGS, InsigniaShape.SENIOR_PARA_WINGS -> {
-            // Tapered 3-feather swept wings + ribbed parachute canopy + shroud lines
-            drawLine(col, Offset(cx - badgeW * 0.48f, cy - badgeH * 0.04f), Offset(cx + badgeW * 0.48f, cy - badgeH * 0.04f), strokeWidth = 2.2f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx - badgeW * 0.40f, cy + badgeH * 0.12f), Offset(cx + badgeW * 0.40f, cy + badgeH * 0.12f), strokeWidth = 1.7f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx - badgeW * 0.28f, cy + badgeH * 0.26f), Offset(cx + badgeW * 0.28f, cy + badgeH * 0.26f), strokeWidth = 1.3f, cap = StrokeCap.Round)
-            drawArc(
-                color = col,
-                startAngle = 180f,
-                sweepAngle = 180f,
-                useCenter = true,
-                topLeft = Offset(cx - badgeW * 0.16f, cy - badgeH * 0.26f),
-                size = Size(badgeW * 0.32f, badgeH * 0.44f)
-            )
-            drawLine(col, Offset(cx - badgeW * 0.11f, cy - badgeH * 0.04f), Offset(cx, cy + badgeH * 0.34f), strokeWidth = 1.2f)
-            drawLine(col, Offset(cx + badgeW * 0.11f, cy - badgeH * 0.04f), Offset(cx, cy + badgeH * 0.34f), strokeWidth = 1.2f)
+            // Art 6b: wings curving up from the base of an open, ribbed canopy, with shroud lines to the harness
+            featherWings(cx, cy + badgeH * 0.12f, badgeW * 0.98f, badgeH * 0.52f, rise = 0.95f, col = col)
+            parachuteCanopy(cx, cy - badgeH * 0.16f, badgeW * 0.30f, badgeH * 0.36f, col)
+            for (s in listOf(-1f, 1f)) drawLine(col, Offset(cx + s * badgeW * 0.14f, cy - badgeH * 0.02f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = 1.0f)
+            drawLine(col, Offset(cx, cy - badgeH * 0.02f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = 0.9f)
             if (shape == InsigniaShape.STAR_WINGS) {
                 drawLaurelWreathArcs(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.22f, gold, 1.3f)
                 drawStar(Offset(cx, cy - badgeH * 0.32f), badgeH * 0.18f, badgeH * 0.08f, gold)
@@ -1881,12 +1891,11 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
         InsigniaShape.MOUNTAIN_BADGE, InsigniaShape.JUNGLE_BADGE, InsigniaShape.ARCTIC_BADGE, InsigniaShape.SNIPER_BADGE ->
             drawEnvironmentOrSniperBadge(shape, center, badgeW, badgeH, col)
         InsigniaShape.MFF_WINGS -> {
-            // Wings with a parachute and an upright dagger through the middle
-            drawLine(col, Offset(cx - badgeW * 0.48f, cy + badgeH * 0.02f), Offset(cx + badgeW * 0.48f, cy + badgeH * 0.02f), strokeWidth = 2.2f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx - badgeW * 0.38f, cy + badgeH * 0.16f), Offset(cx + badgeW * 0.38f, cy + badgeH * 0.16f), strokeWidth = 1.6f, cap = StrokeCap.Round)
-            drawArc(col, 180f, 180f, true, Offset(cx - badgeW * 0.15f, cy - badgeH * 0.28f), Size(badgeW * 0.30f, badgeH * 0.40f))
-            drawLine(darkBack, Offset(cx, cy - badgeH * 0.42f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = 2.0f)
-            drawLine(gold, Offset(cx, cy - badgeH * 0.42f), Offset(cx, cy + badgeH * 0.30f), strokeWidth = 1.1f, cap = StrokeCap.Round)
+            // Art 6b: wings and a canopy with an upright dagger through the middle
+            featherWings(cx, cy + badgeH * 0.14f, badgeW * 0.98f, badgeH * 0.48f, rise = 0.7f, col = col)
+            parachuteCanopy(cx, cy - badgeH * 0.12f, badgeW * 0.30f, badgeH * 0.34f, col)
+            drawLine(darkBack, Offset(cx, cy - badgeH * 0.42f), Offset(cx, cy + badgeH * 0.34f), strokeWidth = 2.0f)
+            drawLine(gold, Offset(cx, cy - badgeH * 0.42f), Offset(cx, cy + badgeH * 0.34f), strokeWidth = 1.1f, cap = StrokeCap.Round)
             drawLine(gold, Offset(cx - badgeW * 0.06f, cy + badgeH * 0.18f), Offset(cx + badgeW * 0.06f, cy + badgeH * 0.18f), strokeWidth = 1.2f)
             val mffStars = combatJumps.coerceIn(0, 5)
             if (mffStars > 0) {
@@ -1906,10 +1915,8 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
             drawRect(col, Offset(cx - badgeW * 0.14f, cy + badgeH * 0.24f), Size(badgeW * 0.28f, badgeH * 0.10f))
         }
         InsigniaShape.AVIATOR_WINGS, InsigniaShape.SENIOR_AVIATOR_WINGS, InsigniaShape.MASTER_AVIATOR_WINGS -> {
-            // Long straight wings with a shield in the middle; a star (Senior) or wreathed star (Master) above
-            drawLine(col, Offset(cx - badgeW * 0.50f, cy - badgeH * 0.02f), Offset(cx + badgeW * 0.50f, cy - badgeH * 0.02f), strokeWidth = 2.2f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx - badgeW * 0.42f, cy + badgeH * 0.13f), Offset(cx + badgeW * 0.42f, cy + badgeH * 0.13f), strokeWidth = 1.6f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx - badgeW * 0.30f, cy + badgeH * 0.26f), Offset(cx + badgeW * 0.30f, cy + badgeH * 0.26f), strokeWidth = 1.2f, cap = StrokeCap.Round)
+            // Art 6b: long, nearly straight feathered wings with a shield in the middle
+            featherWings(cx, cy + badgeH * 0.04f, badgeW * 1.02f, badgeH * 0.46f, rise = 0.18f, col = col)
             val shield = Path().apply {
                 moveTo(cx - badgeW * 0.10f, cy - badgeH * 0.18f)
                 lineTo(cx + badgeW * 0.10f, cy - badgeH * 0.18f)
@@ -1928,16 +1935,17 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
             }
         }
         InsigniaShape.AIR_ASSAULT_WINGS -> {
-            drawLine(col, Offset(cx - badgeW * 0.46f, cy + badgeH * 0.04f), Offset(cx + badgeW * 0.46f, cy + badgeH * 0.04f), strokeWidth = 2.2f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx - badgeW * 0.34f, cy + badgeH * 0.18f), Offset(cx + badgeW * 0.34f, cy + badgeH * 0.18f), strokeWidth = 1.5f, cap = StrokeCap.Round)
-            // Helicopter rotor blade & pod
-            drawLine(col, Offset(cx - badgeW * 0.26f, cy - badgeH * 0.28f), Offset(cx + badgeW * 0.26f, cy - badgeH * 0.28f), strokeWidth = 1.7f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx, cy - badgeH * 0.28f), Offset(cx, cy + badgeH * 0.28f), strokeWidth = 1.6f)
-            drawOval(col, topLeft = Offset(cx - badgeW * 0.10f, cy - badgeH * 0.12f), size = Size(badgeW * 0.20f, badgeH * 0.28f))
+            // Art 6b: wings curving up to a helicopter seen head-on: rotor, body, skids
+            featherWings(cx, cy + badgeH * 0.12f, badgeW * 0.96f, badgeH * 0.44f, rise = 0.6f, col = col)
+            drawLine(col, Offset(cx - badgeW * 0.30f, cy - badgeH * 0.34f), Offset(cx + badgeW * 0.30f, cy - badgeH * 0.34f), strokeWidth = 1.6f, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx, cy - badgeH * 0.34f), Offset(cx, cy - badgeH * 0.22f), strokeWidth = 1.4f)
+            drawOval(col, topLeft = Offset(cx - badgeW * 0.09f, cy - badgeH * 0.24f), size = Size(badgeW * 0.18f, badgeH * 0.36f))
+            drawOval(darkBack.copy(alpha = 0.6f), topLeft = Offset(cx - badgeW * 0.05f, cy - badgeH * 0.18f), size = Size(badgeW * 0.10f, badgeH * 0.12f))
+            drawLine(col, Offset(cx - badgeW * 0.12f, cy + badgeH * 0.16f), Offset(cx + badgeW * 0.12f, cy + badgeH * 0.16f), strokeWidth = 1.2f, cap = StrokeCap.Round)
         }
         InsigniaShape.TORCH_CREST -> {
-            drawLine(col, Offset(cx - badgeW * 0.42f, cy + badgeH * 0.08f), Offset(cx + badgeW * 0.42f, cy + badgeH * 0.08f), strokeWidth = 2.1f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx, cy - badgeH * 0.16f), Offset(cx, cy + badgeH * 0.38f), strokeWidth = 2.2f, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx - badgeW * 0.42f, cy + badgeH * 0.08f), Offset(cx + badgeW * 0.42f, cy + badgeH * 0.08f), strokeWidth = maxOf(2.1f, badgeH * 0.0955f), cap = StrokeCap.Round)
+            drawLine(col, Offset(cx, cy - badgeH * 0.16f), Offset(cx, cy + badgeH * 0.38f), strokeWidth = maxOf(2.2f, badgeH * 0.1000f), cap = StrokeCap.Round)
             drawStar(Offset(cx, cy - badgeH * 0.26f), badgeH * 0.22f, badgeH * 0.10f, Color(0xFFFF9F43))
         }
         InsigniaShape.CYBER_CREST -> {
@@ -1948,7 +1956,7 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 lineTo(cx + badgeW * 0.03f, cy + badgeH * 0.03f)
                 lineTo(cx - badgeW * 0.08f, cy + badgeH * 0.34f)
             }
-            drawPath(bolt, color = col, style = Stroke(width = 1.8f, cap = StrokeCap.Round))
+            drawPath(bolt, color = col, style = Stroke(width = maxOf(1.8f, badgeH * 0.0818f), cap = StrokeCap.Round))
         }
         InsigniaShape.INTEL_CREST -> {
             val diamond = Path().apply {
@@ -1959,26 +1967,26 @@ internal fun DrawScope.drawDetailedChestSchoolBadge(
                 close()
             }
             drawPath(diamond, color = darkBack)
-            drawPath(diamond, color = col, style = Stroke(1.6f, join = StrokeJoin.Round))
+            drawPath(diamond, color = col, style = Stroke(maxOf(1.6f, badgeH * 0.0727f), join = StrokeJoin.Round))
             drawStar(center, badgeH * 0.24f, badgeH * 0.09f, Color.White, points = 4)
         }
         InsigniaShape.EOD_BADGE -> {
-            drawLaurelWreathArcs(center, badgeH * 0.56f, col, 1.8f)
+            drawLaurelWreathArcs(center, badgeH * 0.56f, col, maxOf(1.8f, badgeH * 0.10f))
             drawStar(Offset(cx, cy - badgeH * 0.24f), badgeH * 0.20f, badgeH * 0.09f, Color(0xFFFFC145))
             drawOval(col, topLeft = Offset(cx - badgeW * 0.11f, cy - badgeH * 0.04f), size = Size(badgeW * 0.22f, badgeH * 0.40f))
         }
         InsigniaShape.LOGISTICS_CREST -> {
             drawCircle(darkBack, radius = badgeH * 0.45f, center = center)
-            drawCircle(col, radius = badgeH * 0.45f, center = center, style = Stroke(1.8f))
-            drawLine(col, Offset(cx - badgeH * 0.36f, cy), Offset(cx + badgeH * 0.36f, cy), strokeWidth = 1.6f)
-            drawLine(col, Offset(cx, cy - badgeH * 0.36f), Offset(cx, cy + badgeH * 0.36f), strokeWidth = 1.6f)
+            drawCircle(col, radius = badgeH * 0.45f, center = center, style = Stroke(maxOf(1.8f, badgeH * 0.0818f)))
+            drawLine(col, Offset(cx - badgeH * 0.36f, cy), Offset(cx + badgeH * 0.36f, cy), strokeWidth = maxOf(1.6f, badgeH * 0.0727f))
+            drawLine(col, Offset(cx, cy - badgeH * 0.36f), Offset(cx, cy + badgeH * 0.36f), strokeWidth = maxOf(1.6f, badgeH * 0.0727f))
             drawCircle(col, radius = badgeH * 0.14f, center = center)
         }
         InsigniaShape.STAFF_CREST -> {
-            drawLine(col, Offset(cx - badgeW * 0.28f, cy - badgeH * 0.34f), Offset(cx + badgeW * 0.28f, cy + badgeH * 0.34f), strokeWidth = 1.9f, cap = StrokeCap.Round)
-            drawLine(col, Offset(cx + badgeW * 0.28f, cy - badgeH * 0.34f), Offset(cx - badgeW * 0.28f, cy + badgeH * 0.34f), strokeWidth = 1.9f, cap = StrokeCap.Round)
+            drawLine(col, Offset(cx - badgeW * 0.28f, cy - badgeH * 0.34f), Offset(cx + badgeW * 0.28f, cy + badgeH * 0.34f), strokeWidth = maxOf(1.9f, badgeH * 0.0864f), cap = StrokeCap.Round)
+            drawLine(col, Offset(cx + badgeW * 0.28f, cy - badgeH * 0.34f), Offset(cx - badgeW * 0.28f, cy + badgeH * 0.34f), strokeWidth = maxOf(1.9f, badgeH * 0.0864f), cap = StrokeCap.Round)
             drawCircle(darkBack, radius = badgeH * 0.42f, center = center)
-            drawCircle(col, radius = badgeH * 0.42f, center = center, style = Stroke(1.6f))
+            drawCircle(col, radius = badgeH * 0.42f, center = center, style = Stroke(maxOf(1.6f, badgeH * 0.0727f)))
             drawStar(center, badgeH * 0.30f, badgeH * 0.13f, col)
         }
         InsigniaShape.TAB -> {
@@ -2597,4 +2605,45 @@ internal fun DrawScope.drawRelaxedHand(sideSign: Float, centerX: Float, topY: Fl
     drawPath(thumb, fill)
     drawPath(thumb, line.copy(alpha = 0.65f), style = Stroke(0.9f))
     drawPath(hand, line.copy(alpha = 0.6f), style = Stroke(1f))
+}
+
+/** Art 6b: a pair of feathered wings (filled, scalloped trailing edge, feather lines). [rise] 0 = straight, 1 = curved well up. */
+internal fun DrawScope.featherWings(cx: Float, cy: Float, span: Float, height: Float, rise: Float, col: Color) {
+    val half = span / 2f
+    for (s in listOf(-1f, 1f)) {
+        val rootX = cx + s * half * 0.08f
+        val tipX = cx + s * half
+        val tipY = cy - height * (0.25f + rise * 0.55f)
+        val wing = Path().apply {
+            moveTo(rootX, cy - height * 0.18f)
+            quadraticTo(cx + s * half * 0.55f, cy - height * (0.22f + rise * 0.35f), tipX, tipY)
+            // Trailing edge: three feather scallops back to the root
+            val steps = 4
+            for (k in 1..steps) {
+                val t = k / steps.toFloat()
+                val px = tipX + (rootX - tipX) * t
+                val py = tipY + (cy + height * 0.28f - tipY) * t - height * 0.04f * (1 - t)
+                val mx = tipX + (rootX - tipX) * (t - 0.5f / steps)
+                val my = tipY + (cy + height * 0.28f - tipY) * (t - 0.5f / steps) + height * 0.16f
+                quadraticTo(mx, my, px, py)
+            }
+            close()
+        }
+        drawPath(wing, col)
+        // Feather lines running out toward the tip
+        for (k in 1..2) {
+            val f = k / 3f
+            drawLine(Color.Black.copy(alpha = 0.28f),
+                Offset(rootX + s * half * 0.05f, cy - height * 0.1f + height * 0.18f * f),
+                Offset(cx + s * half * (0.60f + 0.12f * f), cy - height * (0.10f + rise * 0.30f) + height * 0.22f * f),
+                strokeWidth = (height * 0.05f).coerceAtLeast(0.6f))
+        }
+    }
+}
+
+/** Art 6b: an open parachute canopy with ribs, centered at ([cx], [cy]). */
+internal fun DrawScope.parachuteCanopy(cx: Float, cy: Float, w: Float, h: Float, col: Color) {
+    drawArc(col, 180f, 180f, true, Offset(cx - w / 2f, cy - h / 2f), Size(w, h))
+    drawArc(col, 0f, 180f, true, Offset(cx - w / 2f, cy - h * 0.10f), Size(w, h * 0.20f))
+    for (k in -1..1) drawLine(Color.Black.copy(alpha = 0.3f), Offset(cx + k * w * 0.18f, cy - h * 0.42f + kotlin.math.abs(k) * h * 0.06f), Offset(cx + k * w * 0.26f, cy + h * 0.04f), strokeWidth = (w * 0.03f).coerceAtLeast(0.6f))
 }

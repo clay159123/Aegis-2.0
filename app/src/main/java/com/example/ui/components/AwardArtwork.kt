@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -127,33 +128,53 @@ internal fun DrawScope.drawHexagon(
     drawPath(path, color = borderColor, style = Stroke(width = (radius * 0.15f).coerceAtLeast(1.1f)))
 }
 
+/**
+ * Art 6b: an oak/laurel wreath: two curved stems rising from the bottom, each set with leaves angled along the
+ * stem, so wreaths read as leaves at any size (they were plain arcs).
+ */
 internal fun DrawScope.drawLaurelWreathArcs(
     center: Offset,
     radius: Float,
     color: Color,
     strokeWidth: Float
 ) {
-    drawArc(
-        color = color,
-        startAngle = 115f,
-        sweepAngle = 125f,
-        useCenter = false,
-        topLeft = Offset(center.x - radius, center.y - radius),
-        size = Size(radius * 2f, radius * 2f),
-        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-    )
-    drawArc(
-        color = color,
-        startAngle = -60f,
-        sweepAngle = 125f,
-        useCenter = false,
-        topLeft = Offset(center.x - radius, center.y - radius),
-        size = Size(radius * 2f, radius * 2f),
-        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-    )
+    val leafLen = (strokeWidth * 2.6f).coerceAtLeast(2.4f)
+    val leafW = (strokeWidth * 1.05f).coerceAtLeast(1.1f)
+    for (side in listOf(-1f, 1f)) {
+        // Stem: from the bottom (90 deg) around the side to near the top
+        val start = if (side < 0) 100f else 80f
+        val sweep = if (side < 0) 128f else -128f
+        drawArc(color, start, sweep, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f),
+            style = Stroke(width = (strokeWidth * 0.45f).coerceAtLeast(0.6f), cap = StrokeCap.Round))
+        val leaves = 9
+        for (i in 0 until leaves) {
+            val t = (i + 0.5f) / leaves
+            val angDeg = start + sweep * t
+            val a = Math.toRadians(angDeg.toDouble())
+            val p = Offset(center.x + (radius * kotlin.math.cos(a)).toFloat(), center.y + (radius * kotlin.math.sin(a)).toFloat())
+            // Leaves point along the stem toward the top, tilted outward
+            val tangent = angDeg + if (side < 0) 90f else -90f
+            val tilt = tangent + side * -22f
+            rotate(tilt, pivot = p) {
+                drawOval(color, Offset(p.x - leafLen / 2f, p.y - leafW / 2f), Size(leafLen, leafW))
+            }
+        }
+    }
 }
 
 internal fun DrawScope.drawDetailedMedalPendant(
+    medalId: String,
+    tier: MedalTier,
+    center: Offset,
+    radius: Float
+) {
+    // Art 6b: every pendant is finished as struck metal (thin dark rim and a sheen from the upper left)
+    metalFinish(androidx.compose.ui.geometry.Rect(center.x - radius * 1.15f, center.y - radius * 1.15f, center.x + radius * 1.15f, center.y + radius * 1.15f), outlineStrength = 0.7f) {
+        drawMedalPendantShapes(medalId, tier, center, radius)
+    }
+}
+
+private fun DrawScope.drawMedalPendantShapes(
     medalId: String,
     tier: MedalTier,
     center: Offset,
@@ -403,22 +424,8 @@ fun AwardVisualThumbnail(
                 val ribH = h * 0.36f
                 val rx = (w - ribW) / 2f
                 val topY = h * 0.04f
-                val stripes = medal.ribbonStripeHexes.size.coerceAtLeast(1)
-                val sw = ribW / stripes
-                medal.ribbonStripeHexes.forEachIndexed { idx, hex ->
-                    drawRect(
-                        color = Color(hex),
-                        topLeft = Offset(rx + idx * sw, topY),
-                        size = Size(sw + 0.5f, ribH)
-                    )
-                }
-                // Silk highlight + brass top brooch pin
-                drawRect(
-                    brush = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.22f))),
-                    topLeft = Offset(rx, topY),
-                    size = Size(ribW, ribH)
-                )
-                drawRect(color = brass, topLeft = Offset(rx, topY), size = Size(ribW, ribH), style = Stroke(1.3f))
+                // Art 6b: the drape as a woven ribbon folded over the brooch
+                drawMedalDrape(Offset(rx, topY), Size(ribW, ribH), medal.ribbonStripeHexes)
                 drawRect(color = brass, topLeft = Offset(rx - w * 0.04f, topY), size = Size(ribW + w * 0.08f, h * 0.06f))
 
                 // Star-spangled neck ribbon accent or Bronze "V" device
@@ -517,169 +524,14 @@ fun AwardVisualThumbnail(
                             )
                         }
                     }
-                    InsigniaShape.WINGS, InsigniaShape.STAR_WINGS, InsigniaShape.SENIOR_PARA_WINGS -> {
-                        // Sculpted layered feathers
-                        drawLine(col, Offset(w * 0.08f, cy - h * 0.06f), Offset(w * 0.92f, cy - h * 0.06f), strokeWidth = (h * 0.11f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(w * 0.14f, cy + h * 0.10f), Offset(w * 0.86f, cy + h * 0.10f), strokeWidth = (h * 0.08f).coerceAtLeast(2.2f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(w * 0.24f, cy + h * 0.24f), Offset(w * 0.76f, cy + h * 0.24f), strokeWidth = (h * 0.06f).coerceAtLeast(1.6f), cap = StrokeCap.Round)
-                        // Ribbed parachute canopy + shroud triangle
-                        drawArc(
-                            color = col,
-                            startAngle = 180f,
-                            sweepAngle = 180f,
-                            useCenter = true,
-                            topLeft = Offset(cx - w * 0.14f, h * 0.24f),
-                            size = Size(w * 0.28f, h * 0.42f)
-                        )
-                        drawLine(col, Offset(cx - w * 0.10f, h * 0.46f), Offset(cx, h * 0.78f), strokeWidth = 1.6f)
-                        drawLine(col, Offset(cx + w * 0.10f, h * 0.46f), Offset(cx, h * 0.78f), strokeWidth = 1.6f)
-                        if (medal.insigniaShape == InsigniaShape.STAR_WINGS) {
-                            drawLaurelWreathArcs(Offset(cx, h * 0.22f), h * 0.18f, Color(0xFFF2D272), (h * 0.055f).coerceAtLeast(1.6f))
-                            drawStar(Offset(cx, h * 0.22f), h * 0.15f, h * 0.065f, Color(0xFFF2D272))
-                        } else if (medal.insigniaShape == InsigniaShape.SENIOR_PARA_WINGS) {
-                            drawStar(Offset(cx, h * 0.22f), h * 0.14f, h * 0.06f, col)
-                        }
-                    }
-                    InsigniaShape.MOUNTAIN_BADGE, InsigniaShape.JUNGLE_BADGE, InsigniaShape.ARCTIC_BADGE, InsigniaShape.SNIPER_BADGE ->
-                        drawEnvironmentOrSniperBadge(medal.insigniaShape!!, Offset(cx, cy), w * 0.9f, h * 0.9f, col)
-                    InsigniaShape.MFF_WINGS -> {
-                        drawLine(col, Offset(w * 0.06f, cy + h * 0.02f), Offset(w * 0.94f, cy + h * 0.02f), strokeWidth = (h * 0.10f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(w * 0.16f, cy + h * 0.17f), Offset(w * 0.84f, cy + h * 0.17f), strokeWidth = (h * 0.075f).coerceAtLeast(2.2f), cap = StrokeCap.Round)
-                        drawArc(col, 180f, 180f, true, Offset(cx - w * 0.14f, h * 0.20f), Size(w * 0.28f, h * 0.40f))
-                        drawLine(Color(0xFF121722), Offset(cx, h * 0.06f), Offset(cx, h * 0.86f), strokeWidth = (h * 0.09f).coerceAtLeast(2.6f))
-                        drawLine(Color(0xFFF2D272), Offset(cx, h * 0.06f), Offset(cx, h * 0.86f), strokeWidth = (h * 0.05f).coerceAtLeast(1.5f), cap = StrokeCap.Round)
-                        drawLine(Color(0xFFF2D272), Offset(cx - w * 0.06f, h * 0.68f), Offset(cx + w * 0.06f, h * 0.68f), strokeWidth = (h * 0.05f).coerceAtLeast(1.5f))
-                    }
-                    InsigniaShape.DIVER_BADGE -> {
-                        drawLine(col, Offset(w * 0.18f, h * 0.90f), Offset(w * 0.82f, h * 0.10f), strokeWidth = (h * 0.06f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(w * 0.82f, h * 0.90f), Offset(w * 0.18f, h * 0.10f), strokeWidth = (h * 0.06f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
-                        drawCircle(col, radius = h * 0.30f, center = Offset(cx, cy))
-                        drawCircle(Color(0xFF121722), radius = h * 0.13f, center = Offset(cx, cy - h * 0.02f))
-                        drawRect(col, Offset(cx - w * 0.12f, cy + h * 0.24f), Size(w * 0.24f, h * 0.10f))
-                    }
-                    InsigniaShape.AVIATOR_WINGS, InsigniaShape.SENIOR_AVIATOR_WINGS, InsigniaShape.MASTER_AVIATOR_WINGS -> {
-                        val shape = medal.insigniaShape
-                        drawLine(col, Offset(w * 0.04f, cy - h * 0.02f), Offset(w * 0.96f, cy - h * 0.02f), strokeWidth = (h * 0.10f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(w * 0.12f, cy + h * 0.13f), Offset(w * 0.88f, cy + h * 0.13f), strokeWidth = (h * 0.075f).coerceAtLeast(2.2f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(w * 0.22f, cy + h * 0.26f), Offset(w * 0.78f, cy + h * 0.26f), strokeWidth = (h * 0.055f).coerceAtLeast(1.6f), cap = StrokeCap.Round)
-                        val shield = Path().apply {
-                            moveTo(cx - w * 0.09f, cy - h * 0.18f)
-                            lineTo(cx + w * 0.09f, cy - h * 0.18f)
-                            lineTo(cx + w * 0.09f, cy + h * 0.10f)
-                            quadraticTo(cx + w * 0.07f, cy + h * 0.28f, cx, cy + h * 0.36f)
-                            quadraticTo(cx - w * 0.07f, cy + h * 0.28f, cx - w * 0.09f, cy + h * 0.10f)
-                            close()
-                        }
-                        drawPath(shield, col)
-                        drawPath(shield, Color(0xFF121722).copy(alpha = 0.55f), style = Stroke(width = 1.1f))
-                        if (shape == InsigniaShape.MASTER_AVIATOR_WINGS) {
-                            drawLaurelWreathArcs(Offset(cx, h * 0.14f), h * 0.15f, col, (h * 0.05f).coerceAtLeast(1.4f))
-                        }
-                        if (shape != InsigniaShape.AVIATOR_WINGS) {
-                            drawStar(Offset(cx, h * 0.14f), h * 0.12f, h * 0.05f, col)
-                        }
-                    }
-                    // EIB: rifle bar only. CIB: rifle bar inside an oak wreath.
-                    InsigniaShape.RIFLE_BADGE, InsigniaShape.CIB_BADGE -> {
-                        val silver = Color(0xFFDDE3EC)
-                        if (medal.insigniaShape == InsigniaShape.CIB_BADGE) {
-                            drawLaurelWreathArcs(Offset(cx, cy), h * 0.42f, silver, (h * 0.09f).coerceAtLeast(2.5f))
-                        }
-                        drawRoundRect(
-                            color = col,
-                            topLeft = Offset(w * 0.14f, h * 0.28f),
-                            size = Size(w * 0.72f, h * 0.44f),
-                            cornerRadius = CornerRadius(4f, 4f)
-                        )
-                        drawRoundRect(
-                            color = silver,
-                            topLeft = Offset(w * 0.14f, h * 0.28f),
-                            size = Size(w * 0.72f, h * 0.44f),
-                            cornerRadius = CornerRadius(4f, 4f),
-                            style = Stroke(1.6f)
-                        )
-                        // Musket silhouette + bayonet
-                        drawLine(silver, Offset(w * 0.20f, cy + 1f), Offset(w * 0.80f, cy - 1f), strokeWidth = (h * 0.09f).coerceAtLeast(2.8f), cap = StrokeCap.Round)
-                        drawLine(silver, Offset(w * 0.22f, cy + 4f), Offset(w * 0.34f, cy + 1f), strokeWidth = (h * 0.11f).coerceAtLeast(3.2f), cap = StrokeCap.Round)
-                    }
-                    // CAB: bayonet over a grenade inside an oak wreath
-                    InsigniaShape.CAB_BADGE -> {
-                        val silver = Color(0xFFDDE3EC)
-                        drawLaurelWreathArcs(Offset(cx, cy), h * 0.44f, silver, (h * 0.08f).coerceAtLeast(2.2f))
-                        drawOval(col, topLeft = Offset(cx - h * 0.14f, cy - h * 0.04f), size = Size(h * 0.28f, h * 0.32f))
-                        drawLine(silver, Offset(cx, h * 0.12f), Offset(cx, h * 0.80f), strokeWidth = (w * 0.05f).coerceAtLeast(2.4f), cap = StrokeCap.Round)
-                        drawLine(silver, Offset(cx - h * 0.10f, cy - h * 0.10f), Offset(cx + h * 0.10f, cy - h * 0.10f), strokeWidth = (w * 0.04f).coerceAtLeast(2.0f), cap = StrokeCap.Round)
-                    }
-                    // EFMB: cross over a stretcher. CMB: cross and caduceus inside an oak wreath.
-                    InsigniaShape.MEDICAL_BADGE, InsigniaShape.COMBAT_MEDICAL_BADGE -> {
-                        val combat = medal.insigniaShape == InsigniaShape.COMBAT_MEDICAL_BADGE
-                        if (combat) {
-                            drawLaurelWreathArcs(Offset(cx, cy), h * 0.44f, Color(0xFFDDE3EC), (h * 0.08f).coerceAtLeast(2.2f))
-                        } else {
-                            drawLine(Color(0xFFDDE3EC), Offset(w * 0.10f, cy - h * 0.08f), Offset(w * 0.90f, cy - h * 0.08f), strokeWidth = (h * 0.05f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
-                            drawLine(Color(0xFFDDE3EC), Offset(w * 0.10f, cy + h * 0.08f), Offset(w * 0.90f, cy + h * 0.08f), strokeWidth = (h * 0.05f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
-                        }
-                        drawCircle(col.copy(alpha = 0.28f), radius = h * 0.35f, center = Offset(cx, cy))
-                        drawLine(col, Offset(cx, h * 0.22f), Offset(cx, h * 0.78f), strokeWidth = (w * 0.08f).coerceAtLeast(3.2f))
-                        drawLine(col, Offset(cx - w * 0.16f, cy), Offset(cx + w * 0.16f, cy), strokeWidth = (w * 0.08f).coerceAtLeast(3.2f))
-                        if (combat) {
-                            val gold = Color(0xFFF2D272)
-                            drawLine(gold, Offset(cx, h * 0.16f), Offset(cx, h * 0.84f), strokeWidth = (w * 0.025f).coerceAtLeast(1.4f))
-                            drawLine(gold, Offset(cx - h * 0.12f, h * 0.24f), Offset(cx + h * 0.12f, h * 0.24f), strokeWidth = (w * 0.025f).coerceAtLeast(1.4f), cap = StrokeCap.Round)
-                        }
-                    }
-                    InsigniaShape.TORCH_CREST -> {
-                        drawLine(col, Offset(w * 0.12f, cy + h * 0.06f), Offset(w * 0.88f, cy + h * 0.06f), strokeWidth = (h * 0.09f).coerceAtLeast(2.8f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(cx, h * 0.36f), Offset(cx, h * 0.84f), strokeWidth = (w * 0.07f).coerceAtLeast(2.6f), cap = StrokeCap.Round)
-                        drawStar(Offset(cx, h * 0.26f), h * 0.19f, h * 0.09f, Color(0xFFFF9F43))
-                    }
-                    InsigniaShape.AIR_ASSAULT_WINGS -> {
-                        drawLine(col, Offset(w * 0.10f, cy), Offset(w * 0.90f, cy), strokeWidth = (h * 0.10f).coerceAtLeast(3.0f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(w * 0.18f, cy + h * 0.15f), Offset(w * 0.82f, cy + h * 0.15f), strokeWidth = (h * 0.07f).coerceAtLeast(2.0f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(cx - w * 0.22f, h * 0.22f), Offset(cx + w * 0.22f, h * 0.22f), strokeWidth = (h * 0.08f).coerceAtLeast(2.4f), cap = StrokeCap.Round)
-                        drawLine(col, Offset(cx, h * 0.22f), Offset(cx, h * 0.76f), strokeWidth = (w * 0.055f).coerceAtLeast(2.4f))
-                        drawOval(col, topLeft = Offset(cx - w * 0.09f, cy - h * 0.10f), size = Size(w * 0.18f, h * 0.24f))
-                    }
-                    InsigniaShape.CYBER_CREST -> {
-                        drawHexagon(Offset(cx, cy), h * 0.43f, col.copy(alpha = 0.22f), col)
-                        val bolt = Path().apply {
-                            moveTo(cx + w * 0.06f, h * 0.20f)
-                            lineTo(cx - w * 0.08f, cy + h * 0.03f)
-                            lineTo(cx + w * 0.02f, cy + h * 0.03f)
-                            lineTo(cx - w * 0.06f, h * 0.80f)
-                        }
-                        drawPath(bolt, color = col, style = Stroke(width = (w * 0.052f).coerceAtLeast(2.2f), cap = StrokeCap.Round))
-                    }
-                    InsigniaShape.INTEL_CREST -> {
-                        val diamond = Path().apply {
-                            moveTo(cx, h * 0.12f)
-                            lineTo(cx + w * 0.24f, cy)
-                            lineTo(cx, h * 0.88f)
-                            lineTo(cx - w * 0.24f, cy)
-                            close()
-                        }
-                        drawPath(diamond, color = col.copy(alpha = 0.28f))
-                        drawPath(diamond, color = col, style = Stroke((w * 0.045f).coerceAtLeast(2.0f)))
-                        drawStar(Offset(cx, cy), h * 0.20f, h * 0.08f, Color.White, points = 4)
-                    }
-                    InsigniaShape.EOD_BADGE -> {
-                        drawLaurelWreathArcs(Offset(cx, cy), h * 0.42f, col, (h * 0.085f).coerceAtLeast(2.4f))
-                        drawStar(Offset(cx, h * 0.26f), h * 0.17f, h * 0.08f, Color(0xFFFFC145))
-                        drawOval(col, topLeft = Offset(cx - w * 0.10f, cy - h * 0.04f), size = Size(w * 0.20f, h * 0.36f))
-                    }
-                    InsigniaShape.LOGISTICS_CREST -> {
-                        drawCircle(col, radius = h * 0.38f, center = Offset(cx, cy), style = Stroke((w * 0.05f).coerceAtLeast(2.2f)))
-                        drawLine(col, Offset(cx - w * 0.22f, cy), Offset(cx + w * 0.22f, cy), strokeWidth = 2.2f)
-                        drawLine(col, Offset(cx, h * 0.14f), Offset(cx, h * 0.86f), strokeWidth = 2.2f)
-                        drawCircle(col, radius = h * 0.12f, center = Offset(cx, cy))
-                    }
-                    InsigniaShape.STAFF_CREST -> {
-                        drawLine(col, Offset(cx - w * 0.24f, h * 0.22f), Offset(cx + w * 0.24f, h * 0.78f), strokeWidth = 2.2f, cap = StrokeCap.Round)
-                        drawLine(col, Offset(cx + w * 0.24f, h * 0.22f), Offset(cx - w * 0.24f, h * 0.78f), strokeWidth = 2.2f, cap = StrokeCap.Round)
-                        drawCircle(Color(0xFF14181F), radius = h * 0.36f, center = Offset(cx, cy))
-                        drawCircle(col, radius = h * 0.36f, center = Offset(cx, cy), style = Stroke(1.8f))
-                        drawStar(Offset(cx, cy), h * 0.28f, h * 0.12f, col)
-                    }
+                    // Art 6b: every other badge uses the same metal art as the uniform, drawn large
+                    else -> drawDetailedChestSchoolBadge(
+                        shape = medal.insigniaShape ?: InsigniaShape.WINGS,
+                        center = Offset(cx, cy + h * 0.04f),
+                        badgeW = w * 0.82f,
+                        badgeH = h * 0.70f,
+                        col = col
+                    )
                 }
             }
         }
