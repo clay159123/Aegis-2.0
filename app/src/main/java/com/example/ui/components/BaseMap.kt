@@ -407,64 +407,33 @@ private fun DrawScope.drawBase(
     fun r(x: Float, y: Float, w: Float, h: Float) = Rect(Offset(x * u, y * u), Size(w * u, h * u))
     val band = baseDevelopmentBand(hqLevel)
 
-    // Ground with a few darker patches
-    drawRect(Ground)
+    // Art 2a: grass with texture, then roads, trees and the perimeter by Command HQ band
+    drawRect(BaseArt.Grass)
     listOf(Triple(30f, 70f, 22f), Triple(160f, 140f, 26f), Triple(60f, 260f, 20f), Triple(175f, 250f, 18f)).forEach { (x, y, rad) ->
-        drawOval(GroundDark, Offset((x - rad) * u, (y - rad * 0.6f) * u), Size(rad * 2 * u, rad * 1.2f * u))
+        drawOval(BaseArt.GrassDark.copy(alpha = 0.22f), Offset((x - rad) * u, (y - rad * 0.6f) * u), Size(rad * 2 * u, rad * 1.2f * u))
     }
-
-    // Roads: dirt, gravel, paved
-    val roadCol = when (band) { 1 -> Color(0xFF8C7A55); 2 -> Color(0xFF9A988F); else -> Color(0xFF55585A) }
-    listOf(
-        r(68f, 88f, 3f, 200f), r(129f, 88f, 3f, 344f), r(10f, 155f, 180f, 6f), r(10f, 223f, 180f, 6f), r(10f, 88f, 180f, 5f),
-        r(10f, 287f, 180f, 6f), r(10f, 371f, 180f, 6f), r(129f, 430f, 61f, 5f)
-    ).forEach {
-        drawRect(roadCol, it.topLeft, it.size)
-    }
-    if (band == 3) {
-        drawLine(Color(0xFFE8E2C8), Offset(10f * u, 158f * u), Offset(190f * u, 158f * u), strokeWidth = 0.6f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f * u, 3f * u)))
-    }
-
-    // Session 37: more detail: a tree line outside the wall, traffic on the roads, street lamps on a paved post
-    for (i in 0..15) {
-        val tx = (8f + i * 12.2f) * u
-        val ty = (12f + (i % 3) * 2.5f) * u
-        drawCircle(Color(0xFF3F4C2E), (4.2f + (i % 2)) * u, Offset(tx, ty))
-        drawCircle(Color(0xFF4E5E38), (2.6f + (i % 2) * 0.6f) * u, Offset(tx - 1.2f * u, ty - 1.2f * u))
-    }
-    if (band >= 2) {
-        listOf(Triple(40f, 156f, Color(0xFF55603F)), Triple(150f, 224f, Color(0xFF6B6F72)), Triple(96f, 288f, Color(0xFF55603F)), Triple(130f, 400f, Color(0xFF6B6F72)))
-            .forEachIndexed { idx, (vx, vy, col) ->
-                val vertical = idx == 3
-                val sz = if (vertical) Size(3.4f * u, 7f * u) else Size(7f * u, 3.4f * u)
-                drawRoundRect(col, Offset(vx * u, vy * u), sz, CornerRadius(0.8f * u))
-                drawRect(Color(0xFF2A2E25).copy(alpha = 0.6f), Offset(vx * u + (if (vertical) 0.5f else 5f) * u, vy * u + (if (vertical) 0.5f else 0.5f) * u),
-                    if (vertical) Size(2.4f * u, 1.6f * u) else Size(1.6f * u, 2.4f * u))
-            }
-    }
-
-    // Item 159: a home installation's perimeter: wire fence, then chain-link on posts, then a masonry wall
-    val wall = r(3f, 26f, 194f, 410f)
-    fun fencePosts(step: Float, radius: Float, col: Color) {
-        var x = wall.left
-        while (x <= wall.right) { drawCircle(col, radius, Offset(x, wall.top)); drawCircle(col, radius, Offset(x, wall.bottom)); x += step * u }
-        var y = wall.top
-        while (y <= wall.bottom) { drawCircle(col, radius, Offset(wall.left, y)); drawCircle(col, radius, Offset(wall.right, y)); y += step * u }
-    }
-    when (band) {
-        1 -> {
-            drawRect(Color(0xFF9DA39A), wall.topLeft, wall.size, style = Stroke(width = 0.7f * u))
-            fencePosts(12f, 0.9f * u, Color(0xFF7A6A4C))
+    with(BaseArt) {
+        grassTexture(u, MAP_W, MAP_H)
+        val roadRects = listOf(
+            r(68f, 88f, 3f, 200f), r(129f, 88f, 3f, 344f), r(10f, 155f, 180f, 6f), r(10f, 223f, 180f, 6f), r(10f, 88f, 180f, 5f),
+            r(10f, 287f, 180f, 6f), r(10f, 371f, 180f, 6f), r(129f, 430f, 61f, 5f)
+        )
+        roads(u, band, roadRects) { it.width > it.height }
+        // Tree line outside the wall
+        for (i in 0..15) tree((8f + i * 12.2f) * u, (16f + (i % 3) * 2.5f) * u, 4.2f + (i % 2), 1f * u)
+        // Trees inside the wall along the margins: a few at first, planted rows once the base grows
+        val margin = listOf(64f, 120f, 190f, 258f, 330f, 405f)
+        val count = when (band) { 1 -> 2; 2 -> 4; else -> 6 }
+        margin.take(count).forEachIndexed { i, y ->
+            tree(6.5f * u, y * u, 2.3f + (i % 2) * 0.3f, u)
+            tree(193.5f * u, (y + 9f) * u, 2.3f + ((i + 1) % 2) * 0.3f, u)
         }
-        2 -> {
-            drawRect(Color(0xFFB8BDC2), wall.topLeft, wall.size, style = Stroke(width = 1.4f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(0.8f * u, 0.6f * u))))
-            fencePosts(10f, 1.1f * u, Color(0xFF8A8F94))
+        if (band >= 2) {
+            for (y in listOf(155f, 223f, 287f, 371f)) { streetlight(72.6f, y - 0.6f, u); streetlight(133.6f, y - 0.6f, u) }
+            car(40f, 156.5f, u, Color(0xFF55603F)); car(150f, 224.5f, u, Color(0xFF6B6F72)); car(96f, 288.5f, u, Color(0xFF8E4A2E))
+            car(129.2f, 398f, u, Color(0xFF55603F), vertical = true)
         }
-        else -> {
-            drawRect(Color(0xFFB9A88A), wall.topLeft, wall.size, style = Stroke(width = 3.2f * u))
-            drawRect(Ink.copy(alpha = 0.25f), wall.topLeft, wall.size, style = Stroke(width = 0.5f * u))
-            fencePosts(16f, 1.8f * u, Color(0xFFCFC3A6))
-        }
+        perimeter(u, band, r(3f, 26f, 194f, 410f))
     }
 
     BASE_PLOTS.forEach { plot ->
@@ -482,25 +451,14 @@ private fun DrawScope.drawBase(
         val unlocked = TacticalCalculator.isFacilityUnlocked(type, facilities)
         when {
             !unlocked -> {
-                drawRect(Color(0xFFC8C3B3), Offset(rect.left + 3 * u, rect.top + 3 * u), Size(rect.width - 6 * u, rect.height - 14 * u),
-                    style = Stroke(width = 0.8f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f * u, 2f * u))))
-                drawCentered(tm, if (type == FacilityType.SF_COMPOUND) "Form an SF squad" else "HQ ${type.unlockHqLevel}",
-                    Offset(rect.center.x, rect.center.y - 5 * u), 9f, Color(0xFFE6E0CC))
-                drawPlotLabel(tm, plot.label, rect, u, Color(0xFFC8C3B3))
+                // Art 2a: an unbuilt lot is plain grass; the label says what it needs
+                drawPlotLabel(tm, "${plot.label} • " + if (type == FacilityType.SF_COMPOUND) "form an SF squad" else "HQ ${type.unlockHqLevel}", rect, u, Color(0xFFC8C3B3))
             }
             state.level <= 0 && !state.isUpgrading -> {
-                // Empty lot ready to build: survey stakes and string line
-                val l = rect.left + 8 * u; val t = rect.top + 10 * u; val rr = rect.right - 8 * u; val b = rect.bottom - 16 * u
-                drawRect(Color(0xFFE0B655), Offset(l, t), Size(rr - l, b - t), style = Stroke(width = 0.6f * u))
-                listOf(Offset(l, t), Offset(rr, t), Offset(l, b), Offset(rr, b)).forEach { drawCircle(Color(0xFFE0B655), 1.2f * u, it) }
-                drawCentered(tm, "Build", Offset(rect.center.x, rect.center.y - 3 * u), 9f, Color(0xFFF3DFA2))
-                drawPlotLabel(tm, plot.label, rect, u, Label)
+                drawPlotLabel(tm, "${plot.label} • Build", rect, u, Color(0xFFF3DFA2))
             }
             else -> {
-                if (type == FacilityType.AIRFIELD) drawAirfield(rect, u, buildingArtStage(state.level.coerceAtLeast(1)))
-                // Session 38: the Main Gate's own art (guard shack, MP station, hardened gate)
-                else if (type == FacilityType.MAIN_GATE) drawGate(rect, u, buildingArtStage(state.level.coerceAtLeast(1)))
-                else drawBuilding(type, rect, u, buildingArtStage(state.level.coerceAtLeast(1)))
+                with(BaseArt) { drawFacility(type, rect, u, buildingArtStage(state.level.coerceAtLeast(1))) }
                 if (state.isUpgrading) drawConstruction(rect, u, state, now)
                 drawPlotLabel(tm, "${plot.label} ${state.level}", rect, u, Label)
             }
@@ -518,206 +476,6 @@ private fun DrawScope.drawPlotLabel(tm: TextMeasurer, text: String, rect: Rect, 
     val y = rect.bottom - m.size.height - 0.5f * u
     drawRoundRect(Color.Black.copy(alpha = 0.35f), Offset(rect.center.x - m.size.width / 2f - 2 * u, y), Size(m.size.width + 4 * u, m.size.height.toFloat()), CornerRadius(2 * u))
     drawText(m, topLeft = Offset(rect.center.x - m.size.width / 2f, y))
-}
-
-private fun DrawScope.drawBuilding(type: FacilityType, rect: Rect, u: Float, stage: Int) {
-    val cx = rect.center.x
-    val base = rect.bottom - 12 * u
-    val w = rect.width
-    when (stage) {
-        1 -> {
-            // GP tent: canvas with a ridge and a door flap
-            val half = w * 0.32f
-            val tent = Path().apply { moveTo(cx - half, base); lineTo(cx - half * 0.7f, base - 20 * u); lineTo(cx + half * 0.7f, base - 20 * u); lineTo(cx + half, base); close() }
-            drawPath(tent, Canvas1)
-            drawLine(Canvas1Shade, Offset(cx - half * 0.7f, base - 20 * u), Offset(cx + half * 0.7f, base - 20 * u), strokeWidth = 1.2f * u)
-            drawPath(Path().apply { moveTo(cx - 4 * u, base); lineTo(cx, base - 10 * u); lineTo(cx + 4 * u, base); close() }, Canvas1Shade)
-            drawPath(tent, Ink.copy(alpha = 0.5f), style = Stroke(width = 0.5f * u))
-        }
-        2 -> {
-            // Wood frame hut: plank walls under a pitched roof
-            val half = w * 0.33f
-            drawRect(Wood, Offset(cx - half, base - 16 * u), Size(half * 2, 16 * u))
-            for (i in 1..3) drawLine(WoodRoof, Offset(cx - half, base - 16 * u + i * 4 * u), Offset(cx + half, base - 16 * u + i * 4 * u), strokeWidth = 0.4f * u)
-            drawPath(Path().apply { moveTo(cx - half - 2 * u, base - 16 * u); lineTo(cx, base - 27 * u); lineTo(cx + half + 2 * u, base - 16 * u); close() }, WoodRoof)
-            drawRect(Ink.copy(alpha = 0.7f), Offset(cx - 3 * u, base - 9 * u), Size(6 * u, 9 * u))
-        }
-        else -> {
-            // Block building (stage 3), inside its own walled yard at Lv 10 (stage 4)
-            val half = w * if (stage == 4) 0.30f else 0.34f
-            if (stage == 4) {
-                drawRect(Concrete, Offset(rect.left + 3 * u, rect.top + 4 * u), Size(rect.width - 6 * u, rect.height - 16 * u), style = Stroke(width = 1.4f * u))
-            }
-            drawRect(Block, Offset(cx - half, base - 22 * u), Size(half * 2, 22 * u))
-            drawRect(BlockRoof, Offset(cx - half - 1 * u, base - 24 * u), Size(half * 2 + 2 * u, 3 * u))
-            for (i in -1..1) drawRect(Color(0xFF3F4A55), Offset(cx + i * half * 0.6f - 2.5f * u, base - 17 * u), Size(5 * u, 4 * u))
-            drawRect(Ink.copy(alpha = 0.75f), Offset(cx - 3 * u, base - 9 * u), Size(6 * u, 9 * u))
-        }
-    }
-    drawBuildingSignature(type, rect, u, stage)
-}
-
-/** A small detail that tells the buildings apart at a glance. */
-private fun DrawScope.drawBuildingSignature(type: FacilityType, rect: Rect, u: Float, stage: Int) {
-    val cx = rect.center.x
-    val base = rect.bottom - 12 * u
-    val right = rect.right - 6 * u
-    when (type) {
-        FacilityType.COMMAND_HQ -> {
-            drawLine(Color(0xFFDADADA), Offset(right, base), Offset(right, base - 30 * u), strokeWidth = 0.8f * u)
-            drawRect(Color(0xFF2F5FA6), Offset(right, base - 30 * u), Size(8 * u, 5 * u))
-            drawRect(Color(0xFFE8C860), Offset(right + 1 * u, base - 29 * u), Size(2 * u, 2 * u))
-        }
-        FacilityType.BARRACKS -> if (stage == 1) {
-            // A second, smaller tent beside the first
-            val sx = rect.left + 9 * u
-            drawPath(Path().apply { moveTo(sx - 6 * u, base); lineTo(sx, base - 11 * u); lineTo(sx + 6 * u, base); close() }, Canvas1)
-        } else {
-            for (i in 0..2) drawRect(Color(0xFFE4D79F), Offset(cx - 13 * u + i * 9 * u, base - 13 * u), Size(4 * u, 2 * u))
-        }
-        FacilityType.LOGISTICS_DEPOT -> {
-            for ((dx, dy) in listOf(0f to 0f, 6f to 0f, 3f to -5f)) {
-                drawRect(Color(0xFF7A6A3C), Offset(right - 10 * u + dx * u, base - 5 * u + dy * u), Size(5 * u, 5 * u))
-                drawRect(Ink.copy(alpha = 0.5f), Offset(right - 10 * u + dx * u, base - 5 * u + dy * u), Size(5 * u, 5 * u), style = Stroke(0.4f * u))
-            }
-        }
-        FacilityType.ARMORY_WORKSHOP -> {
-            // Sandbag berm and a red ordnance stripe
-            for (i in 0..3) drawOval(Color(0xFFB8A57A), Offset(rect.left + 4 * u + i * 4.5f * u, base - 3 * u), Size(5 * u, 3 * u))
-            drawRect(Color(0xFFA33A2F), Offset(cx - 8 * u, base - (if (stage == 1) 14 else 20) * u), Size(16 * u, 1.6f * u))
-        }
-        FacilityType.RECON_ARRAY -> {
-            drawLine(Color(0xFFCCCCCC), Offset(right, base), Offset(right, base - 32 * u), strokeWidth = 0.8f * u)
-            drawLine(Color(0xFFCCCCCC), Offset(right - 3 * u, base - 24 * u), Offset(right + 3 * u, base - 24 * u), strokeWidth = 0.6f * u)
-            drawArc(Color(0xFFE2E2E2), 200f, 140f, false, Offset(rect.left + 5 * u, base - 30 * u), Size(10 * u, 10 * u), style = Stroke(1.2f * u))
-        }
-        FacilityType.DFAC -> {
-            drawRect(Color(0xFF6B6B6B), Offset(cx + 10 * u, base - (if (stage == 1) 22 else 30) * u), Size(3 * u, 8 * u))
-            drawCircle(Color.White.copy(alpha = 0.5f), 2.5f * u, Offset(cx + 12 * u, base - (if (stage == 1) 26 else 34) * u))
-        }
-        FacilityType.TRAINING_RANGE -> {
-            // Target stands down the lane
-            for (i in 0..2) {
-                val tx = rect.left + 8 * u + i * 8 * u
-                drawLine(Color(0xFF5A4630), Offset(tx, rect.top + 15 * u), Offset(tx, rect.top + 8 * u), strokeWidth = 0.6f * u)
-                drawCircle(Color(0xFFEDE3C6), 2.6f * u, Offset(tx, rect.top + 7 * u))
-                drawCircle(Color(0xFFA33A2F), 1f * u, Offset(tx, rect.top + 7 * u))
-            }
-        }
-        FacilityType.AID_STATION -> {
-            val cy = base - (if (stage == 1) 12 else 19) * u
-            drawRect(Color.White, Offset(cx - 4 * u, cy - 4 * u), Size(8 * u, 8 * u))
-            drawRect(Color(0xFFC0322B), Offset(cx - 1 * u, cy - 3 * u), Size(2 * u, 6 * u))
-            drawRect(Color(0xFFC0322B), Offset(cx - 3 * u, cy - 1 * u), Size(6 * u, 2 * u))
-        }
-        // Item 159: 34-foot jump towers from the start, then a rappel tower; the black and gold tab pennant
-        FacilityType.AIRBORNE_RANGER_CENTER -> {
-            val steel = Color(0xFF8A8F94)
-            val tx = rect.right - 15 * u
-            val towerH = (if (stage == 1) 24 else 30) * u
-            drawLine(steel, Offset(tx, base), Offset(tx, base - towerH), strokeWidth = 1f * u)
-            drawLine(steel, Offset(tx + 8 * u, base), Offset(tx + 8 * u, base - towerH), strokeWidth = 1f * u)
-            drawLine(steel, Offset(tx, base - towerH * 0.5f), Offset(tx + 8 * u, base - towerH * 0.5f), strokeWidth = 0.5f * u)
-            drawRect(Color(0xFF6E7378), Offset(tx - 1 * u, base - towerH - 2 * u), Size(10 * u, 3 * u))
-            // Cable run off the tower
-            drawLine(Color(0xFFDADADA), Offset(tx + 9 * u, base - towerH), Offset(rect.right - 2 * u, base - 4 * u), strokeWidth = 0.4f * u)
-            if (stage >= 2) {
-                // Black and gold pennant flying from the tower platform
-                val py = base - towerH - 2 * u
-                drawLine(Color(0xFFDADADA), Offset(tx + 4 * u, py), Offset(tx + 4 * u, py - 7 * u), strokeWidth = 0.6f * u)
-                drawRect(Color(0xFF1A1A1A), Offset(tx + 4 * u, py - 7 * u), Size(7 * u, 4 * u))
-                drawRect(Color(0xFFE0B84A), Offset(tx + 4 * u, py - 5.6f * u), Size(7 * u, 1f * u))
-            }
-            if (stage >= 3) {
-                // Rappel tower at the lot's left edge: a timber tower with two ropes down its face
-                val rx = rect.left + 3 * u
-                drawRect(Wood, Offset(rx, base - 30 * u), Size(6 * u, 30 * u))
-                drawRect(WoodRoof, Offset(rx - 1 * u, base - 32 * u), Size(8 * u, 3 * u))
-                drawLine(Color(0xFFEDE3C6), Offset(rx + 1.8f * u, base - 29 * u), Offset(rx + 1.8f * u, base), strokeWidth = 0.4f * u)
-                drawLine(Color(0xFFEDE3C6), Offset(rx + 4.2f * u, base - 29 * u), Offset(rx + 4.2f * u, base), strokeWidth = 0.4f * u)
-            }
-        }
-        // Item 118: the SF Compound's own fence, then team rooms and a dive tank as it grows (item 159: jump tower moved)
-        FacilityType.SF_COMPOUND -> {
-            val fence = Rect(Offset(rect.left + 2 * u, rect.top + 4 * u), Size(rect.width - 4 * u, rect.height - 16 * u))
-            drawRect(if (stage >= 3) Concrete else Color(0xFF9DA39A), fence.topLeft, fence.size,
-                style = Stroke(width = (if (stage >= 3) 1.6f else 0.8f) * u, pathEffect = if (stage >= 3) null else PathEffect.dashPathEffect(floatArrayOf(1.5f * u, 1.5f * u))))
-            // Black and red SF pennant
-            drawLine(Color(0xFFDADADA), Offset(rect.left + 8 * u, base), Offset(rect.left + 8 * u, base - 26 * u), strokeWidth = 0.8f * u)
-            drawRect(Color(SF_PATCH_BLACK), Offset(rect.left + 8 * u, base - 26 * u), Size(9 * u, 5 * u))
-            drawRect(Color(SF_PATCH_RED), Offset(rect.left + 8 * u, base - 23.5f * u), Size(9 * u, 1.4f * u))
-            if (stage == 4) {
-                // Dive tank
-                drawRect(Color(0xFF2F6F8F), Offset(rect.left + 22 * u, base - 8 * u), Size(16 * u, 7 * u))
-                drawRect(Color(0xFFBFD9E6), Offset(rect.left + 22 * u, base - 8 * u), Size(16 * u, 7 * u), style = Stroke(0.5f * u))
-            }
-        }
-        else -> Unit
-    }
-}
-
-private fun DrawScope.drawAirfield(rect: Rect, u: Float, stage: Int) {
-    val stripTop = rect.top + 10 * u
-    val stripW = rect.width - 62 * u
-    when (stage) {
-        1 -> drawRect(Color(0xFF9A8458), Offset(rect.left + 6 * u, stripTop), Size(stripW, 16 * u))
-        else -> {
-            drawRect(Color(0xFF4F5254), Offset(rect.left + 6 * u, stripTop), Size(stripW, 16 * u))
-            drawLine(Color(0xFFEDEBE0), Offset(rect.left + 12 * u, stripTop + 8 * u), Offset(rect.left + stripW, stripTop + 8 * u), strokeWidth = 0.8f * u,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f * u, 4f * u)))
-        }
-    }
-    val pad = Offset(rect.right - 28 * u, stripTop + 10 * u)
-    drawCircle(if (stage == 1) Color(0xFF9A8458) else Color(0xFF4F5254), (if (stage >= 3) 15f else 11f) * u, pad)
-    if (stage >= 2) {
-        drawCircle(Color(0xFFEDEBE0), (if (stage >= 3) 13f else 9f) * u, pad, style = Stroke(0.7f * u))
-        val h = 4 * u
-        drawLine(Color(0xFFEDEBE0), Offset(pad.x - h, pad.y - h), Offset(pad.x - h, pad.y + h), strokeWidth = 1f * u)
-        drawLine(Color(0xFFEDEBE0), Offset(pad.x + h, pad.y - h), Offset(pad.x + h, pad.y + h), strokeWidth = 1f * u)
-        drawLine(Color(0xFFEDEBE0), Offset(pad.x - h, pad.y), Offset(pad.x + h, pad.y), strokeWidth = 1f * u)
-    }
-    if (stage >= 3) {
-        // Hangar with an arched roof
-        val hx = rect.left + 8 * u
-        val hy = rect.bottom - 22 * u
-        drawRect(Block, Offset(hx, hy), Size(26 * u, 10 * u))
-        drawArc(BlockRoof, 180f, 180f, true, Offset(hx, hy - 6 * u), Size(26 * u, 12 * u))
-    }
-    if (stage == 4) drawRect(Concrete, Offset(rect.left + 3 * u, rect.top + 3 * u), Size(rect.width - 6 * u, rect.height - 14 * u), style = Stroke(1.2f * u))
-}
-
-/** Session 38 (item 72): the Access Control Point by art stage: 1 guard shack, 2-3 MP station, 4 hardened gate. */
-private fun DrawScope.drawGate(rect: Rect, u: Float, stage: Int) {
-    val cx = rect.center.x
-    val base = rect.bottom - 14 * u
-    drawLine(Color(0xFFDADADA), Offset(cx, base), Offset(cx, base - 28 * u), strokeWidth = 0.8f * u)
-    drawRect(Color(0xFF2F5FA6), Offset(cx, base - 28 * u), Size(10 * u, 6 * u))
-    // Barrier arm
-    drawLine(Color(0xFFD8D3C0), Offset(rect.left + 6 * u, base), Offset(rect.right - 18 * u, base), strokeWidth = 1.4f * u)
-    for (i in 0..4) drawLine(Color(0xFFC0322B), Offset(rect.left + 8 * u + i * 6 * u, base), Offset(rect.left + 10 * u + i * 6 * u, base), strokeWidth = 1.4f * u)
-    when (stage) {
-        1 -> {
-            // Guard shack
-            drawRect(Wood, Offset(rect.right - 16 * u, base - 10 * u), Size(10 * u, 10 * u))
-            drawRect(WoodRoof, Offset(rect.right - 17 * u, base - 12 * u), Size(12 * u, 2.4f * u))
-        }
-        2, 3 -> {
-            // MP station: a block building with a blue light bar and "MP" stripe
-            drawRect(Block, Offset(rect.right - 20 * u, base - 14 * u), Size(16 * u, 14 * u))
-            drawRect(BlockRoof, Offset(rect.right - 21 * u, base - 16 * u), Size(18 * u, 2.6f * u))
-            drawRect(Color(0xFF1F2A3A), Offset(rect.right - 18 * u, base - 11 * u), Size(12 * u, 3 * u))
-            drawRect(Color(0xFF4A8BE0), Offset(rect.right - 15 * u, base - 18 * u), Size(6 * u, 1.6f * u))
-            if (stage == 3) drawRect(Color(0xFF9DA39A), Offset(rect.left + 6 * u, base - 4 * u), Size(rect.width - 28 * u, 0.8f * u))
-        }
-        else -> {
-            // Hardened gate: concrete overwatch, a canopy over the lanes and vehicle barriers
-            drawRect(Concrete, Offset(rect.right - 20 * u, base - 18 * u), Size(16 * u, 18 * u))
-            drawRect(Ink.copy(alpha = 0.5f), Offset(rect.right - 18 * u, base - 15 * u), Size(12 * u, 2.6f * u))
-            drawRect(Color(0xFF4A8BE0), Offset(rect.right - 15 * u, base - 20 * u), Size(6 * u, 1.6f * u))
-            drawRect(Color(0xFF6E7378), Offset(rect.left + 4 * u, base - 22 * u), Size(rect.width - 26 * u, 2.4f * u))
-            for (i in 0..3) drawRect(Concrete, Offset(rect.left + 6 * u + i * 8 * u, base + 2.5f * u), Size(5 * u, 3 * u))
-        }
-    }
 }
 
 private fun DrawScope.drawConstruction(rect: Rect, u: Float, state: FacilityState, now: Long) {
