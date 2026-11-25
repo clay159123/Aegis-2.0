@@ -144,7 +144,8 @@ object SoldierEvents {
 
     fun eventIntervalMillis(): Long = GameTiming.millis(EVENT_INTERVAL_MILLIS)
     fun expiryMillis(): Long = GameTiming.millis(EVENT_EXPIRY_MILLIS)
-    fun awayMillis(): Long = GameTiming.millis(AWAY_MILLIS)
+    /** Session 41: a week of game time. */
+    fun awayMillis(): Long = GameCalendar.daysToMillis(GameCalendar.EVENT_LEAVE_DAYS)
 
     // ---------- Who can raise events ----------
 
@@ -342,7 +343,7 @@ object SoldierEvents {
                 listOf(c("approve", "Fund it (40 CR)", "+60 SUP."), c("decline", "Pass", "Nothing changes.")))
             SoldierEventKind.RECRUITING_DUTY -> SoldierEventCard(e.kind.title,
                 "$who volunteers for a stint on recruiting duty.",
-                listOf(c("approve", "Approve", "Away ${mins(AWAY_MILLIS)} minutes; your next recruit costs $RECRUIT_DISCOUNT_PCT% less."), decline))
+                listOf(c("approve", "Approve", "Away 1 week; your next recruit costs $RECRUIT_DISCOUNT_PCT% less."), decline))
             SoldierEventKind.STANDARDS_WALK -> SoldierEventCard(e.kind.title,
                 "$who wants to walk the line and check standards across the squads.",
                 listOf(c("approve", "Approve", "Every squad +15 cohesion."), decline))
@@ -373,7 +374,7 @@ object SoldierEvents {
                 listOf(c("approve", "Grant it", "+8 PRS; ${pct(PRESS_GAFFE_CHANCE)}% chance of a gaffe: -4 PRS instead."), decline))
             SoldierEventKind.JOINT_SUMMIT -> SoldierEventCard(e.kind.title,
                 "$who is invited to a joint planning summit.",
-                listOf(c("approve", "Send them", "Away ${mins(AWAY_MILLIS)} minutes; +30 INT and +5 PRS."), decline))
+                listOf(c("approve", "Send them", "Away 1 week; +30 INT and +5 PRS."), decline))
             SoldierEventKind.DELEGATION_TOUR -> SoldierEventCard(e.kind.title,
                 "A delegation wants $who to show them the base.",
                 listOf(c("approve", "Host it (50 CR)", "+12 PRS."), decline))
@@ -391,7 +392,7 @@ object SoldierEvents {
                 listOf(c("approve", "Chase it (30 CR)", "+40 INT."), c("decline", "Pass", "Nothing changes.")))
             SoldierEventKind.FAMILY_NEWS -> SoldierEventCard(e.kind.title,
                 "$who just got word: a baby on the way.",
-                listOf(c("approve", "Grant leave", "Away ${mins(AWAY_MILLIS)} minutes; +30 XP."), c("decline", "Not now", "Nothing changes.")))
+                listOf(c("approve", "Grant leave", "Away 1 week; +30 XP."), c("decline", "Not now", "Nothing changes.")))
         }
     }
 

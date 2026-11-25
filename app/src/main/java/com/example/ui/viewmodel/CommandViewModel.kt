@@ -11,6 +11,7 @@ import com.example.domain.SquadCohesionRules
 import com.example.domain.MosEffects
 import com.example.domain.MoraleRules
 import com.example.domain.GameTiming
+import com.example.domain.GameCalendar
 import com.example.domain.MissionNameGenerator
 import com.example.domain.MissionNames
 import com.example.domain.displayTitle
@@ -73,7 +74,9 @@ data class CommandUiState(
     val eventEffects: CommandEventEffects = CommandEventEffects(),
     /** Session 38: Parade Ground activity times. */
     val lastCookoutAtMillis: Long = 0L,
-    val lastParadeActivityAtMillis: Long = 0L
+    val lastParadeActivityAtMillis: Long = 0L,
+    /** Session 41 (item 73): the unit calendar in game days. */
+    val calendarDays: Double = 0.0
 ) {
     fun eventContext(): SoldierEventContext = SoldierEventContext(operators, squads, deployments, facilities, resources, nowMillis)
 
@@ -197,6 +200,7 @@ class CommandViewModel(
                 sfRehearsalBonusPct = data.commander.sfRehearsalBonusPct
             )
             SoldierEvents.effects = eventEffects
+            GameCalendar.today = data.commander.calendarDays
             TacticalCalculator.airfieldLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.AIRFIELD)
             // Session 38: Main Gate recruit discount and the CSM's morale cushion
             TacticalCalculator.mainGateLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.MAIN_GATE)
@@ -248,7 +252,8 @@ class CommandViewModel(
                 lastEventCheckAtMillis = data.commander.lastEventCheckAtMillis,
                 eventEffects = eventEffects,
                 lastCookoutAtMillis = data.commander.lastCookoutAtMillis,
-                lastParadeActivityAtMillis = data.commander.lastParadeActivityAtMillis
+                lastParadeActivityAtMillis = data.commander.lastParadeActivityAtMillis,
+                calendarDays = data.commander.calendarDays
             )
         }
     }.stateIn(
@@ -336,9 +341,18 @@ class CommandViewModel(
             }
             val resolvedRotationTime = if (needsInitRotation) now else initial.rotationUpdatedAtMillis
 
+            // Session 41: the calendar runs offline for as long as anything was in progress
+            val squadsAtLoad = repository.squads.first()
+            val clockFrom = if (initial.lastClockAtMillis > 0L) initial.lastClockAtMillis else now
+            val calendarAtLoad = GameCalendar.advance(
+                initial.calendarDays, GameCalendar.activeIntervals(ops, deps, squadsAtLoad), clockFrom, now
+            )
+            GameCalendar.today = calendarAtLoad
             repository.saveCommanderState(
                 initial.copy(
                     id = 1,
+                    calendarDays = calendarAtLoad,
+                    lastClockAtMillis = now,
                     credits = initial.credits + earnedCredits,
                     supplies = initial.supplies + earnedSupplies,
                     intel = initial.intel + earnedIntel,
@@ -393,12 +407,19 @@ class CommandViewModel(
                     }
                 }
 
+                val tickIntervals = GameCalendar.activeIntervals(state.operators, state.deployments, state.squads)
                 repository.updateCommanderState { cur ->
                     val existingRotating = cur.rotatingMissionIdsCsv.split(",").filter { it.isNotBlank() }
                     val rotationDue = existingRotating.isEmpty() ||
                         cur.rotationUpdatedAtMillis <= 0L ||
                         (now - cur.rotationUpdatedAtMillis) >= TacticalCalculator.STANDALONE_ROTATION_INTERVAL_MILLIS
+                    // Session 41: the calendar moves only while something is in progress
+                    val clockFrom = if (cur.lastClockAtMillis > 0L) cur.lastClockAtMillis else now
+                    val days = GameCalendar.advance(cur.calendarDays, tickIntervals, clockFrom, now)
+                    GameCalendar.today = days
                     cur.copy(
+                        calendarDays = days,
+                        lastClockAtMillis = now,
                         credits = cur.credits + earnedCredits,
                         supplies = cur.supplies + earnedSupplies,
                         intel = cur.intel + earnedIntel,
@@ -424,6 +445,8 @@ class CommandViewModel(
                     showBanner("${backFromLeave.joinToString { it.callsign }} back on duty.")
                 }
                 tickSoldierEvents(state, now)
+                stampServiceRecords(state)
+                enforceMandatoryRetirement(state, now)
                 repairPowRecords(state, now)
                 repairOcsCommissions(state)
                 repairStarterSchools(state)
@@ -814,7 +837,7 @@ class CommandViewModel(
         if (busy.isNotEmpty()) { showBanner("${squad.name} isn't all home: ${busy.joinToString { "${it.callsign} (${it.status.label})" }}."); return }
         val cost = MoraleRules.SQUAD_LEAVE_CREDITS_PER_SOLDIER * members.size
         if (state.resources.credits < cost) { showBanner("Need ${cost.toInt()} CR to send ${squad.name} on leave."); return }
-        val until = now + GameTiming.millis(MoraleRules.SQUAD_LEAVE_MILLIS)
+        val until = now + GameCalendar.daysToMillis(GameCalendar.SQUAD_LEAVE_DAYS)
         viewModelScope.launch {
             repository.updateCommanderState { it.copy(credits = (it.credits - cost).coerceAtLeast(0.0), lastSimulatedAtMillis = now) }
             repository.saveOperators(members.map {
@@ -1862,6 +1885,11 @@ class CommandViewModel(
                     highestRiskSurvived = updatedHighestRisk,
                     timesWounded = updatedWoundedCount,
                     combatPatchHistory = updatedCombatPatchHistory,
+                    // Session 41: dwell time at home after a field op (1:1 with the time actually deployed)
+                    dwellUntilMillis = if (mission.scope == MissionScope.FIELD_COMBAT && outcome != OperatorOutcomeType.FALLEN) {
+                        val ran = (minOf(System.currentTimeMillis(), deployment.startedAtMillis + deployment.durationMillis) - deployment.startedAtMillis).coerceAtLeast(0L)
+                        System.currentTimeMillis() + (ran * GameCalendar.DWELL_RATIO).toLong()
+                    } else op.dwellUntilMillis,
                     status = nextStatus,
                     fallenNote = if (outcome == OperatorOutcomeType.FALLEN) "Killed in action: ${mission.displayTitle}" else op.fallenNote,
                     hqRole = if (outcome == OperatorOutcomeType.FALLEN) null else op.hqRole,
@@ -2046,8 +2074,6 @@ class CommandViewModel(
                 !mission.risk.isTraining &&
                 !staff.retirementRequested &&
                 !staff.transferRequested &&
-                nextSupportCount >= TacticalCalculator.MIN_HQ_STAFF_RETIREMENT_SUPPORT_OPS &&
-                staffTotalOps >= TacticalCalculator.MIN_HQ_STAFF_RETIREMENT_TOTAL_OPS &&
                 TacticalCalculator.evaluateRetirementEligibility(candidateStaff).eligible
             ) {
                 (Random.nextInt(100) < (5 * TacticalCalculator.dfacPetitionFactor(state.facilities) * MoraleRules.petitionFactor(staff)).roundToInt()).also { triggered ->
@@ -2962,7 +2988,48 @@ class CommandViewModel(
         }
     }
 
-    fun approveRetirement(operatorId: String) {
+    /** Session 41: stamp join date, age, prior service and time in grade; restart time in grade on a new rank. */
+    private suspend fun stampServiceRecords(state: CommandUiState) {
+        val today = GameCalendar.today
+        val changed = state.operators.mapNotNull { op ->
+            if (!op.unlocked || op.status.isOutOfActiveService) return@mapNotNull null
+            when {
+                op.joinedDay < 0 -> op.copy(
+                    joinedDay = today,
+                    ageAtJoin = GameCalendar.arrivalAge(op),
+                    priorServiceDays = GameCalendar.typicalServiceYears(op.rank) * GameCalendar.DAYS_PER_YEAR,
+                    rankSinceDay = today,
+                    rankSinceName = op.rank.name,
+                    goodConductSinceDay = today
+                )
+                op.rankSinceName != op.rank.name -> op.copy(rankSinceDay = today, rankSinceName = op.rank.name)
+                else -> null
+            }
+        }
+        if (changed.isNotEmpty()) repository.saveOperators(changed)
+    }
+
+    /** Session 41: 30 years of service, or a general at 62, means retirement now (once they're home). */
+    private val mandatoryRetiring = mutableSetOf<String>()
+
+    private fun enforceMandatoryRetirement(state: CommandUiState, now: Long) {
+        val deployed = state.deployments.flatMap { it.operatorIds }.toSet()
+        state.operators.firstOrNull {
+            it.unlocked && !it.status.isOutOfActiveService && it.status != OperatorStatus.CAPTURED &&
+                it.id !in deployed && it.joinedDay >= 0 && it.id !in mandatoryRetiring && GameCalendar.mustRetire(it)
+        }?.let { mandatoryRetiring += it.id; approveRetirement(it.id, forced = true) }
+    }
+
+    /** Testing build only: tapping the calendar moves it a month (service, ages and time rules; timers keep running). */
+    fun advanceCalendarMonth() {
+        if (GameTiming.MODE != com.example.domain.TimeMode.TESTING) return
+        viewModelScope.launch {
+            repository.updateCommanderState { it.copy(calendarDays = it.calendarDays + GameCalendar.DAYS_PER_MONTH) }
+            showBanner("Calendar advanced a month (testing).")
+        }
+    }
+
+    fun approveRetirement(operatorId: String, forced: Boolean = false) {
         val state = uiState.value
         val op = state.operators.find { it.id == operatorId && it.unlocked } ?: return
         val deployedOpIds = state.deployments.flatMap { it.operatorIds }.toSet()
@@ -2971,7 +3038,7 @@ class CommandViewModel(
             return
         }
         val elig = TacticalCalculator.evaluateRetirementEligibility(op)
-        if (!elig.eligible) {
+        if (!forced && !elig.eligible) {
             showBanner("${op.callsign} not yet eligible: ${elig.reasonText}")
             return
         }
@@ -3018,7 +3085,8 @@ class CommandViewModel(
                 )
             }
             repository.saveOperator(retiredOp)
-            val msg = if (preview.atCap) {
+            val forcedNote = if (forced) "Mandatory retirement: " else ""
+            val msg = forcedNote + if (preview.atCap) {
                 "${op.rank.code} ${op.callsign} honorably retired (+${preview.prestigeAward} PRS). Veteran Legacy at ${preview.capPctText} cap."
             } else {
                 "${op.rank.code} ${op.callsign} honorably retired (+${preview.prestigeAward} PRS • Veteran Legacy ${preview.gainPctText} → ${preview.resultingPctText})."

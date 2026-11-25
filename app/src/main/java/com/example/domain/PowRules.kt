@@ -111,14 +111,14 @@ object PowRules {
     fun failedTalks(target: Operator, now: Long, random: kotlin.random.Random = kotlin.random.Random): Pair<Operator, String> {
         val hardened = target.copy(
             powTalksFailures = target.powTalksFailures + 1,
-            powTalksCooldownUntilMillis = now + GameTiming.millis(TALKS_COOLDOWN_MILLIS)
+            powTalksCooldownUntilMillis = now + GameCalendar.daysToMillis(GameCalendar.TALKS_COOLDOWN_DAYS)
         )
         val who = "${target.rank.code} ${target.callsign}"
         if (random.nextDouble() < BAD_FAITH_CHANCE) {
             return diedInCaptivity(hardened) to "Talks failed in bad faith: $who was killed in captivity."
         }
         val moved = random.nextDouble() < PRISONER_MOVED_CHANCE
-        val note = "Talks for $who collapsed. No new talks for ${GameTiming.millis(TALKS_COOLDOWN_MILLIS) / 60_000L} minutes; " +
+        val note = "Talks for $who collapsed. No new talks for ${GameCalendar.formatGameSpan(GameCalendar.TALKS_COOLDOWN_DAYS)}; " +
             "the captors are harder to deal with (-${hardened.powTalksFailures * HARDENED_PENALTY_PCT}%)." +
             if (moved) " They moved the prisoner: the rescue window is closed." else ""
         return hardened.copy(powRescueClosed = hardened.powRescueClosed || moved) to note
@@ -127,7 +127,7 @@ object PowRules {
     const val RETURN_RECOVERY_FACTOR = 2.0
 
     fun captivityMillis(operator: Operator): Long {
-        val base = GameTiming.millis(CAPTIVITY_MILLIS)
+        val base = GameCalendar.daysToMillis(GameCalendar.CAPTIVITY_DAYS)
         return if (TacticalCalculator.isSereQualified(operator)) (base * SERE_CAPTIVITY_FACTOR).toLong() else base
     }
 
@@ -164,10 +164,10 @@ object PowRules {
 
     fun rescueWindowOpen(operator: Operator, now: Long): Boolean =
         operator.status == OperatorStatus.CAPTURED && !operator.powRescueClosed &&
-            now < operator.capturedAtMillis + GameTiming.millis(RESCUE_WINDOW_MILLIS)
+            now < operator.capturedAtMillis + GameCalendar.daysToMillis(GameCalendar.RESCUE_WINDOW_DAYS)
 
     fun rescueWindowRemainingMillis(operator: Operator, now: Long): Long =
-        if (operator.powRescueClosed) 0L else (operator.capturedAtMillis + GameTiming.millis(RESCUE_WINDOW_MILLIS) - now).coerceAtLeast(0L)
+        if (operator.powRescueClosed) 0L else (operator.capturedAtMillis + GameCalendar.daysToMillis(GameCalendar.RESCUE_WINDOW_DAYS) - now).coerceAtLeast(0L)
 
     /** Home again: into Medbay for a longer recovery, captivity record kept for the POW Medal. */
     fun released(operator: Operator, now: Long, recoveryMultiplier: Double): Operator = operator.copy(

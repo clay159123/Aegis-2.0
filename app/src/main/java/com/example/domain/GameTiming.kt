@@ -13,10 +13,12 @@ enum class TimeMode(
     /** Multiplier on every duration (2.0 = everything takes twice as long). */
     val durationMultiplier: Double,
     /** Multiplier on passive income per second. */
-    val incomeMultiplier: Double
+    val incomeMultiplier: Double,
+    /** Session 41: real seconds per game day for ops, schools and time away (the calendar's speed). */
+    val secondsPerGameDay: Int
 ) {
-    TESTING("Testing", 1.0, 1.0),
-    RELEASE("Release", 1.0, 1.0) // set in Session 19
+    TESTING("Testing", 1.0, 1.0, 1),
+    RELEASE("Release", 1.0, 1.0, 60) // placeholder rates; tuned in the pacing pass
 }
 
 object GameTiming {

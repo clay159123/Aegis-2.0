@@ -2285,8 +2285,10 @@ object GameCatalog {
 
     /** Missions with Session 10 MOS and insertion tags applied (see [tagMission]). */
     val missions: List<MissionTemplate> by lazy {
-        // Item 47: every mission and school length follows the global time scale
-        (baseMissions + TheaterExpansion.campaignMissions + TheaterExpansion.singleMissions).map { tagMission(it).let { m -> m.copy(durationSeconds = GameTiming.seconds(m.durationSeconds)) } }
+        // Session 41 (item 73): every mission and school length comes from the game-length table at the current rate
+        (baseMissions + TheaterExpansion.campaignMissions + TheaterExpansion.singleMissions).map {
+            tagMission(it).let { m -> m.copy(durationSeconds = com.example.domain.GameCalendar.realSecondsFor(com.example.domain.GameCalendar.gameDaysFor(m))) }
+        }
     }
 
     /**

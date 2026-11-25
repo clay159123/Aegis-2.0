@@ -955,8 +955,8 @@ class TacticalCalculatorTest {
         assertFalse(TacticalCalculator.evaluateRetirementEligibility(kestrel).eligible)
         assertFalse(TacticalCalculator.evaluateRetirementEligibility(kestrel.copy(missionsCompleted = 15)).eligible)
 
-        // Long-serving veteran (18+ ops at SGT+) IS eligible when active & not deployed
-        val veteran = kestrel.copy(missionsCompleted = 20)
+        // Session 41: a long-serving veteran (20+ years at SGT+) IS eligible when active & not deployed
+        val veteran = kestrel.copy(missionsCompleted = 20, joinedDay = 0.0, priorServiceDays = 21 * com.example.domain.GameCalendar.DAYS_PER_YEAR)
         assertTrue(TacticalCalculator.evaluateRetirementEligibility(veteran).eligible)
         assertFalse(TacticalCalculator.evaluateRetirementEligibility(veteran.copy(status = OperatorStatus.DEPLOYED)).eligible)
         assertFalse(TacticalCalculator.evaluateRetirementEligibility(veteran.copy(status = OperatorStatus.RETIRED)).eligible)

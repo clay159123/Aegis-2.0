@@ -95,7 +95,7 @@ fun CommandersGuideDialog(
                 GuideSectionCard(
                     icon = Icons.Filled.MilitaryTech,
                     title = "5. Veteran Retirement & Legacy",
-                    body = "Long-serving soldiers (${OperatorRank.SGT.code} E-5+ with ${TacticalCalculator.MIN_RETIREMENT_OPS}+ ops) can submit Retirement Requests that you may Approve or Deny. Approving frees their Field or HQ billet, grants muster-out PRS, memorializes them in the Hall of Honor, and adds a small permanent Veteran Legacy boost to Base Ops (capped at ${TacticalCalculator.formatBpsPercent(TacticalCalculator.MAX_VETERAN_LEGACY_BPS)}). Retirements too close together trigger spacing damping that recovers over 30 minutes."
+                    body = "Long-serving soldiers (${OperatorRank.SGT.code} E-5+ with 20+ years of service) can submit Retirement Requests; at 30 years (or a general at age 62) they must retire that you may Approve or Deny. Approving frees their Field or HQ billet, grants muster-out PRS, memorializes them in the Hall of Honor, and adds a small permanent Veteran Legacy boost to Base Ops (capped at ${TacticalCalculator.formatBpsPercent(TacticalCalculator.MAX_VETERAN_LEGACY_BPS)}). Retirements too close together trigger spacing damping that recovers over 30 minutes."
                 )
 
                 HorizontalDivider(color = extra.borderSubtle)

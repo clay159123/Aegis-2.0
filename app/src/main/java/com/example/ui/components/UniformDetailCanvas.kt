@@ -838,8 +838,9 @@ private fun DrawScope.drawDressUniformFigure(
         }
     }
 
+    // Session 41 (item 73): one stripe per 3 years of enlisted service
     val stripeCount = if (operator.tailorOverrides.showServiceStripes) {
-        (operator.missionsCompleted / 2).coerceIn(0, 4)
+        com.example.domain.GameCalendar.serviceStripes(operator).coerceIn(0, 8)
     } else {
         0
     }

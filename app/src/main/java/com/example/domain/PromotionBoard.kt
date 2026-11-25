@@ -340,6 +340,18 @@ object PromotionBoardEvaluator {
             RankTier.SOLDIER -> Unit
         }
 
+        // Session 41 (item 73): time in grade (trial; may revert)
+        val tigNeeded = GameCalendar.timeInGradeYears(operator.rank)
+        if (tigNeeded > 0.0) {
+            val have = GameCalendar.yearsInGrade(operator)
+            meritChecks += PromotionMeritCheck(
+                id = "time_in_grade",
+                label = "Time in Grade",
+                statusText = "%.1f of %.1f years as %s".format(have.coerceAtMost(tigNeeded), tigNeeded, operator.rank.code),
+                satisfied = GameCalendar.timeInGradeMet(operator)
+            )
+        }
+
         val allMeritsMet = meritChecks.all { it.satisfied }
         val opinions = buildBoardOpinions(
             operator = operator,
