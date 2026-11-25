@@ -488,9 +488,23 @@ private fun DrawScope.drawDressUniformFigure(
             lineTo(cx + w * 0.046f, h * 0.340f)
             close()
         }
-        drawPath(bowL, color = Color(0xFF10141C))
-        drawPath(bowR, color = Color(0xFF10141C))
-        drawCircle(Color(0xFF181E29), radius = w * 0.013f, center = Offset(cx, h * 0.324f))
+        // Art 5b: a tied bow with rounded wings and a pinched knot
+        for (s in listOf(-1f, 1f)) {
+            val wing = Path().apply {
+                moveTo(cx + s * w * 0.008f, h * 0.318f)
+                cubicTo(cx + s * w * 0.030f, h * 0.304f, cx + s * w * 0.050f, h * 0.306f, cx + s * w * 0.050f, h * 0.316f)
+                lineTo(cx + s * w * 0.050f, h * 0.332f)
+                cubicTo(cx + s * w * 0.050f, h * 0.342f, cx + s * w * 0.030f, h * 0.344f, cx + s * w * 0.008f, h * 0.330f)
+                close()
+            }
+            drawPath(wing, Color(0xFF10141C))
+            drawLine(Color.White.copy(alpha = 0.12f), Offset(cx + s * w * 0.018f, h * 0.316f), Offset(cx + s * w * 0.042f, h * 0.312f), strokeWidth = 0.8f)
+        }
+        drawRoundRect(Color(0xFF1C2230), Offset(cx - w * 0.010f, h * 0.316f), Size(w * 0.020f, h * 0.016f), CornerRadius(2f, 2f))
+        // Waistcoat edges and gold studs on the shirt front
+        drawLine(Color.Black.copy(alpha = 0.12f), Offset(cx - w * 0.060f, h * 0.380f), Offset(cx - w * 0.150f, h * 0.720f), strokeWidth = 1f)
+        drawLine(Color.Black.copy(alpha = 0.12f), Offset(cx + w * 0.060f, h * 0.380f), Offset(cx + w * 0.150f, h * 0.720f), strokeWidth = 1f)
+        for (i in 0..2) drawCircle(Color.Black.copy(alpha = 0.35f), radius = w * 0.012f, center = Offset(cx, h * (0.435f + i * 0.064f)), style = Stroke(0.8f))
     } else {
         // Tailored Full Dress Tunic with crisp armhole seam separation
         val coatPath = Path().apply {
@@ -565,13 +579,19 @@ private fun DrawScope.drawDressUniformFigure(
             drawLine(flapHighlight, Offset(px + 2f, pocketTopY + flapH), Offset(px + pocketW - 2f, pocketTopY + flapH), strokeWidth = 0.8f)
         }
 
-        // Lower Hip Pocket Flaps on Heritage Coats
-        if (style == DressUniformStyle.ARMY_SERVICE_GREEN || style == DressUniformStyle.ARMY_DRESS_BLUES) {
-            val flapStroke = trimCol.copy(alpha = 0.5f)
-            drawRoundRect(lapelCol.copy(alpha = 0.35f), Offset(cx - w * 0.214f, h * 0.818f), Size(w * 0.120f, h * 0.072f), CornerRadius(3f, 3f))
-            drawRoundRect(lapelCol.copy(alpha = 0.35f), Offset(cx + w * 0.094f, h * 0.818f), Size(w * 0.120f, h * 0.072f), CornerRadius(3f, 3f))
-            drawLine(flapStroke, Offset(cx - w * 0.214f, h * 0.824f), Offset(cx - w * 0.094f, h * 0.824f), strokeWidth = 1.1f)
-            drawLine(flapStroke, Offset(cx + w * 0.094f, h * 0.824f), Offset(cx + w * 0.214f, h * 0.824f), strokeWidth = 1.1f)
+        // Art 5b: front seams from the chest pockets to the hem, and flapped lower pockets on every coat
+        for (s in listOf(-1f, 1f)) {
+            drawLine(Color.Black.copy(alpha = 0.16f), Offset(cx + s * w * 0.168f, h * (CHEST_POCKET_TOP_FRACTION + 0.125f)), Offset(cx + s * w * 0.160f, h * 0.800f), strokeWidth = 0.9f)
+            val fl = if (s < 0f) cx - w * 0.216f else cx + w * 0.090f
+            val flapW = w * 0.126f
+            drawRoundRect(Color.Black.copy(alpha = 0.12f), Offset(fl, h * 0.812f), Size(flapW, h * 0.070f), CornerRadius(3f, 3f))
+            val flap = Path().apply {
+                moveTo(fl, h * 0.806f); lineTo(fl + flapW, h * 0.806f)
+                lineTo(fl + flapW, h * 0.826f); quadraticTo(fl + flapW / 2f, h * 0.838f, fl, h * 0.826f); close()
+            }
+            drawPath(flap, tunicCol)
+            drawPath(flap, Color.Black.copy(alpha = 0.32f), style = Stroke(1f))
+            drawCircle(trimCol, radius = w * 0.0058f, center = Offset(fl + flapW / 2f, h * 0.826f))
         }
     }
 
@@ -591,6 +611,9 @@ private fun DrawScope.drawDressUniformFigure(
         }
         drawPath(messLapelL, color = lapelCol)
         drawPath(messLapelR, color = lapelCol)
+        // Art 5b: satin facing catches the light
+        drawPath(messLapelL, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.22f), Color.Transparent), start = Offset(cx - w * 0.146f, h * 0.294f), end = Offset(cx - w * 0.080f, h * 0.470f)))
+        drawPath(messLapelR, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), start = Offset(cx + w * 0.146f, h * 0.294f), end = Offset(cx + w * 0.080f, h * 0.470f)))
         if (tier.isOfficer) {
             drawLine(trimCol.copy(alpha = 0.65f), Offset(cx - w * 0.146f, h * 0.294f), Offset(cx - w * 0.118f, h * 0.455f), strokeWidth = 1.1f)
             drawLine(trimCol.copy(alpha = 0.65f), Offset(cx + w * 0.146f, h * 0.294f), Offset(cx + w * 0.118f, h * 0.455f), strokeWidth = 1.1f)
@@ -610,6 +633,18 @@ private fun DrawScope.drawDressUniformFigure(
         }
         drawPath(leftLapel, color = lapelCol)
         drawPath(rightLapel, color = lapelCol)
+        // Art 5b: the notch where collar meets lapel, and the roll line along each lapel
+        for (s in listOf(-1f, 1f)) {
+            val notch = Path().apply {
+                moveTo(cx + s * w * 0.104f, h * 0.352f)
+                lineTo(cx + s * w * 0.084f, h * 0.362f)
+                lineTo(cx + s * w * 0.100f, h * 0.372f)
+                close()
+            }
+            drawPath(notch, tunicCol)
+            drawLine(Color.Black.copy(alpha = 0.35f), Offset(cx + s * w * 0.104f, h * 0.352f), Offset(cx + s * w * 0.084f, h * 0.362f), strokeWidth = 0.9f)
+            drawLine(Color.White.copy(alpha = 0.12f), Offset(cx + s * w * 0.106f, h * 0.300f), Offset(cx + s * w * 0.010f, h * 0.528f), strokeWidth = 0.8f)
+        }
         if (tier.isOfficer) {
             drawLine(trimCol.copy(alpha = 0.65f), Offset(cx - w * 0.110f, h * 0.294f), Offset(cx - w * 0.088f, h * 0.440f), strokeWidth = 1.1f)
             drawLine(trimCol.copy(alpha = 0.65f), Offset(cx + w * 0.110f, h * 0.294f), Offset(cx + w * 0.088f, h * 0.440f), strokeWidth = 1.1f)
@@ -686,12 +721,14 @@ private fun DrawScope.drawDressUniformFigure(
     // 7. Crisp Wrapped Shoulder Tabs + Directorate Heraldic SSI Shield on Outer Upper Deltoid (Wearer's Left Sleeve = +1f)
     // Up to 3 tabs stack top-down in precedence order; a full stack uses slightly slimmer tabs
     val wornTabs = wornRegalia.shoulderTabs.take(TacticalCalculator.MAX_WORN_SHOULDER_TABS)
-    val tabHeightFrac = if (wornTabs.size >= 3) 0.019f else 0.021f
-    val tabStepFrac = tabHeightFrac + 0.004f
+    // Art 5b: the stack starts at the shoulder seam; a full stack uses thinner tabs and tighter gaps
+    val tabsTop = 0.330f
+    val tabHeightFrac = if (wornTabs.size >= 3) 0.0168f else 0.020f
+    val tabStepFrac = tabHeightFrac + if (wornTabs.size >= 3) 0.0022f else 0.003f
     wornTabs.forEachIndexed { idx, tab ->
         drawWrappedShoulderTab(
             sideSign = 1f,
-            topFrac = 0.344f + idx * tabStepFrac,
+            topFrac = tabsTop + idx * tabStepFrac,
             tabColor = Color(tab.insigniaColorHex),
             sleeveFaceX = ::sleeveFaceX,
             h = h,
@@ -699,7 +736,9 @@ private fun DrawScope.drawDressUniformFigure(
         )
     }
 
-    val ssiTopFrac = if (wornTabs.isEmpty()) 0.350f else 0.344f + wornTabs.size * tabStepFrac + 0.006f
+    val ssiTopFrac = if (wornTabs.isEmpty()) 0.350f else tabsTop + wornTabs.size * tabStepFrac + 0.004f
+    // Chevrons drop a little only when a full stack pushes the patch down
+    val chevronStart = if (wornTabs.size >= 3) 0.507f else 0.495f
     val chosenPatch = operator.tailorOverrides.unitPatch
     if (chosenPatch != UnitPatchStyle.NONE) {
         drawWrappedUnitShoulderPatch(
@@ -740,7 +779,8 @@ private fun DrawScope.drawDressUniformFigure(
             trimCol = trimCol,
             sleeveFaceX = ::sleeveFaceX,
             w = w,
-            h = h
+            h = h,
+            startFrac = chevronStart
         )
         drawWrappedSleeveRankInsignia(
             sideSign = 1f,
@@ -750,7 +790,8 @@ private fun DrawScope.drawDressUniformFigure(
             trimCol = trimCol,
             sleeveFaceX = ::sleeveFaceX,
             w = w,
-            h = h
+            h = h,
+            startFrac = chevronStart
         )
     }
 
@@ -2102,9 +2143,10 @@ private fun DrawScope.drawFieldTacticalFigure(
 
     // Wearer's left sleeve: subdued tab stack (SF, Ranger, Sapper, Airborne; max 3) above the subdued squad patch
     val wornTabs = wornRegalia.shoulderTabs.take(TacticalCalculator.MAX_WORN_SHOULDER_TABS)
-    val tabHeightFrac = if (wornTabs.size >= 3) 0.017f else 0.019f
-    val tabStepFrac = tabHeightFrac + 0.003f
-    val tabsTopFrac = 0.432f
+    // Art 5b: tighter field stack to match the dress kits
+    val tabHeightFrac = if (wornTabs.size >= 3) 0.0155f else 0.018f
+    val tabStepFrac = tabHeightFrac + if (wornTabs.size >= 3) 0.002f else 0.0025f
+    val tabsTopFrac = 0.426f
     val patchHeightFrac = 0.064f
     val squadPatch = operator.tailorOverrides.unitPatch
     val showSquadPatch = squadPatch != UnitPatchStyle.NONE && squadPatch != UnitPatchStyle.AUTO_MOS
@@ -2532,7 +2574,7 @@ internal fun sfBeardColor(op: Operator): Color {
  * Art 5a: a relaxed hand seen from the front: the wrist under the cuff, a tapered palm, fingers curled in
  * toward the trouser seam, and the thumb resting forward on the side nearer the body.
  */
-private fun DrawScope.drawRelaxedHand(sideSign: Float, centerX: Float, topY: Float, handW: Float, handH: Float, fill: Color, line: Color) {
+internal fun DrawScope.drawRelaxedHand(sideSign: Float, centerX: Float, topY: Float, handW: Float, handH: Float, fill: Color, line: Color) {
     val inner = -sideSign // toward the body center
     val half = handW / 2f
     val hand = Path().apply {
