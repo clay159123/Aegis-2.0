@@ -453,6 +453,8 @@ fun SquadArmoryScreen(
                 onTdy -> "TDY"
                 isDeployed -> "DEPLOYED"
                 op.status == OperatorStatus.CAPTURED -> "POW"
+                // Session 43 fix: contract up, waiting on the player
+                com.example.domain.ContractRules.contractDue(op, uiState.calendarDays) -> "CONTRACT UP"
                 // Session 39: leave and medbay show the time left
                 else -> TacticalCalculator.awayLabel(op, uiState.nowMillis)?.removePrefix("ON ")
                     // Session 41: home on dwell after a field op

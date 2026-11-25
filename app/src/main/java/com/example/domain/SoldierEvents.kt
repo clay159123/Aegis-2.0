@@ -18,6 +18,8 @@ enum class SoldierEventKind(val title: String, val personal: Boolean = false) {
     RETIREMENT_PETITION("Retirement Request", personal = true),
     /** Session 42: a contract has run out; the soldier re-ups or leaves. */
     CONTRACT_END("Contract Decision", personal = true),
+    /** Session 43: a POW sees a chance to escape. */
+    ESCAPE_CHANCE("Escape Chance", personal = true),
     BARRACKS_INSPECTION("Failed Barracks Inspection"),
     RANGE_TIME("Extra Range Time", personal = true),
     SOLDIER_OF_MONTH("Soldier of the Month Board"),
@@ -266,7 +268,9 @@ object SoldierEvents {
 
     /** True when the waiting event still makes sense (soldier around, target still valid). */
     fun stillValid(e: PendingSoldierEvent, ctx: SoldierEventContext): Boolean =
-        ctx.now < e.expiresAtMillis && idleOperators(ctx).any { it.id == e.operatorId }
+        ctx.now < e.expiresAtMillis && if (e.kind == SoldierEventKind.ESCAPE_CHANCE) {
+            ctx.op(e.operatorId)?.let { it.status == OperatorStatus.CAPTURED && it.evadingUntilMillis == 0L } == true
+        } else idleOperators(ctx).any { it.id == e.operatorId }
 
     // ---------- Session 42: contracts ----------
 
@@ -421,6 +425,15 @@ object SoldierEvents {
                 "$who requests a transfer to another command.",
                 listOf(c("approve", "Approve Transfer", "They leave the command; +10 PRS."), c("decline", "Decline", "They stay.")))
             SoldierEventKind.CONTRACT_END -> contractCard(e, op, who, ctx)
+            SoldierEventKind.ESCAPE_CHANCE -> {
+                val pct = op?.let { PowRules.escapeChancePct(it) } ?: PowRules.ESCAPE_PCT_NONE
+                val death = op?.let { PowRules.failedEscapeDeathPct(it) } ?: PowRules.FAILED_ESCAPE_DEATH_PCT
+                SoldierEventCard(e.kind.title,
+                    "$who, held as a POW, sees a chance to escape.",
+                    listOf(
+                        c("attempt", "Attempt it", "$pct% they get out and evade; you then have about 2 weeks to send a Personnel Recovery. If caught: $death% they're killed, otherwise the captors harden."),
+                        c("decline", "Wait", "Nothing changes; no other chance this term.")))
+            }
             SoldierEventKind.RETIREMENT_PETITION -> SoldierEventCard(e.kind.title,
                 "$who requests retirement after a full career.",
                 listOf(c("approve", "Approve Retirement", "They retire with honors and add to the veteran legacy."), c("decline", "Deny", "They stay on duty.")))
@@ -547,6 +560,18 @@ object SoldierEvents {
             SoldierEventKind.RETIREMENT_PETITION -> SoldierEventOutcome(
                 petitionAction = if (declined) PetitionAction.DENY_RETIREMENT else PetitionAction.APPROVE_RETIREMENT, banner = "")
             SoldierEventKind.CONTRACT_END -> applyContract(op, who, choiceId, ctx, random)
+            SoldierEventKind.ESCAPE_CHANCE -> when {
+                declined -> SoldierEventOutcome(banner = "$who waits for another day.")
+                random.nextInt(100) < PowRules.escapeChancePct(op) -> SoldierEventOutcome(
+                    operatorUpdates = listOf(PowRules.escaped(op, ctx.now)),
+                    banner = "$who escaped and is evading! Send a Personnel Recovery from the POW list before they're caught.")
+                random.nextInt(100) < PowRules.failedEscapeDeathPct(op) -> SoldierEventOutcome(
+                    operatorUpdates = listOf(PowRules.diedInCaptivity(op)),
+                    banner = "$who was killed trying to escape.")
+                else -> SoldierEventOutcome(
+                    operatorUpdates = listOf(op.copy(captorsHardenedPct = op.captorsHardenedPct + PowRules.HARDENED_STEP_PCT)),
+                    banner = "$who was caught trying to escape. The captors have hardened.")
+            }
             // Session 38: turning down a personal request costs that soldier morale
             else -> if (declined) SoldierEventOutcome(
                 banner = "$who: request declined." + if (e.kind.personal) " (Morale ${MoraleRules.REQUEST_DECLINED})" else "",
@@ -646,7 +671,8 @@ object SoldierEvents {
                 SoldierEventKind.INTEL_LEAD -> base("$who ran down the lead: +40 INT.").copy(intelDelta = 40.0)
                 SoldierEventKind.FAMILY_NEWS -> base("$who is on leave. Congratulations!").copy(
                     operatorUpdates = listOf(away(op).copy(xp = op.xp + 30)))
-                SoldierEventKind.TRANSFER_PETITION, SoldierEventKind.RETIREMENT_PETITION, SoldierEventKind.CONTRACT_END -> SoldierEventOutcome(banner = "")
+                SoldierEventKind.TRANSFER_PETITION, SoldierEventKind.RETIREMENT_PETITION, SoldierEventKind.CONTRACT_END,
+                SoldierEventKind.ESCAPE_CHANCE -> SoldierEventOutcome(banner = "")
             }
         }
     }

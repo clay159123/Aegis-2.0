@@ -304,7 +304,7 @@ fun FieldSquadsSection(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = if (isDeployed && member.id in com.example.domain.TacticalCalculator.tdyOperatorIds) "TDY" else if (isDeployed) "DEPLOYED" else away
+                                            text = if (isDeployed && member.id in com.example.domain.TacticalCalculator.tdyOperatorIds) "TDY" else if (isDeployed) "DEPLOYED" else if (com.example.domain.ContractRules.contractDue(member)) "CONTRACT UP" else away
                                                 // Session 41: home on dwell after a field op
                                                 ?: com.example.domain.GameCalendar.dwellLeftMillis(member, nowMillis).takeIf { it > 0 }?.let {
                                                     "DWELL " + com.example.domain.GameCalendar.formatGameSpanShort(com.example.domain.GameCalendar.millisToDays(it))
