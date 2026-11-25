@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.catalog.GameCatalog
 import com.example.domain.TacticalCalculator
+import com.example.domain.GameCalendar
 import com.example.domain.model.*
 import com.example.ui.components.*
 import com.example.ui.theme.LocalAegisColors
@@ -453,7 +454,12 @@ fun SquadArmoryScreen(
                 isDeployed -> "DEPLOYED"
                 op.status == OperatorStatus.CAPTURED -> "POW"
                 // Session 39: leave and medbay show the time left
-                else -> TacticalCalculator.awayLabel(op, uiState.nowMillis)?.removePrefix("ON ") ?: "READY"
+                else -> TacticalCalculator.awayLabel(op, uiState.nowMillis)?.removePrefix("ON ")
+                    // Session 41: home on dwell after a field op
+                    ?: GameCalendar.dwellLeftMillis(op, uiState.nowMillis).takeIf { it > 0 }?.let {
+                        "DWELL • ${GameCalendar.formatGameSpan(GameCalendar.millisToDays(it))}"
+                    }
+                    ?: "READY"
             }
             val isAway = op.status == OperatorStatus.ON_LEAVE || op.status == OperatorStatus.RECOVERING
 
@@ -515,6 +521,15 @@ fun SquadArmoryScreen(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
+                                // Session 41: age next to the name
+                                if (op.joinedDay >= 0) {
+                                    Text(
+                                        text = "${GameCalendar.age(op, uiState.calendarDays)}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.testTag("operator_age_${op.id}")
+                                    )
+                                }
                             }
                             Surface(
                                 shape = MaterialTheme.shapes.extraSmall,

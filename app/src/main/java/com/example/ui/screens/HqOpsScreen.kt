@@ -31,6 +31,7 @@ import com.example.R
 import com.example.data.catalog.GameCatalog
 import com.example.domain.SquadCohesionRules
 import com.example.domain.TacticalCalculator
+import com.example.domain.GameCalendar
 import com.example.domain.PowRules
 import com.example.domain.model.*
 import com.example.ui.components.*
@@ -91,6 +92,8 @@ fun HqOpsScreen(
     onNavigateToSquad: () -> Unit,
     /** Session 39: open the Uniform tab on a soldier up for promotion. */
     onReviewPromotion: (String) -> Unit = { onNavigateToDress() },
+    /** Session 41: testing build only, tapping the calendar advances it a month. */
+    onCalendarTap: (() -> Unit)? = null,
     onSwitchOperatorsToKit: (List<String>, WardrobeKit) -> Unit = { _, _ -> },
     onSetTeamCamo: (List<String>, CamoPattern?) -> Unit = { _, _ -> },
     onRefreshRotatingMissions: () -> Unit = {},
@@ -472,11 +475,21 @@ fun HqOpsScreen(
                                     style = MaterialTheme.typography.headlineSmall,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
+                                // Session 41 (item 73): the unit calendar; it runs only while something is in progress
+                                val busy = GameCalendar.activeMillisBetween(
+                                    GameCalendar.activeIntervals(uiState.operators, uiState.deployments, uiState.squads),
+                                    uiState.nowMillis - 1, uiState.nowMillis
+                                ) > 0
                                 Text(
-                                    text = "Filter combat missions, specialty schools & staff ops",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = GameCalendar.label(uiState.calendarDays).uppercase() + if (busy) "" else " • PAUSED",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = extra.brassBright,
+                                    modifier = Modifier
+                                        .then(if (onCalendarTap != null) Modifier.clickable { onCalendarTap() } else Modifier)
+                                        .padding(vertical = 2.dp)
+                                        .testTag("ops_calendar")
                                 )
+
                             }
                             Button(
                                 onClick = onReadinessDrill,

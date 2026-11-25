@@ -64,7 +64,8 @@ object ClandestineRules {
     const val MIN_BLOWN_COVER_PCT = 5
     const val MAX_BLOWN_COVER_PCT = 75
     /** A blown cover leaves a very hard mission's length on the clock, and costs this much pass chance. */
-    const val VERY_HARD_SECONDS = 300
+    /** Session 41: a blown cover leaves at most a month of game time to get out. */
+    val VERY_HARD_SECONDS: Int get() = GameCalendar.realSecondsFor(30)
     const val BLOWN_COVER_PASS_PENALTY = 15
     /** Aborting after a blown cover: a quicker exfil, so casualty odds are halved. */
     const val EXFIL_CASUALTY_FACTOR = 0.5
@@ -88,7 +89,7 @@ object ClandestineRules {
     /** Cover is blown: the clock drops to a very hard mission's length (never longer than what's left). */
     fun blowCover(d: ActiveDeployment, now: Long): ActiveDeployment {
         val left = (d.startedAtMillis + d.durationMillis - now).coerceAtLeast(0L)
-        val newLeft = minOf(left, GameTiming.seconds(VERY_HARD_SECONDS.toLong()) * 1000L)
+        val newLeft = minOf(left, VERY_HARD_SECONDS * 1000L)
         return d.copy(coverBlown = true, durationMillis = (now - d.startedAtMillis) + newLeft)
     }
 

@@ -1495,6 +1495,17 @@ data class Operator(
     val lastReturnAtMillis: Long = 0L,
     /** Session 38: last uniform inspection that raised this soldier's morale (30-minute cooldown). */
     val inspectionMoraleAtMillis: Long = 0L,
+    /** Session 41 (item 73): calendar day the soldier joined (-1 until stamped), age then, and prior service. */
+    val joinedDay: Double = -1.0,
+    val ageAtJoin: Double = 0.0,
+    val priorServiceDays: Double = 0.0,
+    /** Session 41: calendar day the current rank was reached (time in grade) and which rank that was. */
+    val rankSinceDay: Double = -1.0,
+    val rankSinceName: String? = null,
+    /** Session 41: start of the current clean stretch for Good Conduct (reset by a wound or failed mission). */
+    val goodConductSinceDay: Double = -1.0,
+    /** Session 41: home from a field op until this time (dwell); field ops wait until then. */
+    val dwellUntilMillis: Long = 0L,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */
@@ -1578,6 +1589,8 @@ data class Operator(
             val current = rank
             if (current.tier == RankTier.SOLDIER || current.isWarrant || current.tier == RankTier.FLAG_OFFICER) return null
             if (isAtHqRankCap) return null
+            // Session 41: time in grade (trial)
+            if (!com.example.domain.GameCalendar.timeInGradeMet(this)) return null
             val next = OperatorRank.nextRank(current) ?: return null
             if (OperatorRank.isBoardGate(current, next)) return null
             hqRankCap?.let { cap -> if (next.seniorityIndex > cap.seniorityIndex) return null }

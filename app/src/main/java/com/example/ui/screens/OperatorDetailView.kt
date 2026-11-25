@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.catalog.GameCatalog
 import com.example.domain.GearAutoDistributor
 import com.example.domain.TacticalCalculator
+import com.example.domain.GameCalendar
 import com.example.domain.model.*
 import com.example.ui.components.*
 import com.example.ui.theme.LocalAegisColors
@@ -176,6 +177,24 @@ fun OperatorDetailView(
                             style = MaterialTheme.typography.bodySmall,
                             color = if (operator.status == OperatorStatus.HQ_STAFF) extra.signalsCyan else MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        // Session 41 (item 73): age, service and time in grade on the calendar
+                        if (operator.joinedDay >= 0) {
+                            val today = uiState.calendarDays
+                            val tig = GameCalendar.timeInGradeYears(operator.rank)
+                            Text(
+                                text = buildString {
+                                    append("Age ${GameCalendar.age(operator, today)} • ")
+                                    append("%.1f yrs served".format(GameCalendar.yearsServed(operator, today)))
+                                    append(" • %.1f yrs as %s".format(GameCalendar.yearsInGrade(operator, today), operator.rank.code))
+                                    if (tig > 0) append(" (needs %.1f)".format(tig))
+                                    val dwell = GameCalendar.dwellLeftMillis(operator, uiState.nowMillis)
+                                    if (dwell > 0) append(" • Dwell ${GameCalendar.formatGameSpan(GameCalendar.millisToDays(dwell))}")
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = extra.brassBright,
+                                modifier = Modifier.testTag("operator_service_line")
+                            )
+                        }
                     }
                 }
 

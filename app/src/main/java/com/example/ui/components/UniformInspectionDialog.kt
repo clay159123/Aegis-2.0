@@ -99,7 +99,7 @@ fun UniformInspectionDialog(
     val leftCord = wornRegalia.leftCord
     val rightCord = wornRegalia.rightCord
     val serviceStripes = if (effectiveOp.tailorOverrides.showServiceStripes) {
-        (effectiveOp.missionsCompleted / 2).coerceIn(0, 4)
+        com.example.domain.GameCalendar.serviceStripes(effectiveOp).coerceIn(0, 10)
     } else {
         0
     }

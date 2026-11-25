@@ -348,6 +348,7 @@ fun AegisCommandApp() {
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
                                     onReviewPromotion = { id -> dressFocusOpId = id; navigateTo(ROUTE_DRESS) },
+                                    onCalendarTap = if (com.example.domain.GameTiming.MODE == com.example.domain.TimeMode.TESTING) viewModel::advanceCalendarMonth else null,
                                     onSwitchOperatorsToKit = viewModel::switchOperatorsToKit,
                                     onSetTeamCamo = viewModel::setTeamFieldCamo,
                                     onRefreshRotatingMissions = viewModel::refreshRotatingMissions,

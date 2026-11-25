@@ -62,7 +62,8 @@ class Session17bTest {
     fun combatDiverSchoolIsLongTdy() {
         val diver = mission("msn_combat_diver_school")
         assertTrue(diver.isTdy)
-        assertTrue(diver.durationSeconds >= 100)
+        // Session 41: eight weeks of game time
+        assertEquals(com.example.domain.GameCalendar.realSecondsFor(56), diver.durationSeconds)
         assertFalse(mission("msn_sf_school").isTdy)
         val tdy = ActiveDeployment("d1", diver.id, listOf("a", "b"), 0L, 1000L, 100, 100)
         val field = ActiveDeployment("d2", "msn_sf_school", listOf("c"), 0L, 1000L, 100, 100)

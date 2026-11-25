@@ -31,7 +31,10 @@ data class CommanderStateEntity(
     val sfRehearsalBonusPct: Int = 0,
     /** Session 38: Parade Ground activity times. */
     val lastCookoutAtMillis: Long = 0L,
-    val lastParadeActivityAtMillis: Long = 0L
+    val lastParadeActivityAtMillis: Long = 0L,
+    /** Session 41 (item 73): the unit calendar in game days and when it last advanced. */
+    val calendarDays: Double = 0.0,
+    val lastClockAtMillis: Long = 0L
 )
 
 @Entity(tableName = "facilities")
@@ -94,6 +97,13 @@ data class OperatorEntity(
     val deployStreak: Int = 0,
     val lastReturnAtMillis: Long = 0L,
     val inspectionMoraleAtMillis: Long = 0L,
+    val joinedDay: Double = -1.0,
+    val ageAtJoin: Double = 0.0,
+    val priorServiceDays: Double = 0.0,
+    val rankSinceDay: Double = -1.0,
+    val rankSinceName: String? = null,
+    val goodConductSinceDay: Double = -1.0,
+    val dwellUntilMillis: Long = 0L,
     val flightSkill: Int = 0,
     val combatSortiesFlown: Int = 0,
     val combatJumps: Int = 0,

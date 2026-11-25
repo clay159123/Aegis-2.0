@@ -126,10 +126,10 @@ class Session40Test {
 
     @Test
     fun schools_dont_advance_good_conduct() {
-        val op = base.copy(goodConductStreak = 4)
+        // Session 41: Good Conduct now runs on years of service (see Session41Test)
+        val op = base.copy(goodConductSinceDay = 5.0)
         val r = AwardRules.serviceAwardsFor(op, mission("msn_ranger_school"), OperatorOutcomeType.TRAINING_PASSED, true, emptyMap(), emptySet(), Random(1))
-        assertEquals(4, r.operator.goodConductStreak)
-        assertEquals(9, AwardRules.GOOD_CONDUCT_STREAK)
+        assertEquals(5.0, r.operator.goodConductSinceDay, 0.0)
         assertEquals(0.25, AwardRules.ARCOM_CHANCE, 0.0)
         assertEquals(0.30, AwardRules.AAM_CHANCE, 0.0)
     }

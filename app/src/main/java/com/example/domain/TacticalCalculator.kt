@@ -571,7 +571,8 @@ object TacticalCalculator {
     fun aidSaveChancePct(facilities: List<FacilityState>): Int =
         facilityLevel(facilities, FacilityType.AID_STATION).coerceAtLeast(0) * 5
 
-    const val BASE_RECOVERY_MILLIS = 45_000L
+    /** Session 41: three weeks of game time; wounds and the aid station scale it. */
+    val BASE_RECOVERY_MILLIS: Long get() = GameCalendar.daysToMillis(GameCalendar.BASE_RECOVERY_DAYS)
 
     // ---------- Rifle qualification ----------
     const val RIFLE_QUAL_MISSION_ID = "msn_rifle_qual"
@@ -1511,6 +1512,14 @@ object TacticalCalculator {
             OperatorStatus.ON_LEAVE -> return EligibilityResult(false, listOf("On leave"))
             OperatorStatus.CAPTURED -> return EligibilityResult(false, listOf("Held as a POW"))
             OperatorStatus.DEPLOYED -> return EligibilityResult(false, listOf("Already Deployed"))
+            else -> {}
+        }
+        // Session 41: home from the last field op for a while before the next one (POW Rescue never waits)
+        if (GameCalendar.dwellBlocks(mission)) {
+            val left = GameCalendar.dwellLeftMillis(operator, System.currentTimeMillis())
+            if (left > 0) return EligibilityResult(false, listOf("Dwell: ${GameCalendar.formatGameSpan(GameCalendar.millisToDays(left))} at home"))
+        }
+        when (operator.status) {
             OperatorStatus.HQ_STAFF -> {
                 if (!mission.scope.hqStaffAllowed) {
                     return EligibilityResult(
@@ -1525,6 +1534,7 @@ object TacticalCalculator {
                     return EligibilityResult(false, listOf("Generals serve on HQ staff only"))
                 }
             }
+            else -> {}
         }
 
         if (mission.requiresSfTeam && !isSfQualified(operator) && !takesBoatRiders(mission)) {
@@ -2420,9 +2430,10 @@ object TacticalCalculator {
         if (!operator.rank.isCareerEligibleForStaffOrTransfer) {
             missing += "Requires ${OperatorRank.SGT.code} (${OperatorRank.SGT.payGrade})+"
         }
-        val totalOps = operator.missionsCompleted + operator.staffOpsSupported
-        if (totalOps < MIN_RETIREMENT_OPS) {
-            missing += "Requires $MIN_RETIREMENT_OPS+ Ops ($totalOps/$MIN_RETIREMENT_OPS)"
+        // Session 41 (item 73): retirement comes with 20 years of service (ops no longer count)
+        val years = GameCalendar.yearsServed(operator)
+        if (years < GameCalendar.RETIREMENT_ELIGIBLE_YEARS) {
+            missing += "Requires ${GameCalendar.RETIREMENT_ELIGIBLE_YEARS.toInt()} years of service (${"%.1f".format(years)})"
         }
         return EligibilityResult(eligible = missing.isEmpty(), missingRequirements = missing)
     }
@@ -2444,7 +2455,7 @@ object TacticalCalculator {
             RankTier.OFFICER, RankTier.WARRANT -> 15
             RankTier.FLAG_OFFICER -> 30
         }
-        val tenureBonusBps = (((totalOps - MIN_RETIREMENT_OPS).coerceAtLeast(0)) / 4).coerceAtMost(4) * 5
+        val tenureBonusBps = (((GameCalendar.yearsServed(operator) - GameCalendar.RETIREMENT_ELIGIBLE_YEARS).coerceAtLeast(0.0)) / 2.0).toInt().coerceAtMost(4) * 5
         val rawBps = 50 + tierBonusBps + tenureBonusBps
 
         // Time-between-retirements damping: back-to-back retirements yield 20%, recovering to 100% over 30m

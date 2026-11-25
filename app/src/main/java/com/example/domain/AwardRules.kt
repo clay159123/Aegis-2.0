@@ -244,17 +244,15 @@ object AwardRules {
         val passedSchool = outcome == OperatorOutcomeType.TRAINING_PASSED
         val succeeded = missionSucceeded && outcome != OperatorOutcomeType.TRAINING_FAILED
 
-        // Good Conduct: every N missions or schools with no wound and no failed mission since the last one
-        var streak = when {
-            outcome == OperatorOutcomeType.WOUNDED -> 0
-            !isSchool && !missionSucceeded && !isStaff -> 0
-            // Item 196: schools don't count toward the streak
-            isSchool -> op.goodConductStreak
-            else -> op.goodConductStreak + 1
-        }
-        if (streak >= GOOD_CONDUCT_STREAK && eligible(GOOD_CONDUCT_ID)) {
+        // Session 41 (item 73): Good Conduct for every 3 years of service with no wound and no failed mission
+        val today = GameCalendar.today
+        val streak = op.goodConductStreak
+        var cleanSince = if (op.goodConductSinceDay < 0) today else op.goodConductSinceDay
+        if (outcome == OperatorOutcomeType.WOUNDED || (!isSchool && !missionSucceeded && !isStaff)) {
+            cleanSince = today
+        } else if ((today - cleanSince) / GameCalendar.DAYS_PER_YEAR >= GameCalendar.GOOD_CONDUCT_YEARS && eligible(GOOD_CONDUCT_ID)) {
             awards += GOOD_CONDUCT_ID
-            streak = 0
+            cleanSince = today
         }
 
         // ARCOM for strong results; AAM for smaller wins. Both on cooldowns.
@@ -314,6 +312,7 @@ object AwardRules {
             op.copy(
                 serviceActions = actions,
                 goodConductStreak = streak,
+                goodConductSinceDay = cleanSince,
                 lastArcomAtAction = lastArcom,
                 lastAamAtAction = lastAam
             ),

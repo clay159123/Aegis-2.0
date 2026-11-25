@@ -104,7 +104,9 @@ fun MissionPrepDialog(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             PrepStat("Pass", "${preview.passPct}%", extra.signalsCyan, "prep_pass")
                             PrepStat("Survival", "${preview.survivalPct}%", extra.brassBright, "prep_survival")
-                            PrepStat("Time", "${preview.durationSeconds}s", MaterialTheme.colorScheme.onSurface, "prep_time")
+                            // Session 41: game length (calendar time) over the real timer
+                            PrepStat("Time", com.example.domain.GameCalendar.formatGameSpan(preview.durationSeconds.toDouble() / com.example.domain.GameTiming.MODE.secondsPerGameDay) +
+                                " (" + TacticalCalculator.formatBuildTime(preview.durationSeconds.toLong()) + ")", MaterialTheme.colorScheme.onSurface, "prep_time")
                             PrepStat("Supply", "${preview.supplyCost}", if (canAfford) MaterialTheme.colorScheme.onSurface else extra.amberTelemetry, "prep_supply")
                         }
                         preview.breakdown.forEach { (label, value) ->

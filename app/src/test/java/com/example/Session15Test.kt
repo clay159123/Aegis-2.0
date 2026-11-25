@@ -91,14 +91,15 @@ class Session15Test {
     @Test
     fun goodConductEverySixCleanActions() {
         val m = GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT && it.risk == MissionRisk.LOW }
-        val veteran = op.copy(missionsCompleted = 5, goodConductStreak = AwardRules.GOOD_CONDUCT_STREAK - 1)
+        // Session 41: three clean years of service
+        val veteran = op.copy(missionsCompleted = 5, goodConductSinceDay = 0.0)
+        com.example.domain.GameCalendar.today = 3.1 * com.example.domain.GameCalendar.DAYS_PER_YEAR
         val r = AwardRules.serviceAwardsFor(veteran, m, OperatorOutcomeType.SAFE, true, emptyMap(), emptySet(), FixedRandom(0.99))
         assertTrue(AwardRules.GOOD_CONDUCT_ID in r.medalIds)
-        assertEquals(0, r.operator.goodConductStreak)
         // A wound resets the streak
         val hurt = AwardRules.serviceAwardsFor(veteran, m, OperatorOutcomeType.WOUNDED, true, emptyMap(), emptySet(), FixedRandom(0.99))
         assertFalse(AwardRules.GOOD_CONDUCT_ID in hurt.medalIds)
-        assertEquals(0, hurt.operator.goodConductStreak)
+        com.example.domain.GameCalendar.today = 0.0
     }
 
     @Test
