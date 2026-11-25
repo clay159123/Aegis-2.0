@@ -325,9 +325,14 @@ private fun DrawScope.drawDressUniformFigure(
                 val t = ((yFrac - 0.320f) / (0.520f - 0.320f)).coerceIn(0f, 1f)
                 0.252f - t * 0.008f
             }
+            // Art 5a: the arm hangs straighter, angling in a little from the elbow
+            yFrac <= 0.660f -> {
+                val t = ((yFrac - 0.520f) / (0.660f - 0.520f)).coerceIn(0f, 1f)
+                0.244f + t * 0.014f
+            }
             else -> {
-                val t = ((yFrac - 0.520f) / (0.895f - 0.520f)).coerceIn(0f, 1f)
-                0.244f + t * 0.052f
+                val t = ((yFrac - 0.660f) / (0.895f - 0.660f)).coerceIn(0f, 1f)
+                0.258f + t * 0.010f
             }
         }
         return cx + sideSign * w * x
@@ -340,9 +345,14 @@ private fun DrawScope.drawDressUniformFigure(
                 val ease = sin(t * (PI.toFloat() * 0.5f))
                 0.280f + ease * 0.106f
             }
+            // Art 5a: upper arm narrows to the elbow, forearm tapers to the cuff
+            yFrac <= 0.620f -> {
+                val t = ((yFrac - 0.455f) / (0.620f - 0.455f)).coerceIn(0f, 1f)
+                0.386f - t * 0.012f
+            }
             else -> {
-                val t = ((yFrac - 0.455f) / (0.895f - 0.455f)).coerceIn(0f, 1f)
-                0.386f + t * 0.022f
+                val t = ((yFrac - 0.620f) / (0.895f - 0.620f)).coerceIn(0f, 1f)
+                0.374f - t * 0.012f
             }
         }
         return cx + sideSign * w * x
@@ -410,7 +420,7 @@ private fun DrawScope.drawDressUniformFigure(
     drawPath(
         sleevePathL,
         brush = Brush.horizontalGradient(
-            colors = listOf(Color.Black.copy(alpha = 0.24f), Color.White.copy(alpha = 0.08f), Color.Black.copy(alpha = 0.14f)),
+            colors = listOf(Color.Black.copy(alpha = 0.16f), Color.White.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.10f)),
             startX = cx - w * 0.408f,
             endX = cx - w * 0.244f
         )
@@ -418,7 +428,7 @@ private fun DrawScope.drawDressUniformFigure(
     drawPath(
         sleevePathR,
         brush = Brush.horizontalGradient(
-            colors = listOf(Color.Black.copy(alpha = 0.14f), Color.White.copy(alpha = 0.08f), Color.Black.copy(alpha = 0.24f)),
+            colors = listOf(Color.Black.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.08f), Color.Black.copy(alpha = 0.34f)),
             startX = cx + w * 0.244f,
             endX = cx + w * 0.408f
         )
@@ -487,12 +497,13 @@ private fun DrawScope.drawDressUniformFigure(
             moveTo(cx - w * 0.148f, h * 0.294f)
             lineTo(cx + w * 0.148f, h * 0.294f)
             lineTo(cx + w * 0.254f, h * 0.326f)
-            lineTo(cx + w * 0.244f, h * 0.520f)
-            lineTo(cx + w * 0.238f, h * 0.750f)
-            lineTo(cx + w * 0.268f, h * 0.905f)
-            lineTo(cx - w * 0.268f, h * 0.905f)
-            lineTo(cx - w * 0.238f, h * 0.750f)
-            lineTo(cx - w * 0.244f, h * 0.520f)
+            // Art 5a: the coat is cut in at the waist and flares over the hips
+            lineTo(cx + w * 0.246f, h * 0.500f)
+            quadraticTo(cx + w * 0.228f, h * 0.640f, cx + w * 0.232f, h * 0.730f)
+            lineTo(cx + w * 0.262f, h * 0.905f)
+            lineTo(cx - w * 0.262f, h * 0.905f)
+            lineTo(cx - w * 0.232f, h * 0.730f)
+            quadraticTo(cx - w * 0.228f, h * 0.640f, cx - w * 0.246f, h * 0.500f)
             lineTo(cx - w * 0.254f, h * 0.326f)
             close()
         }
@@ -500,6 +511,14 @@ private fun DrawScope.drawDressUniformFigure(
         drawPath(
             coatPath,
             brush = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.06f), Color.Transparent, Color.Black.copy(alpha = 0.18f)))
+        )
+        // Art 5a: light from the upper left, the wearer's left side in shadow
+        drawPath(
+            coatPath,
+            brush = Brush.horizontalGradient(
+                0f to Color.White.copy(alpha = 0.06f), 0.45f to Color.Transparent, 0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.22f),
+                startX = cx - w * 0.27f, endX = cx + w * 0.27f
+            )
         )
 
         // Armhole shoulder seam lines cleanly framing the chest against sleeves
@@ -878,17 +897,6 @@ private fun DrawScope.drawDressUniformFigure(
         val sleeveW = kotlin.math.abs(sleeveOuterX(sideSign, 0.895f) - sleeveInnerX(sideSign, 0.895f))
         val cuffX = sleeveLeft + sleeveW * 0.06f
         val cuffW = sleeveW * 0.88f
-        val handX = sleeveLeft + sleeveW * 0.10f
-        val handW = sleeveW * 0.80f
-        val handTopY = h * 0.899f
-        val handH = h * 0.050f
-        val thumbW = handW * 0.28f
-        val thumbX = if (sideSign < 0f) {
-            handX + handW - thumbW * 0.78f
-        } else {
-            handX - thumbW * 0.22f
-        }
-
         // Crisp dress shirt cuff peeking just beneath the coat sleeve hem
         drawRoundRect(
             color = cuffShirtCol,
@@ -897,85 +905,17 @@ private fun DrawScope.drawDressUniformFigure(
             cornerRadius = CornerRadius(2f, 2f)
         )
 
-        if (operator.hasWhiteGloves) {
-            val gloveBase = Color(0xFFF0F2F5)
-            val gloveSeam = Color(0xFFC5CEDB)
-            drawRoundRect(
-                color = gloveBase,
-                topLeft = Offset( sleeveLeft + sleeveW * 0.08f, h * 0.896f),
-                size = Size(sleeveW * 0.84f, h * 0.052f),
-                cornerRadius = CornerRadius(6f, 6f)
-            )
-            drawRoundRect(
-                color = Color(0xFFF7F9FC),
-                topLeft = Offset(thumbX, h * 0.903f),
-                size = Size(thumbW, h * 0.033f),
-                cornerRadius = CornerRadius(4f, 4f)
-            )
-            drawRoundRect(
-                color = gloveSeam,
-                topLeft = Offset(thumbX, h * 0.903f),
-                size = Size(thumbW, h * 0.033f),
-                cornerRadius = CornerRadius(4f, 4f),
-                style = Stroke(width = 0.9f)
-            )
-            for (rib in -1..1) {
-                val rx = handX + handW * (0.50f + rib * 0.14f)
-                drawLine(
-                    color = gloveSeam,
-                    start = Offset(rx, h * 0.906f),
-                    end = Offset(rx, h * 0.932f),
-                    strokeWidth = 0.9f,
-                    cap = StrokeCap.Round
-                )
-            }
-        } else {
-            // Natural bare hands at attention matching the soldier's skin tone & shading
-            drawRoundRect(
-                color = skinTone,
-                topLeft = Offset(handX, handTopY),
-                size = Size(handW, handH),
-                cornerRadius = CornerRadius(6f, 6f)
-            )
-            // Subtle wrist shadow beneath shirt cuff
-            drawRect(
-                color = skinShadow.copy(alpha = 0.55f),
-                topLeft = Offset(handX + 1f, handTopY),
-                size = Size((handW - 2f).coerceAtLeast(1f), h * 0.007f)
-            )
-            // Tucked thumb along trouser seam at attention
-            drawRoundRect(
-                color = skinTone,
-                topLeft = Offset(thumbX, handTopY + handH * 0.12f),
-                size = Size(thumbW, handH * 0.64f),
-                cornerRadius = CornerRadius(4f, 4f)
-            )
-            drawRoundRect(
-                color = skinShadow.copy(alpha = 0.72f),
-                topLeft = Offset(thumbX, handTopY + handH * 0.12f),
-                size = Size(thumbW, handH * 0.64f),
-                cornerRadius = CornerRadius(4f, 4f),
-                style = Stroke(width = 1.0f)
-            )
-            // Subtle curled finger creases & crisp hand contour
-            for (finger in 1..2) {
-                val fx = handX + handW * (finger / 3f)
-                drawLine(
-                    color = skinShadow.copy(alpha = 0.58f),
-                    start = Offset(fx, handTopY + handH * 0.52f),
-                    end = Offset(fx, handTopY + handH * 0.94f),
-                    strokeWidth = 1.0f,
-                    cap = StrokeCap.Round
-                )
-            }
-            drawRoundRect(
-                color = skinShadow.copy(alpha = 0.60f),
-                topLeft = Offset(handX, handTopY),
-                size = Size(handW, handH),
-                cornerRadius = CornerRadius(6f, 6f),
-                style = Stroke(width = 1.0f)
-            )
-        }
+        // Art 5a: a relaxed hand hanging at the side, thumb forward; white gloves only in Mess (never Alphas)
+        val gloved = operator.hasWhiteGloves && kit != WardrobeKit.ALPHAS
+        drawRelaxedHand(
+            sideSign = sideSign,
+            centerX = sleeveLeft + sleeveW * 0.5f,
+            topY = h * 0.897f,
+            handW = sleeveW * 0.66f,
+            handH = h * 0.064f,
+            fill = if (gloved) Color(0xFFF2F4F7) else skinTone,
+            line = if (gloved) Color(0xFFC5CEDB) else skinShadow
+        )
     }
 
     // 12. Wearer's Left Chest: Mess Miniature Medals, Full Hanging Medals, Ribbon Rack, OR Clean Tunic
@@ -1246,69 +1186,91 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
 
         // 15. Detailed Ceremonial Headgear
         if (operator.headgearStyle.kind != HeadgearKind.BERET) {
-            val capBandW = skullHalfW(0.118f) + w * 0.008f
-            val crownPath = Path().apply {
-                moveTo(cx - w * 0.152f, h * 0.060f)
-                lineTo(cx + w * 0.152f, h * 0.060f)
-                lineTo(cx + capBandW, h * 0.122f)
-                lineTo(cx - capBandW, h * 0.122f)
+            // Art 5a: a service cap seen slightly from the front: the round crown wider than the band, the
+            // band, a shined visor, the chinstrap (gold cord for officers, black leather for enlisted) and the badge
+            val officerCap = operator.headgearStyle.kind == HeadgearKind.OFFICER_CAP ||
+                operator.headgearStyle.kind == HeadgearKind.GENERAL_CAP || tier.isOfficer
+            val bandHalf = skullHalfW(0.118f) + w * 0.010f
+            val crownHalf = w * 0.150f
+            val crownTopY = h * 0.050f
+            val crownRy = h * 0.017f
+            val bandTop = h * 0.100f
+            val bandBot = h * 0.122f
+            // Top of the crown (seen from just above) and the front wall sloping down to the band
+            drawOval(lerp(headgearCol, Color.White, 0.10f), Offset(cx - crownHalf, crownTopY - crownRy), Size(crownHalf * 2f, crownRy * 2f))
+            val wall = Path().apply {
+                moveTo(cx - crownHalf, crownTopY)
+                cubicTo(cx - crownHalf * 0.98f, h * 0.078f, cx - bandHalf - w * 0.006f, h * 0.088f, cx - bandHalf, bandTop)
+                lineTo(cx + bandHalf, bandTop)
+                cubicTo(cx + bandHalf + w * 0.006f, h * 0.088f, cx + crownHalf * 0.98f, h * 0.078f, cx + crownHalf, crownTopY)
+                // Front edge of the crown, rising slightly at the center where the badge sits
+                cubicTo(cx + crownHalf * 0.6f, crownTopY + crownRy * 1.15f, cx + w * 0.03f, crownTopY + crownRy * 0.55f, cx, crownTopY + crownRy * 0.50f)
+                cubicTo(cx - w * 0.03f, crownTopY + crownRy * 0.55f, cx - crownHalf * 0.6f, crownTopY + crownRy * 1.15f, cx - crownHalf, crownTopY)
                 close()
             }
-            drawPath(crownPath, color = headgearCol)
-            drawRect(trimCol, Offset(cx - capBandW + w * 0.003f, h * 0.106f), Size((capBandW - w * 0.003f) * 2f, h * 0.016f))
-            drawArc(
-                color = Color(0xFF0A0D14),
-                startAngle = 0f,
-                sweepAngle = 180f,
-                useCenter = true,
-                topLeft = Offset(cx - capBandW + w * 0.004f, h * 0.109f),
-                size = Size((capBandW - w * 0.004f) * 2f, h * 0.044f)
-            )
-            drawArc(
-                color = Color.White.copy(alpha = 0.22f),
-                startAngle = 25f,
-                sweepAngle = 120f,
-                useCenter = false,
-                topLeft = Offset(cx - w * 0.068f, h * 0.115f),
-                size = Size(w * 0.136f, h * 0.022f),
-                style = Stroke(1.3f, cap = StrokeCap.Round)
-            )
-            if (operator.headgearStyle.kind == HeadgearKind.OFFICER_CAP ||
-                operator.headgearStyle.kind == HeadgearKind.GENERAL_CAP ||
-                tier.isOfficer
-            ) {
-                val visorStroke = when {
-                    tier == RankTier.FLAG_OFFICER -> 3.4f
-                    operator.rank.isFieldGradeOfficer -> 2.3f
-                    else -> 1.25f
-                }
-                drawArc(
-                    color = trimCol,
-                    startAngle = 15f,
-                    sweepAngle = 150f,
-                    useCenter = false,
-                    topLeft = Offset(cx - w * 0.082f, h * 0.114f),
-                    size = Size(w * 0.164f, h * 0.034f),
-                    style = Stroke(width = visorStroke, cap = StrokeCap.Round)
-                )
-                // Field-Grade (MAJ–COL) & Flag Officer visor oak-leaf "scrambled eggs" darts
-                if (tier == RankTier.FLAG_OFFICER || operator.rank.isFieldGradeOfficer) {
-                    for (side in listOf(-1f, 1f)) {
-                        for (leafIdx in 0..2) {
-                            val lx = cx + side * w * (0.034f + leafIdx * 0.017f)
-                            val ly = h * (0.132f - leafIdx * 0.002f)
-                            drawLine(
-                                color = trimCol,
-                                start = Offset(lx, ly),
-                                end = Offset(lx + side * w * 0.009f, ly - h * 0.006f),
-                                strokeWidth = if (tier == RankTier.FLAG_OFFICER) 1.7f else 1.3f,
-                                cap = StrokeCap.Round
-                            )
-                        }
-                    }
+            drawPath(wall, headgearCol)
+            drawPath(wall, Brush.horizontalGradient(
+                0f to Color.White.copy(alpha = 0.08f), 0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.30f),
+                startX = cx - crownHalf, endX = cx + crownHalf))
+            // Welt piping around the crown edge
+            drawPath(Path().apply {
+                moveTo(cx - crownHalf, crownTopY)
+                cubicTo(cx - crownHalf * 0.6f, crownTopY + crownRy * 1.15f, cx - w * 0.03f, crownTopY + crownRy * 0.55f, cx, crownTopY + crownRy * 0.50f)
+                cubicTo(cx + w * 0.03f, crownTopY + crownRy * 0.55f, cx + crownHalf * 0.6f, crownTopY + crownRy * 1.15f, cx + crownHalf, crownTopY)
+            }, if (officerCap) trimCol.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.35f), style = Stroke(1.2f))
+            // Band, with braid texture for officers
+            drawRect(trimCol, Offset(cx - bandHalf, bandTop), Size(bandHalf * 2f, bandBot - bandTop))
+            if (officerCap) {
+                var bx = cx - bandHalf
+                while (bx < cx + bandHalf) { drawLine(Color.Black.copy(alpha = 0.18f), Offset(bx, bandTop), Offset(bx + w * 0.008f, bandBot), strokeWidth = 0.7f); bx += w * 0.010f }
+            }
+            drawRect(Color.Black.copy(alpha = 0.25f), Offset(cx - bandHalf, bandBot - h * 0.003f), Size(bandHalf * 2f, h * 0.003f))
+            // Visor: black patent leather with a shine
+            val visor = Path().apply {
+                moveTo(cx - bandHalf + w * 0.004f, bandBot)
+                quadraticTo(cx, bandBot + h * 0.006f, cx + bandHalf - w * 0.004f, bandBot)
+                quadraticTo(cx, bandBot + h * 0.036f, cx - bandHalf + w * 0.004f, bandBot)
+                close()
+            }
+            drawPath(visor, Color(0xFF0A0D14))
+            drawArc(Color.White.copy(alpha = 0.28f), 25f, 110f, false, Offset(cx - w * 0.060f, bandBot + h * 0.004f), Size(w * 0.120f, h * 0.020f), style = Stroke(1.2f, cap = StrokeCap.Round))
+            // Field-grade and general officers: gold oak leaves along the visor
+            if (tier == RankTier.FLAG_OFFICER || operator.rank.isFieldGradeOfficer) {
+                for (side in listOf(-1f, 1f)) for (k in 0..3) {
+                    val t = 0.25f + k * 0.17f
+                    val lx = cx + side * bandHalf * t
+                    val ly = bandBot + h * (0.020f - t * t * 0.012f)
+                    drawOval(trimCol, Offset(lx - w * 0.008f, ly - h * 0.003f), Size(w * 0.016f, h * if (tier == RankTier.FLAG_OFFICER) 0.008f else 0.006f))
                 }
             }
-            drawStar(Offset(cx, h * 0.084f), w * 0.023f, w * 0.0095f, trimCol)
+            // Chinstrap across the band bottom with a button at each end
+            if (officerCap) {
+                drawLine(Color(0xFFE6C96A), Offset(cx - bandHalf, bandBot - h * 0.005f), Offset(cx + bandHalf, bandBot - h * 0.005f), strokeWidth = 1.4f)
+                drawLine(Color(0xFFB99A3E), Offset(cx - bandHalf, bandBot - h * 0.0015f), Offset(cx + bandHalf, bandBot - h * 0.0015f), strokeWidth = 1.0f)
+            } else {
+                drawRect(Color(0xFF0D0F12), Offset(cx - bandHalf, bandBot - h * 0.007f), Size(bandHalf * 2f, h * 0.006f))
+                drawLine(Color.White.copy(alpha = 0.2f), Offset(cx - bandHalf, bandBot - h * 0.006f), Offset(cx + bandHalf, bandBot - h * 0.006f), strokeWidth = 0.6f)
+            }
+            for (side in listOf(-1f, 1f)) drawCircle(trimCol, w * 0.006f, Offset(cx + side * (bandHalf - w * 0.008f), bandBot - h * 0.004f))
+            // Cap badge on the front of the crown: officers a star with spread wings, enlisted a disc with a star
+            val badge = Offset(cx, h * 0.084f)
+            if (officerCap) {
+                for (side in listOf(-1f, 1f)) {
+                    val wing = Path().apply {
+                        moveTo(badge.x + side * w * 0.010f, badge.y)
+                        lineTo(badge.x + side * w * 0.036f, badge.y - h * 0.009f)
+                        lineTo(badge.x + side * w * 0.030f, badge.y + h * 0.002f)
+                        lineTo(badge.x + side * w * 0.012f, badge.y + h * 0.006f)
+                        close()
+                    }
+                    drawPath(wing, trimCol)
+                }
+                drawStar(badge, w * 0.016f, w * 0.0068f, trimCol)
+            } else {
+                drawCircle(trimCol, w * 0.017f, badge)
+                drawCircle(Color.Black.copy(alpha = 0.25f), w * 0.017f, badge, style = Stroke(0.8f))
+                drawStar(badge, w * 0.010f, w * 0.0042f, lerp(trimCol, Color.Black, 0.35f))
+            }
         } else {
             // Skull-fitted molded military beret: snug leather sweatband around cranium & wool drape hugging right temple
             val bandLeftY = 0.124f
@@ -1373,6 +1335,12 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
                 color = Color.Black.copy(alpha = 0.34f),
                 style = Stroke(width = 1.0f, join = StrokeJoin.Round)
             )
+            // Art 5a: a soft sheen across the wool where the light catches the crown
+            drawPath(
+                Path().apply { moveTo(cx - w * 0.090f, h * 0.088f); quadraticTo(cx - w * 0.040f, h * 0.070f, cx + w * 0.020f, h * 0.072f) },
+                color = Color.White.copy(alpha = 0.16f),
+                style = Stroke(width = 2.2f, cap = StrokeCap.Round)
+            )
 
             // Fitted black leather sweatband curving across the forehead
             val bandPath = Path().apply {
@@ -1416,8 +1384,9 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
             // Heraldic shield-shaped Beret Flash + gold DI crest centered neatly above left eye
             val flashCx = cx + w * 0.034f
             val flashTopY = h * 0.080f
-            val flashW = w * 0.036f
-            val flashH = h * 0.026f
+            // Art 5a: a touch larger so the flash reads at card size
+            val flashW = w * 0.040f
+            val flashH = h * 0.029f
             // Item 66: squad members wear a flash in their squad's division patch colors (fill and diagonal
             // stripe); soldiers with no squad wear the plain Army flash for their beret
             // Item 68: the SF squad wears a black and red SF flash
@@ -2557,4 +2526,45 @@ internal fun sfBeardColor(op: Operator): Color {
     val hair = SoldierFace.traits(op).hairColor
     val graying = ((SoldierFace.ageOf(op) - 36) / 18f).coerceIn(0f, 0.85f)
     return lerp(hair, Color(0xFFB9B6B0), graying * 0.8f)
+}
+
+/**
+ * Art 5a: a relaxed hand seen from the front: the wrist under the cuff, a tapered palm, fingers curled in
+ * toward the trouser seam, and the thumb resting forward on the side nearer the body.
+ */
+private fun DrawScope.drawRelaxedHand(sideSign: Float, centerX: Float, topY: Float, handW: Float, handH: Float, fill: Color, line: Color) {
+    val inner = -sideSign // toward the body center
+    val half = handW / 2f
+    val hand = Path().apply {
+        moveTo(centerX - half * 0.80f, topY)
+        lineTo(centerX + half * 0.80f, topY)
+        cubicTo(centerX + half * 1.05f, topY + handH * 0.35f, centerX + half * 1.0f, topY + handH * 0.80f, centerX + half * 0.55f, topY + handH)
+        quadraticTo(centerX, topY + handH * 1.08f, centerX - half * 0.55f, topY + handH)
+        cubicTo(centerX - half * 1.0f, topY + handH * 0.80f, centerX - half * 1.05f, topY + handH * 0.35f, centerX - half * 0.80f, topY)
+        close()
+    }
+    drawPath(hand, fill)
+    // The outer half falls into shade
+    drawPath(hand, Brush.horizontalGradient(
+        if (sideSign > 0f) listOf(Color.Transparent, Color.Black.copy(alpha = 0.18f)) else listOf(Color.Black.copy(alpha = 0.10f), Color.Transparent),
+        startX = centerX - half, endX = centerX + half))
+    // Wrist shadow under the cuff
+    drawRect(line.copy(alpha = 0.45f), Offset(centerX - half * 0.78f, topY), Size(half * 1.56f, handH * 0.10f))
+    // Curled fingers: knuckle line and finger breaks near the tips
+    drawArc(line.copy(alpha = 0.55f), 20f, 140f, false, Offset(centerX - half * 0.75f, topY + handH * 0.48f), Size(half * 1.5f, handH * 0.22f), style = Stroke(1f))
+    for (k in -1..1) {
+        val fx = centerX + k * half * 0.34f
+        drawLine(line.copy(alpha = 0.5f), Offset(fx, topY + handH * 0.66f), Offset(fx, topY + handH * 0.95f), strokeWidth = 0.9f, cap = StrokeCap.Round)
+    }
+    // Thumb forward on the inner side
+    val thumb = Path().apply {
+        val tx = centerX + inner * half * 0.62f
+        moveTo(tx, topY + handH * 0.12f)
+        quadraticTo(tx + inner * half * 0.42f, topY + handH * 0.40f, tx + inner * half * 0.18f, topY + handH * 0.70f)
+        quadraticTo(tx - inner * half * 0.12f, topY + handH * 0.72f, tx - inner * half * 0.18f, topY + handH * 0.48f)
+        close()
+    }
+    drawPath(thumb, fill)
+    drawPath(thumb, line.copy(alpha = 0.65f), style = Stroke(0.9f))
+    drawPath(hand, line.copy(alpha = 0.6f), style = Stroke(1f))
 }

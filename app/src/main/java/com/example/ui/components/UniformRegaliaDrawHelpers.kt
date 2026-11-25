@@ -35,7 +35,7 @@ import kotlin.math.sin
  * pocket badges are all placed relative to it, so changing this one value moves the
  * pockets and everything on them together.
  */
-internal const val CHEST_POCKET_TOP_FRACTION = 0.505f
+internal const val CHEST_POCKET_TOP_FRACTION = 0.475f
 
 /** Pocket top the original chest offsets were tuned against. */
 private const val LEGACY_CHEST_POCKET_TOP_FRACTION = 0.565f
