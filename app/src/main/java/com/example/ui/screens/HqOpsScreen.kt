@@ -532,7 +532,8 @@ fun HqOpsScreen(
                         onRush = onRushFacility,
                         fallenCount = uiState.operators.count { it.status == OperatorStatus.FALLEN },
                         completedCampaignIds = uiState.completedCampaignIds,
-                        operators = uiState.operators
+                        operators = uiState.operators,
+                        campaignCompletedDays = uiState.campaignCompletedDays
                     )
 
                     TacticalPanelCard(

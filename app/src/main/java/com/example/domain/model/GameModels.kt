@@ -1524,6 +1524,8 @@ data class Operator(
     val eventKit: String? = null,
     /** Art 1: reroll seed for the soldier's face (Tailor "New face"). */
     val faceSeed: Int = 0,
+    /** Art 2b: calendar day this soldier fell (for the Memorial Wall plaque); -1 = unknown or alive. */
+    val fallenDay: Double = -1.0,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */

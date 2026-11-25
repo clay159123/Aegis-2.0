@@ -22,6 +22,20 @@ import com.example.domain.model.SF_PATCH_RED
 internal object BaseArt {
     enum class Roof { FLAT, GABLE, ARCH }
 
+    /** Art 2b: the map follows the calendar's (northern hemisphere) season. Set before each draw. */
+    enum class Season { WINTER, SPRING, SUMMER, FALL }
+    @Volatile var season: Season = Season.SPRING
+    fun seasonOf(days: Double): Season = when (com.example.domain.GameCalendar.season(days)) {
+        "Winter" -> Season.WINTER; "Summer" -> Season.SUMMER; "Fall" -> Season.FALL; else -> Season.SPRING
+    }
+    val Snow = Color(0xFFE4E9EC)
+    val ground: Color get() = when (season) {
+        Season.WINTER -> Color(0xFFDCE2E5)
+        Season.SPRING -> Color(0xFF62734A)
+        Season.SUMMER -> Color(0xFF6E7246)
+        Season.FALL -> Color(0xFF666A42)
+    }
+
     // Palette
     val Grass = Color(0xFF5F6D45)
     val GrassLight = Color(0xFF6C7B4F)
@@ -83,6 +97,7 @@ internal object BaseArt {
         when (style) {
             Roof.FLAT -> {
                 drawRect(roof, l.o(x, base - h - d), Size(w * l.u, d * l.u))
+                if (season == Season.WINTER) drawRect(Snow, l.o(x + 0.5f, base - h - d + 0.5f), Size((w - 1f).coerceAtLeast(0f) * l.u, (d - 1f).coerceAtLeast(0f) * l.u))
                 drawRect(lighter(roof, 0.28f), l.o(x, base - h - d), Size(w * l.u, d * l.u), style = Stroke(0.6f * l.u))
                 drawRect(wall, front.topLeft, front.size)
                 drawRect(darker(wall, 0.25f), front.topLeft, Size(front.width, 0.7f * l.u))
@@ -91,6 +106,10 @@ internal object BaseArt {
                 // Ridge runs left to right: the far slope catches the light, the near slope is darker
                 drawRect(lighter(roof, 0.12f), l.o(x - 0.8f, base - h - d), Size((w + 1.6f) * l.u, d * 0.5f * l.u))
                 drawRect(roof, l.o(x - 0.8f, base - h - d * 0.5f), Size((w + 1.6f) * l.u, d * 0.5f * l.u + 0.8f * l.u))
+                if (season == Season.WINTER) {
+                    drawRect(Snow, l.o(x - 0.8f, base - h - d), Size((w + 1.6f) * l.u, d * 0.5f * l.u))
+                    drawRect(darker(Snow, 0.08f), l.o(x - 0.8f, base - h - d * 0.5f), Size((w + 1.6f) * l.u, d * 0.5f * l.u))
+                }
                 drawLine(darker(roof, 0.35f), l.o(x - 0.8f, base - h - d * 0.5f), l.o(x + w + 0.8f, base - h - d * 0.5f), strokeWidth = 0.5f * l.u)
                 drawRect(wall, front.topLeft, front.size)
                 drawRect(darker(roof, 0.2f), front.topLeft, Size(front.width, 0.6f * l.u))
@@ -102,6 +121,7 @@ internal object BaseArt {
                     val f = if (i == 1) 0.22f else if (i == 2) 0.08f else 0f
                     drawRect(lighter(roof, f), l.o(x + i * w / bands, base - h - d + h * 0.3f), Size(w / bands * l.u + 0.3f * l.u, d * l.u))
                 }
+                if (season == Season.WINTER) drawRect(Snow.copy(alpha = 0.85f), l.o(x + w * 0.15f, base - h - d + h * 0.3f), Size(w * 0.7f * l.u, d * l.u))
                 for (i in 1 until 10) drawLine(darker(roof, 0.15f), l.o(x, base - h - d + h * 0.3f + i * d / 10f), l.o(x + w, base - h - d + h * 0.3f + i * d / 10f), strokeWidth = 0.25f * l.u)
                 val arch = Path().apply {
                     moveTo(l.x(x), l.y(base))
@@ -148,8 +168,8 @@ internal object BaseArt {
         val rightSlope = Path().apply {
             moveTo(l.x(x + w / 2), l.y(ridge)); lineTo(l.x(x + w), l.y(eave)); lineTo(l.x(x + w), l.y(eave - d)); lineTo(l.x(x + w / 2), l.y(ridge - d)); close()
         }
-        drawPath(leftSlope, lighter(cloth, 0.2f))
-        drawPath(rightSlope, darker(cloth, 0.12f))
+        drawPath(leftSlope, if (season == Season.WINTER) Snow else lighter(cloth, 0.2f))
+        drawPath(rightSlope, if (season == Season.WINTER) darker(Snow, 0.08f) else darker(cloth, 0.12f))
         val end = Path().apply {
             moveTo(l.x(x), l.y(base)); lineTo(l.x(x), l.y(eave)); lineTo(l.x(x + w / 2), l.y(ridge)); lineTo(l.x(x + w), l.y(eave)); lineTo(l.x(x + w), l.y(base)); close()
         }
@@ -164,12 +184,29 @@ internal object BaseArt {
         drawLine(darker(cloth, 0.5f), l.o(x + w, eave), l.o(x + w + 2f, base), strokeWidth = 0.25f * l.u)
     }
 
-    fun DrawScope.tree(cx: Float, cy: Float, r: Float, u: Float, autumn: Boolean = false) {
-        drawOval(Shadow.copy(alpha = 0.25f), Offset(cx - r * 0.2f * u, cy + r * 0.2f * u), Size(r * 2.1f * u, r * 0.9f * u))
-        drawRect(Color(0xFF5A4630), Offset(cx - 0.4f * u, cy - r * 0.2f * u), Size(0.8f * u, r * 0.7f * u))
-        val leaf = if (autumn) Color(0xFF9A6A2E) else Color(0xFF3F5130)
+    fun DrawScope.tree(cx: Float, cy: Float, r: Float, u: Float) {
+        val pick = ((cx * 7f + cy * 13f) / u).toInt().let { if (it < 0) -it else it } % 3
+        drawOval(Shadow.copy(alpha = if (season == Season.WINTER) 0.08f else 0.25f), Offset(cx - r * 0.2f * u, cy + r * 0.2f * u), Size(r * 2.1f * u, r * 0.9f * u))
+        val bark = Color(0xFF5A4630)
+        if (season == Season.WINTER) {
+            // Bare branches with a dusting of snow
+            drawLine(bark, Offset(cx, cy + r * 0.4f * u), Offset(cx, cy - r * 1.6f * u), strokeWidth = 0.7f * u)
+            for ((dx, dy) in listOf(-0.9f to -1.4f, 0.8f to -1.6f, -0.6f to -0.8f, 0.7f to -0.9f, 0f to -1.9f)) {
+                drawLine(bark, Offset(cx, cy + dy * 0.55f * r * u), Offset(cx + dx * r * u, cy + dy * r * u), strokeWidth = 0.35f * u)
+                drawCircle(Snow, 0.35f * u, Offset(cx + dx * r * u, cy + dy * r * u))
+            }
+            return
+        }
+        drawRect(bark, Offset(cx - 0.4f * u, cy - r * 0.2f * u), Size(0.8f * u, r * 0.7f * u))
+        val leaf = when (season) {
+            Season.SPRING -> Color(0xFF5C7A3A)
+            Season.SUMMER -> Color(0xFF3F5130)
+            else -> listOf(Color(0xFFB5642A), Color(0xFFC9952E), Color(0xFF8E3E22))[pick]
+        }
         drawCircle(leaf, r * u, Offset(cx, cy - r * 0.9f * u))
         drawCircle(lighter(leaf, 0.16f), r * 0.62f * u, Offset(cx - r * 0.25f * u, cy - r * 1.15f * u))
+        if (season == Season.SPRING && pick == 0) for ((dx, dy) in listOf(-0.4f to -1.2f, 0.3f to -0.7f, 0.5f to -1.3f, -0.2f to -0.5f))
+            drawCircle(Color(0xFFE6B3C2), 0.45f * u, Offset(cx + dx * r * u, cy + dy * r * u))
     }
 
     fun DrawScope.flag(l: Lot, x: Float, base: Float, h: Float, col: Color, trim: Color? = null) {
@@ -728,9 +765,15 @@ internal object BaseArt {
         fun rnd(n: Int): Int { seed = (seed * 1103515245 + 12345) and 0x7fffffff; return seed % n }
         for (i in 0 until 260) {
             val x = rnd(w.toInt()).toFloat(); val y = rnd(h.toInt()).toFloat()
-            val col = if (i % 3 == 0) GrassLight else GrassDark
+            val col = when (season) {
+                Season.WINTER -> if (i % 3 == 0) Color(0xFFF4F7F8) else Color(0xFFB9C3C8)
+                else -> if (i % 3 == 0) lighter(ground, 0.12f) else darker(ground, 0.18f)
+            }
             drawLine(col.copy(alpha = 0.55f), Offset(x * u, y * u), Offset((x + 0.5f) * u, (y - 1.4f) * u), strokeWidth = 0.35f * u)
             drawLine(col.copy(alpha = 0.55f), Offset((x + 0.8f) * u, y * u), Offset((x + 0.6f) * u, (y - 1.1f) * u), strokeWidth = 0.35f * u)
+            // Spring flowers and fall leaves
+            if (i % 4 == 0 && season == Season.SPRING) drawCircle(if (i % 8 == 0) Color(0xFFF2E27A) else Color(0xFFF4F1EA), 0.35f * u, Offset((x + 2f) * u, (y + 1f) * u))
+            if (i % 4 == 0 && season == Season.FALL) drawCircle(if (i % 8 == 0) Color(0xFFB5642A) else Color(0xFFC9952E), 0.4f * u, Offset((x + 2f) * u, (y + 1f) * u))
         }
     }
 
