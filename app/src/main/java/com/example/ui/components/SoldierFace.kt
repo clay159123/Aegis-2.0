@@ -206,24 +206,28 @@ internal object SoldierFace {
             }
             else -> drawArc(line, 270f, 160f, false, Offset(cx - W * 0.02f, noseTop), Size(W * 0.06f, noseBot - noseTop), style = Stroke(W * 0.018f, cap = StrokeCap.Round))
         }
-        // Mouth
-        val mY = y(0.75f)
-        // Width is the soldier's own; the expression follows current morale
-        val mHalf = W * when (t.mouthStyle) { 0 -> 0.07f; 1 -> 0.085f; else -> 0.10f }
-        val mouthCol = featureDark.copy(alpha = 0.85f)
-        val mStroke = Stroke(W * 0.02f, cap = StrokeCap.Round)
-        when (MoraleRules.band(op)) {
-            MoraleRules.Band.HIGH -> drawArc(mouthCol, 20f, 140f, false, Offset(cx - mHalf, mY - H * 0.04f), Size(mHalf * 2, H * 0.06f), style = mStroke)
-            MoraleRules.Band.STEADY -> drawLine(mouthCol, Offset(cx - mHalf, mY), Offset(cx + mHalf, mY), strokeWidth = W * 0.02f, cap = StrokeCap.Round)
-            MoraleRules.Band.LOW -> drawArc(mouthCol, 205f, 130f, false, Offset(cx - mHalf, mY), Size(mHalf * 2, H * 0.03f), style = mStroke)
-            MoraleRules.Band.BROKEN -> drawArc(mouthCol, 200f, 140f, false, Offset(cx - mHalf, mY), Size(mHalf * 2, H * 0.06f), style = mStroke)
-        }
+        drawMouth(box, op, featureDark.copy(alpha = 0.85f))
         // Marks
         if (t.freckles) listOf(-0.22f to 0.57f, -0.17f to 0.60f, -0.25f to 0.61f, 0.22f to 0.57f, 0.17f to 0.60f, 0.25f to 0.61f).forEach { (fx, fy) ->
             drawCircle(shadow.copy(alpha = 0.7f), radius = W * 0.011f, center = Offset(x(fx), y(fy)))
         }
         if (t.mole) drawCircle(featureDark.copy(alpha = 0.6f), radius = W * 0.014f, center = Offset(x(0.24f), y(0.68f)))
         if (t.scar) drawLine(lerp(skin, Color(0xFFE8C8C0), 0.5f), Offset(x(-0.30f), y(0.52f)), Offset(x(-0.20f), y(0.68f)), strokeWidth = W * 0.016f, cap = StrokeCap.Round)
+    }
+
+    /** The mouth: width is the soldier's own, the expression follows current morale. Also drawn over a beard. */
+    fun DrawScope.drawMouth(box: Rect, op: Operator, col: Color) {
+        val t = traits(op)
+        val W = box.width; val H = box.height; val cx = box.center.x
+        val mY = box.top + H * 0.75f
+        val mHalf = W * when (t.mouthStyle) { 0 -> 0.07f; 1 -> 0.085f; else -> 0.10f }
+        val mStroke = Stroke(W * 0.02f, cap = StrokeCap.Round)
+        when (MoraleRules.band(op)) {
+            MoraleRules.Band.HIGH -> drawArc(col, 20f, 140f, false, Offset(cx - mHalf, mY - H * 0.04f), Size(mHalf * 2, H * 0.06f), style = mStroke)
+            MoraleRules.Band.STEADY -> drawLine(col, Offset(cx - mHalf, mY), Offset(cx + mHalf, mY), strokeWidth = W * 0.02f, cap = StrokeCap.Round)
+            MoraleRules.Band.LOW -> drawArc(col, 205f, 130f, false, Offset(cx - mHalf, mY), Size(mHalf * 2, H * 0.03f), style = mStroke)
+            MoraleRules.Band.BROKEN -> drawArc(col, 200f, 140f, false, Offset(cx - mHalf, mY), Size(mHalf * 2, H * 0.06f), style = mStroke)
+        }
     }
 
     fun ageOf(op: Operator, today: Double = GameCalendar.today): Int = if (op.joinedDay < 0) 0 else GameCalendar.age(op, today)

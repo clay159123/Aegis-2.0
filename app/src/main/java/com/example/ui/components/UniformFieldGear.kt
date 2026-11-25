@@ -22,7 +22,7 @@ internal fun fieldLoadBearingStyleFor(armorId: String?): FieldLoadBearingStyle =
 
 private val webbing = Color(0xFF1C1F18)
 
-/** Camo blotches, collar, zipper and sleeve pocket flaps on the base field uniform. */
+/** Collar, zipper and shoulder seams on the base field uniform (Art 4a: the pattern itself is FieldCamo). */
 internal fun DrawScope.drawFieldUniformTexture(
     w: Float,
     h: Float,
@@ -32,22 +32,6 @@ internal fun DrawScope.drawFieldUniformTexture(
     secondary: Color,
     accent: Color
 ) {
-    // Fixed blotch layout so every soldier's pattern is stable between frames
-    val blotches = listOf(
-        Triple(-0.30f, 0.46f, 0.050f), Triple(-0.18f, 0.40f, 0.038f), Triple(-0.06f, 0.52f, 0.044f),
-        Triple(0.10f, 0.44f, 0.040f), Triple(0.22f, 0.55f, 0.052f), Triple(0.34f, 0.47f, 0.042f),
-        Triple(-0.24f, 0.66f, 0.058f), Triple(-0.02f, 0.70f, 0.050f), Triple(0.16f, 0.74f, 0.056f),
-        Triple(0.30f, 0.68f, 0.046f), Triple(-0.34f, 0.80f, 0.050f), Triple(-0.12f, 0.88f, 0.054f),
-        Triple(0.08f, 0.92f, 0.048f), Triple(0.26f, 0.86f, 0.052f), Triple(-0.20f, 0.56f, 0.030f),
-        Triple(0.02f, 0.60f, 0.028f), Triple(0.36f, 0.78f, 0.030f), Triple(-0.38f, 0.60f, 0.032f)
-    )
-    clipPath(clip) {
-        blotches.forEachIndexed { i, (dx, y, r) ->
-            val col = if (i % 3 == 0) accent.copy(alpha = 0.55f) else secondary.copy(alpha = 0.60f)
-            drawOval(col, Offset(cx + w * dx - w * r, h * y - h * r * 0.55f), Size(w * r * 2.1f, h * r * 1.1f))
-            drawOval(col, Offset(cx + w * (dx + r * 0.6f) - w * r * 0.6f, h * (y + r * 0.35f) - h * r * 0.4f), Size(w * r * 1.2f, h * r * 0.8f))
-        }
-    }
     // Mandarin collar standing open at the neck
     val collarL = Path().apply {
         moveTo(cx - w * 0.050f, h * 0.330f)
