@@ -2900,6 +2900,20 @@ object TacticalCalculator {
         }
     }
 
+    /**
+     * Item 196: the campaign a field op counts toward for the Expeditionary ribbon and combat patches:
+     * its own campaign, or for a standalone op the campaign in its theater. Null for schools and HQ work.
+     */
+    fun deploymentCampaignKey(m: MissionTemplate): String? {
+        if (m.campaignId != null) return m.campaignId
+        if (m.scope != MissionScope.FIELD_COMBAT) return null
+        return GameCatalog.campaigns.firstOrNull { it.theater == m.theater }?.id ?: "theater_${m.theater.name}"
+    }
+
+    /** Item 196: how many different campaigns this soldier has completed a mission in. */
+    fun deploymentCampaignsServed(op: Operator): Int =
+        op.completedMissionIds.mapNotNull { id -> GameCatalog.missions.find { it.id == id }?.let(::deploymentCampaignKey) }.distinct().size
+
     fun evaluateAwardEligibility(
         medal: MedalDefinition,
         operator: Operator,
@@ -2980,6 +2994,8 @@ object TacticalCalculator {
                 }
             }
             "medal_meritorious" -> {
+                // Item 196: SFC, CW2 and CPT and above
+                if (operator.rank !in AwardRules.MSM_RANKS) missing += "SFC, CW2, CPT or above"
                 val staffMet = isHqStaff && operator.staffOpsSupported >= 3
                 val diploMet = distinctDiploMissions >= 2
                 val careerMet = careerOps >= 5
@@ -2997,6 +3013,11 @@ object TacticalCalculator {
                 if (combatOps < 1 || operator.highestRiskSurvived == null) {
                     missing += "Complete 1+ Field Combat Deployment (non-training)"
                 }
+                // Item 196: one per campaign taken part in (any stage); standalone ops count toward their theater's campaign
+                val served = deploymentCampaignsServed(operator)
+                val held = allCitations.count { it.medalId == medal.id && it.operatorId == operator.id }
+                    .coerceAtLeast(if (medal.id in ownedMedalIds) 1 else 0)
+                if (held >= served) missing += "Serve in a new campaign ($held of $served credited)"
             }
             PowRules.POW_MEDAL_ID -> {
                 if (operator.timesCaptured < 1 || operator.status == OperatorStatus.CAPTURED) {
@@ -3330,6 +3351,10 @@ object TacticalCalculator {
             return null
         }
 
+        /** Item 196: the Expeditionary ribbon for a successful op in a campaign the soldier hasn't been credited for. */
+        fun newCampaignRibbon(): String? =
+            if (missionSucceeded) firstEligibleUnowned(listOf("medal_expeditionary"), includeGeneralFallback = false) else null
+
         return when (outcome) {
             // Item 63: the POW Medal waits until they come home
             OperatorOutcomeType.CAPTURED -> null to "Captured by the enemy during ${mission.title}."
@@ -3525,17 +3550,11 @@ object TacticalCalculator {
                                     )
                                 } else null
                         } else {
-                            val isFirstCombatDeployment = operator.highestRiskSurvived == null &&
-                                "medal_expeditionary" !in existingCitationMedalIds
-                            val firstCombatRibbon = if (isFirstCombatDeployment) {
-                                firstEligibleUnowned(listOf("medal_expeditionary"), includeGeneralFallback = false)
-                            } else null
-                            firstCombatRibbon ?: if (rollSeedPct < 25) {
-                                firstEligibleUnowned(
-                                    listOf("medal_expeditionary", "medal_nco_dev"),
-                                    includeGeneralFallback = false
-                                )
-                            } else null
+                            // Item 196: the Expeditionary ribbon comes with each new campaign, never by chance
+                            newCampaignRibbon()
+                                ?: if (rollSeedPct < 25) {
+                                    firstEligibleUnowned(listOf("medal_nco_dev"), includeGeneralFallback = false)
+                                } else null
                         }
                         val deed = if (medalId == null) {
                             "Completed ${mission.title} cleanly (+XP & Op count); no new medal citation warranted."
@@ -3560,9 +3579,8 @@ object TacticalCalculator {
                         } else {
                             val milestoneCandidates = buildList {
                                 if (mission.isNightOp && hasNvg) add("medal_night_owl")
-                                add("medal_expeditionary")
                             }
-                            firstEligibleUnowned(milestoneCandidates, includeGeneralFallback = false)
+                            newCampaignRibbon() ?: firstEligibleUnowned(milestoneCandidates, includeGeneralFallback = false)
                                 ?: if (rollSeedPct < 30) {
                                     firstEligibleUnowned(
                                         listOf("medal_meritorious"),
@@ -3582,8 +3600,7 @@ object TacticalCalculator {
                     MissionRisk.HIGH -> {
                         // Valor comes from the valor roll (item 89); this is the routine citation
                         // Item 166: parachutist wings now come from combat jumps (see parachutistMilestone)
-                        val milestoneCandidates = emptyList<String>()
-                        val medalId = firstEligibleUnowned(milestoneCandidates, includeGeneralFallback = false)
+                        val medalId = newCampaignRibbon()
                             ?: if (rollSeedPct < 35) {
                                 firstEligibleUnowned(
                                     listOf("medal_meritorious"),
@@ -3598,7 +3615,7 @@ object TacticalCalculator {
                         medalId to deed
                     }
                     MissionRisk.EXTREME -> {
-                        val medalId = if (rollSeedPct < 45) {
+                        val medalId = newCampaignRibbon() ?: if (rollSeedPct < 45) {
                                 firstEligibleUnowned(
                                     listOf("medal_meritorious"),
                                     includeGeneralFallback = false
@@ -3719,7 +3736,8 @@ object TacticalCalculator {
         if (!op.unlocked || op.status.isOutOfActiveService || op.status == OperatorStatus.CAPTURED) return@filter false
         if (op.pinEligibleRank != null) return@filter true
         val next = OperatorRank.nextRank(op.rank) ?: return@filter false
-        if (next.tier == op.rank.tier) return@filter false
+        // Item 192: any board step, including warrant steps that stay inside the WARRANT tier
+        if (!OperatorRank.isBoardGate(op.rank, next)) return@filter false
         val board = evaluatePromotionBoard(op, operators, citations, gearItems, facilities)
         board.allMeritsMet && board.blockedReason == null
     }.sortedByDescending { it.rank.seniorityIndex }

@@ -160,8 +160,8 @@ class TacticalCalculatorTest {
         val worn = TacticalCalculator.resolveWornRegalia(infantry, badges)
         assertEquals("insig_cib", worn.chestPinAboveRack?.id)
         assertEquals("insig_master_para", worn.chestPinLeftPocket?.id)
-        // Slot 3 catches the leftover EIB instead of sitting empty
-        assertEquals("insig_eib_rifle", worn.chestPinRightPocket?.id)
+        // Item 195: the CIB replaces the EIB on the uniform
+        assertTrue(listOf(worn.chestPinAboveRack, worn.chestPinLeftPocket, worn.chestPinRightPocket).none { it?.id == "insig_eib_rifle" })
     }
 
     @Test
@@ -851,7 +851,8 @@ class TacticalCalculatorTest {
             operator = kestrel,
             outcome = OperatorOutcomeType.SAFE,
             equippedGear = emptyList(),
-            existingCitationMedalIds = setOf(TacticalCalculator.combatBadgeIdFor(kestrel)),
+            // Item 196: already credited for this campaign's Expeditionary ribbon
+            existingCitationMedalIds = setOf(TacticalCalculator.combatBadgeIdFor(kestrel), "medal_expeditionary"),
             missionSucceeded = true,
             rollSeedPct = 80
         )

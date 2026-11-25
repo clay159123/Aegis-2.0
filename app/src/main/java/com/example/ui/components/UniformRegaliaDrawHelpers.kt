@@ -43,6 +43,10 @@ private const val LEGACY_CHEST_POCKET_TOP_FRACTION = 0.565f
 /** How far the chest group sits above its original position. */
 internal const val CHEST_LIFT = LEGACY_CHEST_POCKET_TOP_FRACTION - CHEST_POCKET_TOP_FRACTION
 
+/** Item 194: the SF tier pin sits under the name plate; the right pocket badge drops to make room. */
+internal const val SF_PIN_CENTER_Y = 0.611f
+internal fun rightPocketBadgeY(sfTier: Int): Float = if (sfTier in 1..3) 0.654f else 0.638f
+
 internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     rightChestCenterX: Float,
     w: Float,
@@ -53,7 +57,9 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     leaderRole: LeaderRole,
     textMeasurer: TextMeasurer,
     /** Item 142: the environment school badge worn above the unit awards and name plate. */
-    environmentBadge: MedalDefinition? = null
+    environmentBadge: MedalDefinition? = null,
+    /** Item 194: SF tier 1 to 3 (0 for none): a bronze, silver or gold arrowhead pin beside the name plate. */
+    sfTier: Int = 0
 ) {
     val showLeaderPin = leaderRole != LeaderRole.NONE
     // 1. Unit award emblems in precedence order, side by side, shifted higher if the Leader Pin is present.
@@ -133,6 +139,16 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     val plateY = h * (0.568f - CHEST_LIFT)
     val plateW = w * 0.112f
     val plateH = h * 0.026f
+
+    // 3b. Item 194: SF tier arrowhead pin centered just below the name plate (a right pocket badge moves down for it)
+    if (sfTier in 1..3) {
+        drawSfTierPin(
+            center = Offset(rightChestCenterX, h * (SF_PIN_CENTER_Y - CHEST_LIFT)),
+            halfW = w * 0.016f,
+            halfH = h * 0.014f,
+            tier = sfTier
+        )
+    }
 
     drawRoundRect(
         color = Color(0xFF14181F),
@@ -762,4 +778,31 @@ internal fun DrawScope.drawLeaderChevron(center: Offset, halfW: Float, halfH: Fl
         lineTo(center.x + halfW, center.y + halfH * 0.55f)
     }
     drawPath(p, color = color, style = Stroke(width = (halfH * 0.55f).coerceAtLeast(1.1f), cap = StrokeCap.Round, join = StrokeJoin.Round))
+}
+
+
+/** Item 194: bronze (SF1), silver (SF2) or gold (SF3) arrowhead pin with a dagger, point up. */
+internal fun DrawScope.drawSfTierPin(center: Offset, halfW: Float, halfH: Float, tier: Int) {
+    val (metal, shine) = when (tier) {
+        3 -> Color(0xFFE2B93B) to Color(0xFFFFE9A3)
+        2 -> Color(0xFFB9C0CA) to Color(0xFFF1F4F8)
+        else -> Color(0xFFA0642E) to Color(0xFFD9A070)
+    }
+    val head = androidx.compose.ui.graphics.Path().apply {
+        moveTo(center.x, center.y - halfH)
+        lineTo(center.x + halfW, center.y + halfH * 0.35f)
+        lineTo(center.x + halfW * 0.45f, center.y + halfH)
+        lineTo(center.x, center.y + halfH * 0.72f)
+        lineTo(center.x - halfW * 0.45f, center.y + halfH)
+        lineTo(center.x - halfW, center.y + halfH * 0.35f)
+        close()
+    }
+    drawPath(head, metal)
+    drawPath(head, Color(0xFF1A1A1A), style = Stroke(width = 1.0f))
+    // Upright dagger down the middle
+    val bladeW = (halfW * 0.16f).coerceAtLeast(0.8f)
+    drawRect(Color(0xFF20262E), Offset(center.x - bladeW / 2f, center.y - halfH * 0.62f), Size(bladeW, halfH * 1.18f))
+    drawRect(Color(0xFF20262E), Offset(center.x - halfW * 0.36f, center.y + halfH * 0.18f), Size(halfW * 0.72f, bladeW))
+    // Highlight on the upper left face
+    drawLine(shine, Offset(center.x - halfW * 0.15f, center.y - halfH * 0.7f), Offset(center.x - halfW * 0.7f, center.y + halfH * 0.25f), strokeWidth = 1.0f)
 }

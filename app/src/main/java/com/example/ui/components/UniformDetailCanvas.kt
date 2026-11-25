@@ -756,7 +756,8 @@ private fun DrawScope.drawDressUniformFigure(
         unitAwards = unitAwards,
         leaderRole = leaderRole,
         textMeasurer = textMeasurer,
-        environmentBadge = environmentBadge
+        environmentBadge = environmentBadge,
+        sfTier = com.example.domain.TacticalCalculator.sfTier(operator)
     )
 
     // Center Brass Coat Buttons
@@ -1192,7 +1193,7 @@ private fun DrawScope.drawDressUniformFigure(
     wornRegalia.chestPinRightPocket?.let { insig ->
         drawDetailedChestSchoolBadge(
             shape = insig.insigniaShape ?: InsigniaShape.WINGS,
-            center = Offset(rightChestCenterX, h * (0.638f - CHEST_LIFT)),
+            center = Offset(rightChestCenterX, h * (rightPocketBadgeY(com.example.domain.TacticalCalculator.sfTier(operator)) - CHEST_LIFT)),
             badgeW = w * 0.088f,
             badgeH = h * 0.044f,
             col = Color(insig.insigniaColorHex),

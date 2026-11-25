@@ -1789,8 +1789,10 @@ class CommandViewModel(
                     op.highestRiskSurvived
                 }
                 val updatedWoundedCount = if (outcome == OperatorOutcomeType.WOUNDED) op.timesWounded + 1 else op.timesWounded
-                // Campaign missions record the squad patch worn; the newest campaign becomes the combat patch
-                val updatedCombatPatchHistory = mission.campaignId?.let { campaignId ->
+                // Campaign missions record the squad patch worn; the newest campaign becomes the combat patch.
+                // Item 193: a standalone field op counts toward its theater's campaign
+                val patchCampaignKey = TacticalCalculator.deploymentCampaignKey(mission)
+                val updatedCombatPatchHistory = patchCampaignKey?.let { campaignId ->
                     // Item 100: aviators' combat patch is always the Aviation Brigade
                     val wornPatch = if (op.specialty == OperatorSpecialty.AVIATION) {
                         if (TacticalCalculator.isSfAviator(op)) UnitPatchStyle.SOA else UnitPatchStyle.AVIATION_BRIGADE
