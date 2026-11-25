@@ -347,6 +347,7 @@ fun AegisCommandApp() {
                                     onTreatWounded = viewModel::treatWoundedOperator,
                                     onNavigateToDress = { navigateTo(ROUTE_DRESS) },
                                     onNavigateToSquad = { navigateTo(ROUTE_SQUAD) },
+                                    onReviewPromotion = { id -> dressFocusOpId = id; navigateTo(ROUTE_DRESS) },
                                     onSwitchOperatorsToKit = viewModel::switchOperatorsToKit,
                                     onSetTeamCamo = viewModel::setTeamFieldCamo,
                                     onRefreshRotatingMissions = viewModel::refreshRotatingMissions,

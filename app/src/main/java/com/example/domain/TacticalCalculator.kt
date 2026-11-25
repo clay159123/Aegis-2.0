@@ -956,9 +956,33 @@ object TacticalCalculator {
     /** Fast Rope: a little quicker than landing, and a bonus on assault and urban missions. */
     const val FAST_ROPE_DURATION_FACTOR = 0.95
     const val FAST_ROPE_ASSAULT_PASS_BONUS = 4
+    /** Session 39: pass points for the insertion that suits the terrain (same as Fast Rope's old urban bonus). */
+    const val PREFERRED_INSERTION_PASS_BONUS = FAST_ROPE_ASSAULT_PASS_BONUS
 
     private fun isAssaultOrUrban(m: MissionTemplate): Boolean =
         m.theater.terrain == Terrain.URBAN || listOf("Assault", "Breach", "Strike").any { it in m.primaryFocus }
+
+    /**
+     * Session 39 (item 183): each terrain has insertions that suit it. Fast rope for cities and assaults,
+     * helicopters for mountains and jungle canopy, parachutes or helicopters into woodland clearings,
+     * over-snow vehicles or a drop on arctic ice, vehicles across open desert, boats or a ship's helicopter on the coast.
+     */
+    fun preferredInsertions(m: MissionTemplate): Set<InsertionMethod> {
+        val byTerrain = when (m.theater.terrain) {
+            Terrain.URBAN -> setOf(InsertionMethod.FAST_ROPE)
+            Terrain.MOUNTAIN -> setOf(InsertionMethod.HELICOPTER, InsertionMethod.FAST_ROPE)
+            Terrain.JUNGLE -> setOf(InsertionMethod.HELICOPTER)
+            Terrain.WOODLAND -> setOf(InsertionMethod.AIRBORNE, InsertionMethod.HELICOPTER)
+            Terrain.ARCTIC -> setOf(InsertionMethod.GROUND, InsertionMethod.AIRBORNE, InsertionMethod.HALO)
+            Terrain.DESERT -> setOf(InsertionMethod.GROUND)
+            Terrain.COASTAL -> setOf(InsertionMethod.MARITIME, InsertionMethod.HELICOPTER)
+            else -> emptySet()
+        }
+        val assault = if (isAssaultOrUrban(m)) setOf(InsertionMethod.FAST_ROPE) else emptySet()
+        return (byTerrain + assault).filter { it in m.allowedInsertions }.toSet()
+    }
+
+    fun isPreferredInsertion(m: MissionTemplate, method: InsertionMethod): Boolean = method in preferredInsertions(m)
 
     /** Why this team can't use [method] on [mission], or null when it can. */
     /** Item 137: most non-SF soldiers an SF boat team can bring along. */
@@ -1038,10 +1062,9 @@ object TacticalCalculator {
             InsertionMethod.HELICOPTER ->
                 if (mission.isNightOp && airfieldLevel >= AIRFIELD_NIGHT_FLYING_LEVEL) NIGHT_FLYING_PASS_BONUS else 0
             InsertionMethod.FAST_ROPE ->
-                (if (mission.isNightOp && airfieldLevel >= AIRFIELD_NIGHT_FLYING_LEVEL) NIGHT_FLYING_PASS_BONUS else 0) +
-                    (if (isAssaultOrUrban(mission)) FAST_ROPE_ASSAULT_PASS_BONUS else 0)
+                if (mission.isNightOp && airfieldLevel >= AIRFIELD_NIGHT_FLYING_LEVEL) NIGHT_FLYING_PASS_BONUS else 0
             else -> 0
-        }
+        } + if (isPreferredInsertion(mission, method)) PREFERRED_INSERTION_PASS_BONUS else 0
         // Item 98: the insertion a stage is built around
         return bonus + ClandestineRules.signatureBonus(mission, method) - if (scattered) SCATTER_PASS_PENALTY else 0
     }
@@ -1320,6 +1343,17 @@ object TacticalCalculator {
 
 
     /** "45s", "5m", "1h 12m", "7h" */
+    /** Session 39: "LEAVE • 12m" or "MEDBAY • 5m" for a soldier who is away but keeps their place; null when home. */
+    fun awayLabel(op: Operator, now: Long): String? {
+        val tag = when (op.status) {
+            OperatorStatus.ON_LEAVE -> "ON LEAVE"
+            OperatorStatus.RECOVERING -> "MEDBAY"
+            else -> return null
+        }
+        val left = (op.recoveryUntilMillis - now).coerceAtLeast(0L)
+        return if (left > 0L) "$tag • ${formatBuildTime((left + 999L) / 1000L)}" else tag
+    }
+
     fun formatBuildTime(seconds: Long): String {
         val s = seconds.coerceAtLeast(0L)
         val h = s / 3600
@@ -1561,6 +1595,9 @@ object TacticalCalculator {
                 // Item 143: Sniper School takes Expert marksmen only
                 if (mission.id == SNIPER_SCHOOL_ID && operator.marksmanshipQual != MarksmanshipBadgeTier.EXPERT) {
                     missing += "Requires an Expert rifle qualification"
+                }
+                if (mission.id in HQ_LOCKED_SCHOOL_IDS && operator.isHqStaffer) {
+                    missing += "Field school: HQ staff stay off the line"
                 }
                 // Item 152: seated HQ staff run the base; language training is for the field teams
                 if (mission.id == ClandestineRules.LANGUAGE_SCHOOL_ID && operator.status == OperatorStatus.HQ_STAFF) {
@@ -2026,7 +2063,7 @@ object TacticalCalculator {
             WardrobeKit.ALPHAS -> {
                 // Item 91: HQ staff wear the waist sash by default
                 // Session 38: HQ staff and squad leaders (regular and SF) wear the sash on Auto
-                val rawSash = settings.hasDressSash ?: (operator.status == OperatorStatus.HQ_STAFF || squads.any { it.leaderId == operator.id })
+                val rawSash = settings.hasDressSash ?: (operator.isHqStaffer || squads.any { it.leaderId == operator.id })
                 operator.copy(
                     activeWardrobeKit = WardrobeKit.ALPHAS,
                     uniformMode = UniformMode.DRESS_UNIFORM,
@@ -2044,7 +2081,7 @@ object TacticalCalculator {
                     // Playtest: on Auto, HQ staff wear full medals on Alphas and everyone else wears ribbons;
                     // full medals for field troops are a Tailor (or toggle) choice
                     dressDisplayMode = settings.dressDisplayMode
-                        ?: if (operator.status == OperatorStatus.HQ_STAFF) DressDisplayMode.FULL_MEDALS else DressDisplayMode.RIBBONS,
+                        ?: if (operator.isHqStaffer) DressDisplayMode.FULL_MEDALS else DressDisplayMode.RIBBONS,
                     // Session 38: white gloves are a Mess Dress item; Alphas go without on Auto
                     hasWhiteGloves = settings.hasWhiteGloves ?: std.gloves ?: false,
                     hasDressSash = rawSash && sashAllowed
@@ -2212,6 +2249,18 @@ object TacticalCalculator {
     }
 
     const val SNIPER_SCHOOL_ID = "msn_sniper_school"
+
+    /**
+     * Session 39 (item 188): field schools closed to HQ staff. A seat at HQ means the soldier is off the line;
+     * leadership, commissioning, MOS and qualification courses stay open.
+     */
+    val HQ_LOCKED_SCHOOL_IDS: Set<String> = setOf(
+        "msn_eib_testing", SNIPER_SCHOOL_ID, "msn_sapper_school",
+        "msn_night_qual", "msn_air_assault_school", "msn_pathfinder_school", "msn_ranger_school",
+        "msn_mountain_school", "msn_jungle_school", "msn_arctic_school",
+        "msn_sere_school", "msn_selection_prep", "msn_sf_school", "msn_sere3_school",
+        "msn_mff_school", "msn_combat_diver_school", "msn_sf_aviation_school"
+    )
     /** Item 167 */
     const val CGSC_SCHOOL_ID = "msn_cgsc_school"
     const val SNIPER_BADGE_ID = "insig_sniper"
@@ -3659,6 +3708,21 @@ object TacticalCalculator {
         val board = evaluatePromotionBoard(candidate, roster, citations, gearItems, facilities)
         return board.nextRank?.takeIf { board.isCrossTierGate && board.allMeritsMet }?.code
     }
+
+    /** Session 39: soldiers who can pin their next rank now or have met every merit for a tier board, most senior first. */
+    fun promotableSoldiers(
+        operators: List<Operator>,
+        citations: List<AwardedMedal>,
+        gearItems: List<GearItem>,
+        facilities: List<FacilityState>
+    ): List<Operator> = operators.filter { op ->
+        if (!op.unlocked || op.status.isOutOfActiveService || op.status == OperatorStatus.CAPTURED) return@filter false
+        if (op.pinEligibleRank != null) return@filter true
+        val next = OperatorRank.nextRank(op.rank) ?: return@filter false
+        if (next.tier == op.rank.tier) return@filter false
+        val board = evaluatePromotionBoard(op, operators, citations, gearItems, facilities)
+        board.allMeritsMet && board.blockedReason == null
+    }.sortedByDescending { it.rank.seniorityIndex }
 
     fun evaluatePromotionBoard(
         operator: Operator,

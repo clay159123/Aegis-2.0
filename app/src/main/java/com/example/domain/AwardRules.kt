@@ -162,16 +162,16 @@ object AwardRules {
         return base * DFC_ODDS_MULTIPLIER * if (anyCasualty) DFC_CASUALTY_MULTIPLIER else 1.0
     }
 
-    /** Field schools where a training accident can call for heroism (Soldier's Medal). */
-    private val fieldSchoolIds = setOf(
-        "msn_night_qual", "msn_ranger_school", "msn_sapper_school", "msn_sf_school", "msn_pathfinder_school",
-        TacticalCalculator.MFF_SCHOOL_ID, TacticalCalculator.COMBAT_DIVER_SCHOOL_ID, TacticalCalculator.FLIGHT_SCHOOL_MISSION_ID
+    /** Session 39 (item 180): only the dangerous schools can call for heroism (Soldier's Medal), at half the usual odds. */
+    val DANGEROUS_SCHOOL_IDS = setOf(
+        "msn_ranger_school", "msn_sf_school", TacticalCalculator.MFF_SCHOOL_ID, TacticalCalculator.COMBAT_DIVER_SCHOOL_ID
     )
+    const val DANGEROUS_SCHOOL_HEROISM_ODDS = 0.0075
 
     /** Odds of a Soldier's Medal for one soldier on this mission. */
     fun soldiersMedalOdds(mission: MissionTemplate, outcome: OperatorOutcomeType): Double = when {
         outcome == OperatorOutcomeType.FALLEN -> 0.0
-        mission.scope == MissionScope.TRAINING && mission.id in fieldSchoolIds -> SOLDIERS_MEDAL_ODDS
+        mission.scope == MissionScope.TRAINING && mission.id in DANGEROUS_SCHOOL_IDS -> DANGEROUS_SCHOOL_HEROISM_ODDS
         mission.scope == MissionScope.STAFF_DIPLOMATIC -> SOLDIERS_MEDAL_ODDS
         else -> 0.0
     }

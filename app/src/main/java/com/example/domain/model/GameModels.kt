@@ -411,6 +411,12 @@ enum class OperatorSpecialty(val label: String, val roleTag: String, val recruit
 }
 
 /** Item 143: the MOS name shown for a soldier: Sniper School graduates read "Sniper" (they count as 11B). */
+/** Session 39: HQ staff keep their seat while on leave or in the medbay; only leaving HQ frees it. */
+val Operator.holdsHqSeat: Boolean get() = unlocked && hqRole != null && !status.isOutOfActiveService
+
+/** Session 39: counts as HQ staff for rosters and seats, seated or briefly away. */
+val Operator.isHqStaffer: Boolean get() = status == OperatorStatus.HQ_STAFF || holdsHqSeat
+
 val Operator.mosLabel: String get() = when {
     "msn_sf_school" in completedMissionIds && specialty != OperatorSpecialty.AVIATION -> when (specialty) {
         OperatorSpecialty.ASSAULT -> "SF Weapons Sergeant"
@@ -520,7 +526,7 @@ object HqChain {
     /** The seated officer who outranks [candidate] (by earned rank), which bars them from taking command. */
     fun outrankingOfficer(candidate: Operator, seated: List<Operator> = seatedStaff): Operator? =
         seated.filter {
-            it.id != candidate.id && it.unlocked && it.status == OperatorStatus.HQ_STAFF &&
+            it.id != candidate.id && it.holdsHqSeat &&
                 it.hqRole != HqStaffRole.CO_COMMANDING_OFFICER && it.earnedRank.isCommissioned
         }.filter { it.earnedRank.seniorityIndex > candidate.earnedRank.seniorityIndex }
             .maxByOrNull { it.earnedRank.seniorityIndex }
@@ -1580,14 +1586,14 @@ data class Operator(
 
     /** Item 107: the HQ billet's top rank for this soldier, if seated in one that has a cap. */
     val hqRankCap: OperatorRank?
-        get() = if (status == OperatorStatus.HQ_STAFF) hqRole?.rankCapFor(earnedRank) else null
+        get() = if (isHqStaffer) hqRole?.rankCapFor(earnedRank) else null
 
     /** Displayed rank: what they've earned, held at their HQ billet's top rank while seated there. */
     val rank: OperatorRank
         get() {
             val earned = earnedRank
             // Item 110: a SGM seated as Command Sergeant Major wears the CSM grade
-            if (earned == OperatorRank.SGM && status == OperatorStatus.HQ_STAFF && hqRole == HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR) {
+            if (earned == OperatorRank.SGM && isHqStaffer && hqRole == HqStaffRole.CSM_COMMAND_SERGEANT_MAJOR) {
                 return OperatorRank.CSM
             }
             val cap = hqRankCap ?: return earned

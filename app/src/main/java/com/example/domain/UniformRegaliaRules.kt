@@ -399,7 +399,10 @@ object UniformRegaliaRules {
                 ?.let { id -> GameCatalog.campaigns.find { it.id == id }?.theater?.terrain }
             earned.find { it.terrain == patchTerrain }
                 ?: earned.map { school ->
-                    school to operator.completedMissionIds.count { id -> GameCatalog.missions.find { it.id == id }?.theater?.terrain == school.terrain }
+                    // Session 39 (item 184): field missions only; the schools themselves would tie every terrain at one
+                    school to operator.completedMissionIds.count { id ->
+                        GameCatalog.missions.find { it.id == id }?.let { m -> m.scope != MissionScope.TRAINING && m.theater.terrain == school.terrain } == true
+                    }
                 }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
                 ?: earned[Math.floorMod(operator.id.hashCode(), earned.size)]
         }

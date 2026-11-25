@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -87,7 +88,7 @@ fun HqCommandScreen(
     }
 
     val hqStaffOps = remember(uiState.operators) {
-        uiState.operators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
+        uiState.operators.filter { it.unlocked && it.isHqStaffer && !it.status.isOutOfActiveService }
     }
     val staffByRole = remember(hqStaffOps) {
         hqStaffOps.filter { it.hqRole != null }.associateBy { it.hqRole!! }
@@ -99,7 +100,7 @@ fun HqCommandScreen(
 
     val fieldOps = remember(uiState.operators) {
         uiState.operators.filter {
-            it.unlocked && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService
+            it.unlocked && !it.isHqStaffer && !it.status.isOutOfActiveService
         }
     }
     val experiencedFieldCandidates = remember(fieldOps) {
@@ -114,6 +115,7 @@ fun HqCommandScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .testTag("hq_personnel_list")
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(top = 12.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -302,6 +304,7 @@ fun HqCommandScreen(
                     allCitations = uiState.citations,
                     smartWardrobeEnabled = uiState.smartWardrobeEnabled,
                     isOnTasking = isDeployed,
+                    awayLabel = TacticalCalculator.awayLabel(occupant, uiState.nowMillis),
                     hasOtherOpenBillet = openUnlockedRoles.any {
                         TacticalCalculator.evaluateHqRoleEligibility(it, occupant).eligible
                     },
@@ -746,6 +749,8 @@ private fun HqOccupiedBilletCard(
     allCitations: List<AwardedMedal> = emptyList(),
     smartWardrobeEnabled: Boolean = true,
     isOnTasking: Boolean,
+    /** Session 39: "ON LEAVE • 12m" or "MEDBAY • 5m" while the staffer is away; they keep the seat. */
+    awayLabel: String? = null,
     hasOtherOpenBillet: Boolean,
     canTransfer: Boolean,
     canRetire: Boolean,
@@ -772,9 +777,12 @@ private fun HqOccupiedBilletCard(
         else -> resources.credits >= crCost && resources.prestige >= prsCost
     }
 
+    val busy = isOnTasking || awayLabel != null
     TacticalPanelCard(
-        borderColor = if (isOnTasking) extra.amberTelemetry else extra.signalsCyan.copy(alpha = 0.65f),
-        modifier = Modifier.testTag("hq_billet_occupied_${role.name.lowercase()}")
+        borderColor = if (busy) extra.amberTelemetry else extra.signalsCyan.copy(alpha = 0.65f),
+        modifier = Modifier
+            .alpha(if (awayLabel != null) 0.6f else 1f)
+            .testTag("hq_billet_occupied_${role.name.lowercase()}")
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -805,13 +813,13 @@ private fun HqOccupiedBilletCard(
             }
             Surface(
                 shape = MaterialTheme.shapes.extraSmall,
-                color = if (isOnTasking) extra.amberTelemetry.copy(alpha = 0.18f) else extra.brassContainer
+                color = if (busy) extra.amberTelemetry.copy(alpha = 0.18f) else extra.brassContainer
             ) {
                 Text(
-                    text = if (isOnTasking) "ON TASKING" else "ACTIVE",
+                    text = awayLabel ?: if (isOnTasking) "ON TASKING" else "ACTIVE",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isOnTasking) extra.amberTelemetry else extra.brassBright,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    color = if (busy) extra.amberTelemetry else extra.brassBright,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp).testTag("hq_billet_status_${role.name.lowercase()}")
                 )
             }
         }
@@ -931,7 +939,7 @@ private fun HqOccupiedBilletCard(
                 }
                 OutlinedButton(
                     onClick = onDispatchTasking,
-                    enabled = !isOnTasking,
+                    enabled = !busy,
                     modifier = Modifier
                         .weight(1f)
                         .defaultMinSize(minHeight = 48.dp)
@@ -971,7 +979,7 @@ private fun HqOccupiedBilletCard(
             ) {
                 OutlinedButton(
                     onClick = onChangeRole,
-                    enabled = hasOtherOpenBillet && !isOnTasking,
+                    enabled = hasOtherOpenBillet && !busy,
                     modifier = Modifier
                         .weight(1f)
                         .defaultMinSize(minHeight = 48.dp)
@@ -982,7 +990,7 @@ private fun HqOccupiedBilletCard(
                 if (canRetire) {
                     OutlinedButton(
                         onClick = onRetire,
-                        enabled = !isOnTasking,
+                        enabled = !busy,
                         modifier = Modifier
                             .weight(1f)
                             .defaultMinSize(minHeight = 48.dp)
@@ -994,7 +1002,7 @@ private fun HqOccupiedBilletCard(
                 if (canTransfer) {
                     TextButton(
                         onClick = onTransferOut,
-                        enabled = !isOnTasking,
+                        enabled = !busy,
                         modifier = Modifier
                             .weight(0.9f)
                             .defaultMinSize(minHeight = 48.dp),

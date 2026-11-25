@@ -217,7 +217,10 @@ fun DressAwardsScreen(
     val listState = rememberLazyListState()
     LaunchedEffect(showTailorPanel) {
         if (showTailorPanel) {
-            listState.animateScrollToItem(2)
+            // Session 39: find the Tailor by key; the promote-all row comes and goes above it
+            val idx = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "tailor_studio_panel" }?.index
+                ?: if (unlockedOps.any { it.pinEligibleRank != null }) 3 else 2
+            listState.animateScrollToItem(idx)
         }
     }
 
@@ -231,7 +234,7 @@ fun DressAwardsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Organized Personnel Roster Switcher & Categorized Directory
-        item {
+        item(key = "personnel_switcher") {
             DressPersonnelSwitcherCard(
                 unlockedOps = unlockedOps,
                 selectedOp = selectedOp,
@@ -245,6 +248,8 @@ fun DressAwardsScreen(
             )
         }
         // Session 33: one tap pins the next rank for everyone XP has made promotable
+        // Session 39 (item 179): every item here has a stable key, so pinning a rank (which can remove this row)
+        // keeps the list anchored instead of jumping
         val promotableCount = unlockedOps.count { it.pinEligibleRank != null }
         if (promotableCount > 0) {
             item(key = "pin_all_promotions") {
@@ -263,7 +268,7 @@ fun DressAwardsScreen(
         }
 
         // Army Dress Uniform & Rank Showcase Pedestal
-        item {
+        item(key = "dress_pedestal") {
             TacticalPanelCard(borderColor = extra.brass.copy(alpha = 0.65f)) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -811,7 +816,7 @@ fun DressAwardsScreen(
 
         // Pending Deeds Recommended From Recent Missions
         if (opDeeds.isNotEmpty()) {
-            item {
+            item(key = "deeds_header") {
                 SectionHeader(
                     title = "Recent Mission Deeds",
                     subtitle = "Recommended awards based on ${selectedOp.callsign}'s field actions"
@@ -913,7 +918,7 @@ fun DressAwardsScreen(
         }
 
         // Awardable Decorations Catalog + Category Tabs
-        item {
+        item(key = "awards_catalog_header") {
             SectionHeader(
                 title = "Army Awards & Regalia (${uiState.resources.prestige.toInt()} PRS)",
                 subtitle = "Medals, Ribbons, Shoulder Cords & Specialty School Insignia"
