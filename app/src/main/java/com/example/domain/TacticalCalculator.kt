@@ -1350,6 +1350,10 @@ object TacticalCalculator {
     /** "45s", "5m", "1h 12m", "7h" */
     /** Session 39: "LEAVE • 12m" or "MEDBAY • 5m" for a soldier who is away but keeps their place; null when home. */
     fun awayLabel(op: Operator, now: Long): String? {
+        // Session 44: at a base event
+        if (op.atEventUntilMillis > now && (op.status == OperatorStatus.READY || op.status == OperatorStatus.HQ_STAFF)) {
+            return "AT EVENT • ${formatBuildTime((op.atEventUntilMillis - now + 999L) / 1000L)}"
+        }
         val tag = when (op.status) {
             OperatorStatus.ON_LEAVE -> "ON LEAVE"
             OperatorStatus.RECOVERING -> "MEDBAY"
@@ -1517,6 +1521,10 @@ object TacticalCalculator {
             OperatorStatus.CAPTURED -> return EligibilityResult(false, listOf("Held as a POW"))
             OperatorStatus.DEPLOYED -> return EligibilityResult(false, listOf("Already Deployed"))
             else -> {}
+        }
+        // Session 44: at a base event until it ends
+        if (operator.atEventUntilMillis > System.currentTimeMillis()) {
+            return EligibilityResult(false, listOf("At a base event"))
         }
         // Session 43 fix: a soldier whose contract has run out stays home until the player settles it
         if (ContractRules.contractDue(operator)) {
@@ -1734,6 +1742,13 @@ object TacticalCalculator {
                 MissionScope.TRAINING -> schoolDutyContext(mission)
                 MissionScope.STAFF_DIPLOMATIC -> DutyUniformContext.DIPLOMATIC_MISSION
                 null -> DutyUniformContext.COMBAT_DEPLOYMENT
+            }
+        }
+        // Session 44: formal base events call for Mess Dress; the honor guard wears Alphas
+        if (operator.atEventUntilMillis > System.currentTimeMillis()) {
+            when (operator.eventKit) {
+                "MESS" -> return DutyUniformContext.DIPLOMATIC_MISSION
+                "ALPHAS" -> return DutyUniformContext.PROMOTION_BOARD
             }
         }
         return when {
@@ -2268,6 +2283,10 @@ object TacticalCalculator {
 
     const val SNIPER_SCHOOL_ID = "msn_sniper_school"
 
+    /** Session 44: base lockdown (set each tick from the commander state). */
+    @Volatile var productionCutPct: Int = 0
+    @Volatile var productionCutUntilMillis: Long = 0L
+
     /**
      * Session 39 (item 188): field schools closed to HQ staff. A seat at HQ means the soldier is off the line;
      * leadership, commissioning, MOS and qualification courses stay open.
@@ -2423,7 +2442,9 @@ object TacticalCalculator {
         } else {
             1.0 + hqStaffCount.coerceAtLeast(0) * 0.08
         }
-        val legacyMult = 1.0 + (veteranLegacyBps.coerceIn(0, MAX_VETERAN_LEGACY_BPS) / 10_000.0)
+        // Session 44: a base lockdown cuts production for a while
+        val legacyMult = (1.0 + (veteranLegacyBps.coerceIn(0, MAX_VETERAN_LEGACY_BPS) / 10_000.0)) *
+            (1.0 - (if (System.currentTimeMillis() < productionCutUntilMillis) productionCutPct else 0) / 100.0)
         return ResourceBundle(
             credits = GameTiming.income(credits * crMult * legacyMult),
             supplies = GameTiming.income(supplies * supMult * legacyMult),

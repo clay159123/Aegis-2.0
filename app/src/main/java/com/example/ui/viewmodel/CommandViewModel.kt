@@ -76,7 +76,9 @@ data class CommandUiState(
     val lastCookoutAtMillis: Long = 0L,
     val lastParadeActivityAtMillis: Long = 0L,
     /** Session 41 (item 73): the unit calendar in game days. */
-    val calendarDays: Double = 0.0
+    val calendarDays: Double = 0.0,
+    /** Session 44: base events already run (KIND:year). */
+    val baseEventsDone: Set<String> = emptySet()
 ) {
     fun eventContext(): SoldierEventContext = SoldierEventContext(operators, squads, deployments, facilities, resources, nowMillis, citations)
 
@@ -201,6 +203,8 @@ class CommandViewModel(
             )
             SoldierEvents.effects = eventEffects
             GameCalendar.today = data.commander.calendarDays
+            TacticalCalculator.productionCutPct = data.commander.productionCutPct
+            TacticalCalculator.productionCutUntilMillis = data.commander.productionCutUntilMillis
             TacticalCalculator.airfieldLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.AIRFIELD)
             // Session 38: Main Gate recruit discount and the CSM's morale cushion
             TacticalCalculator.mainGateLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.MAIN_GATE)
@@ -253,7 +257,8 @@ class CommandViewModel(
                 eventEffects = eventEffects,
                 lastCookoutAtMillis = data.commander.lastCookoutAtMillis,
                 lastParadeActivityAtMillis = data.commander.lastParadeActivityAtMillis,
-                calendarDays = data.commander.calendarDays
+                calendarDays = data.commander.calendarDays,
+                baseEventsDone = data.commander.baseEventsDoneCsv.split(",").filter { it.isNotBlank() }.toSet()
             )
         }
     }.stateIn(
@@ -490,7 +495,12 @@ class CommandViewModel(
         val pending = state.pendingEvent
         if (pending != null) {
             if (!SoldierEvents.stillValid(pending, ctx)) {
-                repository.updateCommanderState { it.copy(pendingEventCsv = "") }
+                // Session 44: a base event nobody answered goes ahead with the cheaper default
+                if (pending.kind.base) {
+                    resolveEvent(pending, com.example.domain.BaseEvents.defaultChoice(pending.kind), auto = true)
+                } else {
+                    repository.updateCommanderState { it.copy(pendingEventCsv = "") }
+                }
             }
             return
         }
@@ -500,6 +510,7 @@ class CommandViewModel(
             repository.updateCommanderState { it.copy(pendingEventCsv = ev.toCsv()) }
             return
         }
+        if (tickBaseEvents(state, ctx, now)) return
         // Session 43: an escape chance comes up right away, once per captivity term
         state.operators.firstOrNull { PowRules.escapeDue(it, now) }?.let { pow ->
             val ev = PendingSoldierEvent(com.example.domain.SoldierEventKind.ESCAPE_CHANCE, pow.id, null, now, now + SoldierEvents.expiryMillis())
@@ -515,6 +526,48 @@ class CommandViewModel(
         if (now - state.lastEventCheckAtMillis < SoldierEvents.eventIntervalMillis()) return
         val rolled = SoldierEvents.roll(ctx)
         repository.updateCommanderState { it.copy(lastEventCheckAtMillis = now, pendingEventCsv = rolled?.toCsv() ?: "") }
+    }
+
+    /**
+     * Session 44 (item 71): change of command, calendar events (they win over random ones), then a random base
+     * event about once a game quarter. Returns true when it raised (or settled) one.
+     */
+    private suspend fun tickBaseEvents(state: CommandUiState, ctx: com.example.domain.SoldierEventContext, now: Long): Boolean {
+        val today = GameCalendar.today
+        val cmd = repository.commanderState.first() ?: return false
+        fun raise(kind: com.example.domain.SoldierEventKind, target: String? = null): PendingSoldierEvent {
+            val hostId = state.operators.firstOrNull { it.holdsHqSeat }?.id ?: state.operators.firstOrNull { it.unlocked }?.id ?: ""
+            return PendingSoldierEvent(kind, hostId, target, now, now + SoldierEvents.expiryMillis())
+        }
+        // Change of command: a new CO in the seat
+        val co = state.operators.firstOrNull { it.holdsHqSeat && it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER }
+        if (co != null && co.id != cmd.seatedCoId) {
+            val ev = if (cmd.seatedCoId.isNotBlank()) raise(com.example.domain.SoldierEventKind.BASE_CHANGE_OF_COMMAND, co.id) else null
+            repository.updateCommanderState { it.copy(seatedCoId = co.id, pendingEventCsv = ev?.toCsv() ?: it.pendingEventCsv) }
+            if (ev != null) return true
+        }
+        val done = cmd.baseEventsDoneCsv.split(",").filter { it.isNotBlank() }.toSet()
+        com.example.domain.BaseEvents.dueScheduled(today, done)?.let { kind ->
+            val key = com.example.domain.BaseEvents.key(kind, today)
+            val doneCsv = (done + key).joinToString(",")
+            if (com.example.domain.BaseEvents.anyoneFor(kind, ctx)) {
+                val ev = raise(kind)
+                repository.updateCommanderState { it.copy(baseEventsDoneCsv = doneCsv, pendingEventCsv = ev.toCsv()) }
+                return true
+            }
+            if (com.example.domain.BaseEvents.scheduledLapsed(kind, today)) {
+                repository.updateCommanderState { it.copy(baseEventsDoneCsv = doneCsv) }
+                resolveEvent(raise(kind), com.example.domain.BaseEvents.defaultChoice(kind), auto = true)
+                return true
+            }
+        }
+        if (today - cmd.lastRandomBaseEventDay >= com.example.domain.BaseEvents.RANDOM_EVERY_DAYS) {
+            val pick = com.example.domain.BaseEvents.pickRandom(ctx, today)
+            val ev = pick?.let { (k, t) -> raise(k, t) }
+            repository.updateCommanderState { it.copy(lastRandomBaseEventDay = today, pendingEventCsv = ev?.toCsv() ?: it.pendingEventCsv) }
+            if (ev != null) return true
+        }
+        return false
     }
 
     /** Fix: saves from before the capture-record fix; see [PowRules.repairedRecord]. */
@@ -639,10 +692,15 @@ class CommandViewModel(
 
     /** Item 69: answer the waiting soldier event. */
     fun answerSoldierEvent(choiceId: String) {
+        val event = uiState.value.pendingEvent ?: return
+        resolveEvent(event, choiceId, auto = false)
+    }
+
+    /** Session 44: answer an event, or let a base event go ahead with its default when nobody answered. */
+    private fun resolveEvent(event: PendingSoldierEvent, choiceId: String, auto: Boolean) {
         val state = uiState.value
-        val event = state.pendingEvent ?: return
         val ctx = state.eventContext().copy(now = System.currentTimeMillis())
-        if (!SoldierEvents.stillValid(event, ctx)) {
+        if (!auto && !SoldierEvents.stillValid(event, ctx)) {
             viewModelScope.launch { repository.updateCommanderState { it.copy(pendingEventCsv = "") } }
             showBanner("That request has lapsed.")
             return
@@ -668,9 +726,12 @@ class CommandViewModel(
                     pendingEventCsv = "",
                     heloGroundedUntilMillis = eff?.heloGroundedUntilMillis ?: cur.heloGroundedUntilMillis,
                     recruitDiscountPct = eff?.recruitDiscountPct ?: cur.recruitDiscountPct,
-                    sfRehearsalBonusPct = eff?.sfRehearsalBonusPct ?: cur.sfRehearsalBonusPct
+                    sfRehearsalBonusPct = eff?.sfRehearsalBonusPct ?: cur.sfRehearsalBonusPct,
+                    productionCutPct = if (outcome.productionCutUntilMillis > 0) outcome.productionCutPct else cur.productionCutPct,
+                    productionCutUntilMillis = if (outcome.productionCutUntilMillis > 0) outcome.productionCutUntilMillis else cur.productionCutUntilMillis
                 )
             }
+            outcome.facilityUpdates.forEach { repository.saveFacility(it) }
             if (outcome.operatorUpdates.isNotEmpty()) repository.saveOperators(outcome.operatorUpdates)
             if (outcome.squadUpdates.isNotEmpty()) repository.saveSquads(outcome.squadUpdates)
             if (outcome.deeds.isNotEmpty()) repository.addPendingDeeds(outcome.deeds)
