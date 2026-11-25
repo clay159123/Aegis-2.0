@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -119,7 +120,7 @@ fun SquadArmoryScreen(
     }
 
     val fieldOps = uiState.operators.filter {
-        it.unlocked && !it.status.isOutOfActiveService && it.status != OperatorStatus.HQ_STAFF
+        it.unlocked && !it.status.isOutOfActiveService && !it.isHqStaffer
     }
     // Ground soldiers first, then the aviation pool (153A pilots never join squads)
     val groundOps = fieldOps.filter { !it.isAviator }
@@ -127,7 +128,7 @@ fun SquadArmoryScreen(
     val rosterOrder = groundOps + aviationPool
     val firstAviatorId = aviationPool.firstOrNull()?.id
     val hqStaffOps = uiState.operators.filter {
-        it.unlocked && it.status == OperatorStatus.HQ_STAFF
+        it.unlocked && it.isHqStaffer
     }
     val retirementRequestOps = uiState.operators.filter {
         it.unlocked && it.retirementRequested && !it.status.isOutOfActiveService
@@ -450,14 +451,15 @@ fun SquadArmoryScreen(
             val statusLabel = when {
                 onTdy -> "TDY"
                 isDeployed -> "DEPLOYED"
-                op.status == OperatorStatus.ON_LEAVE -> "LEAVE"
                 op.status == OperatorStatus.CAPTURED -> "POW"
-                op.status == OperatorStatus.RECOVERING -> "MEDBAY"
-                else -> "READY"
+                // Session 39: leave and medbay show the time left
+                else -> TacticalCalculator.awayLabel(op, uiState.nowMillis)?.removePrefix("ON ") ?: "READY"
             }
+            val isAway = op.status == OperatorStatus.ON_LEAVE || op.status == OperatorStatus.RECOVERING
 
             TacticalPanelCard(
                 modifier = Modifier
+                    .alpha(if (isAway) 0.6f else 1f)
                     .clickable { selectedOperatorId = op.id }
                     .testTag("operator_card_${op.id}"),
                 borderColor = when {
@@ -839,14 +841,22 @@ fun SquadArmoryScreen(
     }
 
     if (showArmoryDrawer) {
-        ModalBottomSheet(
+        // Session 39 (item 182): a full-screen dialog in place of the bottom sheet, whose drag-to-close fought the
+        // list's scrolling and left the buttons unresponsive after a scroll
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { showArmoryDrawer = false },
-            containerColor = MaterialTheme.colorScheme.surface
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            ArmoryCatalogSheet(
-                uiState = uiState,
-                onPurchaseOrUpgradeGear = onPurchaseOrUpgradeGear
-            )
+            Surface(
+                modifier = Modifier.fillMaxSize().testTag("armory_dialog"),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                ArmoryCatalogSheet(
+                    uiState = uiState,
+                    onPurchaseOrUpgradeGear = onPurchaseOrUpgradeGear,
+                    onClose = { showArmoryDrawer = false }
+                )
+            }
         }
     }
 
@@ -949,7 +959,8 @@ fun SquadArmoryScreen(
 @Composable
 private fun ArmoryCatalogSheet(
     uiState: CommandUiState,
-    onPurchaseOrUpgradeGear: (String) -> Unit
+    onPurchaseOrUpgradeGear: (String) -> Unit,
+    onClose: () -> Unit = {}
 ) {
     val extra = LocalAegisColors.current
     var selectedSlot by remember { mutableStateOf<GearSlot?>(null) }
@@ -963,10 +974,9 @@ private fun ArmoryCatalogSheet(
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 580.dp)
+            .fillMaxSize()
             .padding(horizontal = 20.dp)
-            .padding(bottom = 24.dp),
+            .padding(top = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
@@ -977,19 +987,24 @@ private fun ArmoryCatalogSheet(
             Text(
                 text = "QUARTERMASTER ARMORY",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
             )
-            Surface(
-                shape = MaterialTheme.shapes.extraSmall,
-                color = extra.signalsContainer
-            ) {
-                Text(
-                    text = "Armory Lv.$armoryLevel (+${armoryBonusPct}%)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = extra.signalsCyan,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
+            TextButton(
+                onClick = onClose,
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("armory_close")
+            ) { Text("Close") }
+        }
+        Surface(
+            shape = MaterialTheme.shapes.extraSmall,
+            color = extra.signalsContainer
+        ) {
+            Text(
+                text = "Armory Lv.$armoryLevel (+${armoryBonusPct}%)",
+                style = MaterialTheme.typography.labelSmall,
+                color = extra.signalsCyan,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
         }
         Text(
             text = "Standard kit equips any soldier. Specialty kit locks behind School Training & Armory Bay tiers.",
@@ -1021,7 +1036,10 @@ private fun ArmoryCatalogSheet(
                 )
             }
         }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(
+            modifier = Modifier.weight(1f).testTag("armory_list"),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             items(filtered, key = { it.id }) { gear ->
                 val crCost = gear.nextActionCreditCost()
                 val supCost = gear.nextActionSupplyCost()

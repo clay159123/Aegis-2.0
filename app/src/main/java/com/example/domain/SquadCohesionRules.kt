@@ -167,7 +167,7 @@ object SquadCohesionRules {
     fun isOperatorEligibleForFieldSquad(operator: Operator): Boolean =
         operator.unlocked &&
             !operator.status.isOutOfActiveService &&
-            operator.status != OperatorStatus.HQ_STAFF &&
+            !operator.isHqStaffer &&
             !operator.isAviator
 
     fun orderedMembersForDeployment(

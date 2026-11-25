@@ -89,6 +89,8 @@ fun HqOpsScreen(
     onTreatWounded: (String) -> Unit,
     onNavigateToDress: () -> Unit,
     onNavigateToSquad: () -> Unit,
+    /** Session 39: open the Uniform tab on a soldier up for promotion. */
+    onReviewPromotion: (String) -> Unit = { onNavigateToDress() },
     onSwitchOperatorsToKit: (List<String>, WardrobeKit) -> Unit = { _, _ -> },
     onSetTeamCamo: (List<String>, CamoPattern?) -> Unit = { _, _ -> },
     onRefreshRotatingMissions: () -> Unit = {},
@@ -315,6 +317,9 @@ fun HqOpsScreen(
 
     val returnedCount = uiState.deployments.count { it.isComplete(uiState.nowMillis) }
 
+    val promotable = remember(uiState.operators, uiState.citations, uiState.gearItems, uiState.facilities) {
+        TacticalCalculator.promotableSoldiers(uiState.operators, uiState.citations, uiState.gearItems, uiState.facilities)
+    }
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -572,6 +577,80 @@ fun HqOpsScreen(
                             )
                         ) {
                             Text("Present")
+                        }
+                    }
+                }
+            }
+        }
+
+        // Session 39 (item 181): soldiers ready to pin a rank or go before a board
+        if (promotable.isNotEmpty()) {
+            item(key = "ops_promotions_alert") {
+                TacticalPanelCard(
+                    containerColor = extra.brassContainer.copy(alpha = 0.35f),
+                    borderColor = extra.brassBright,
+                    modifier = Modifier.testTag("ops_promotions_alert")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${promotable.size} UP FOR PROMOTION",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = extra.brassBright,
+                                modifier = Modifier.testTag("ops_promotions_count")
+                            )
+                            Text(
+                                text = promotable.take(4).joinToString(", ") { "${it.rank.code} ${it.callsign}" } +
+                                    if (promotable.size > 4) " +${promotable.size - 4} more" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Button(
+                            onClick = { onReviewPromotion(promotable.first().id) },
+                            modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag("ops_review_promotions"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = extra.brass,
+                                contentColor = MaterialTheme.colorScheme.onSecondary
+                            )
+                        ) { Text("Review") }
+                    }
+                }
+            }
+        }
+
+        // Session 39 (item 186): who is on leave and when they're back
+        val onLeave = uiState.operators.filter { it.unlocked && it.status == OperatorStatus.ON_LEAVE }
+            .sortedBy { it.recoveryUntilMillis }
+        if (onLeave.isNotEmpty()) {
+            item(key = "ops_on_leave") {
+                TacticalPanelCard(borderColor = extra.amberTelemetry.copy(alpha = 0.6f), modifier = Modifier.testTag("ops_on_leave")) {
+                    Text(
+                        text = "ON LEAVE (${onLeave.size})",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = extra.amberTelemetry
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    onLeave.forEach { op ->
+                        val remSec = ((op.recoveryUntilMillis - uiState.nowMillis + 999L) / 1000L).coerceAtLeast(0L)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).testTag("ops_leave_${op.id}"),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "${op.rank.code} ${op.callsign}" + (op.hqRole?.let { " • ${it.shortCode}" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "back in ${formatCountdown(remSec)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = extra.amberTelemetry
+                            )
                         }
                     }
                 }

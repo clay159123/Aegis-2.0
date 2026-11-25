@@ -185,9 +185,9 @@ class CommandViewModel(
             TacticalCalculator.sfSquadEstablished = TacticalCalculator.sfMissionsUnlocked(data.squads)
             TacticalCalculator.clearedCampaignIds = completedCampaigns
             ClandestineRules.clearedStageIds = completedStages
-            HqChain.seatedStaff = data.operators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
+            HqChain.seatedStaff = data.operators.filter { it.holdsHqSeat }
             HqChain.commanderRank = data.operators.firstOrNull {
-                it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER
+                it.holdsHqSeat && it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER
             }?.earnedRank
             CompoundRules.compoundLevel = TacticalCalculator.facilityLevel(data.facilities, FacilityType.SF_COMPOUND)
             TacticalCalculator.tdyOperatorIds = TacticalCalculator.tdyOperatorIdsFor(data.deployments)
@@ -1135,7 +1135,7 @@ class CommandViewModel(
     }
 
     private suspend fun repairCommandSeniority(state: CommandUiState) {
-        val seated = state.operators.filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
+        val seated = state.operators.filter { it.holdsHqSeat }
         val co = seated.find { it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER } ?: return
         val dcg = seated.find { it.hqRole == HqStaffRole.DEPUTY_COMMANDER } ?: return
         if (dcg.earnedRank.seniorityIndex <= co.earnedRank.seniorityIndex) return
@@ -2770,7 +2770,7 @@ class CommandViewModel(
 
         val unlockedRoles = TacticalCalculator.unlockedHqRoles(state.facilities)
         val occupiedRoles = state.operators
-            .filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF }
+            .filter { it.holdsHqSeat }
             .mapNotNull { it.hqRole }
             .toSet()
 
@@ -2878,7 +2878,7 @@ class CommandViewModel(
             return
         }
         val occupant = state.operators.find {
-            it.id != operatorId && it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole == newRole
+            it.id != operatorId && it.holdsHqSeat && it.hqRole == newRole
         }
         if (occupant != null) {
             showBanner("${newRole.shortCode} is currently held by ${occupant.callsign}.")

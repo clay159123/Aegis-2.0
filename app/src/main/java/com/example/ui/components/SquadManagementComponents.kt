@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -268,8 +269,10 @@ fun FieldSquadsSection(
                             members.forEach { member ->
                                 val isLeader = member.id == squad.leaderId
                                 val isDeployed = member.id in deployedOpIds || member.status == OperatorStatus.DEPLOYED
+                                // Session 39: a soldier on leave or in the medbay stays on the roster, grayed with a timer
+                                val away = TacticalCalculator.awayLabel(member, nowMillis)?.removePrefix("ON ")?.replace(" • ", " ")
                                 Surface(
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1f).alpha(if (away != null) 0.55f else 1f).testTag("squad_member_${member.id}"),
                                     shape = MaterialTheme.shapes.extraSmall,
                                     color = if (isLeader) {
                                         extra.brassContainer.copy(alpha = 0.55f)
@@ -301,9 +304,10 @@ fun FieldSquadsSection(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = if (isDeployed && member.id in com.example.domain.TacticalCalculator.tdyOperatorIds) "TDY" else if (isDeployed) "DEPLOYED" else if (member.status == OperatorStatus.RECOVERING) "MEDBAY" else member.mosTag,
+                                            text = if (isDeployed && member.id in com.example.domain.TacticalCalculator.tdyOperatorIds) "TDY" else if (isDeployed) "DEPLOYED" else away ?: member.mosTag,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = if (isDeployed) extra.signalsCyan else extra.textMuted,
+                                            color = if (isDeployed) extra.signalsCyan else if (away != null) extra.amberTelemetry else extra.textMuted,
+                                            modifier = Modifier.testTag("squad_member_status_${member.id}"),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )

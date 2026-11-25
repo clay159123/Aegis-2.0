@@ -96,7 +96,7 @@ object PromotionBoardEvaluator {
 
         // Item 107: an HQ billet's top rank ends promotions there (treated like having no next rank).
         // Item 135: a COL capped as XO can still go before the general board when a general billet is open.
-        val seatedRole = operator.hqRole.takeIf { operator.status == OperatorStatus.HQ_STAFF }
+        val seatedRole = operator.hqRole.takeIf { operator.isHqStaffer }
         val blockedReason = when {
             nextRank == null -> null
             operator.isAtHqRankCap ->
@@ -289,7 +289,7 @@ object PromotionBoardEvaluator {
                     statusText = "$totalOps/$opsNeeded Ops Completed",
                     satisfied = totalOps >= opsNeeded
                 )
-                val commandTenureMet = operator.status == OperatorStatus.HQ_STAFF ||
+                val commandTenureMet = operator.isHqStaffer ||
                     operator.staffOpsSupported >= 3 ||
                     completedSchoolsCount >= 3 ||
                     operator.missionsCompleted >= 6
@@ -330,7 +330,7 @@ object PromotionBoardEvaluator {
                     label = "General Officer Billet",
                     statusText = when {
                         generalBillet != null -> "Seated as ${generalBillet.shortCode}"
-                        operator.status == OperatorStatus.HQ_STAFF && operator.hqRole == HqStaffRole.DEPUTY_COMMANDER ->
+                        operator.isHqStaffer && operator.hqRole == HqStaffRole.DEPUTY_COMMANDER ->
                             "Deputy tops out at ${HqChain.deputyCap().code} under the current CO"
                         else -> "Must hold the CO or Deputy Commander billet"
                     },
@@ -394,7 +394,7 @@ object PromotionBoardEvaluator {
     ): List<BoardMemberOpinion> {
         fun staffReviewerName(role: HqStaffRole, fallback: String): String {
             val holder = allOperators.firstOrNull {
-                it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole == role
+                it.holdsHqSeat && it.hqRole == role
             }
             return if (holder != null) "${holder.rank.code} ${holder.callsign}" else fallback
         }
@@ -402,9 +402,9 @@ object PromotionBoardEvaluator {
         val s1Name = staffReviewerName(HqStaffRole.S1_PERSONNEL_HONORS, "Directorate S-1 Desk")
         val s3Name = staffReviewerName(HqStaffRole.S3_OPS_DIRECTOR, "Brigade CSM / S-3 Panel")
         val coHolder = allOperators.firstOrNull {
-            it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER
+            it.holdsHqSeat && it.hqRole == HqStaffRole.CO_COMMANDING_OFFICER
         } ?: allOperators.firstOrNull {
-            it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole == HqStaffRole.XO_CHIEF_OF_STAFF
+            it.holdsHqSeat && it.hqRole == HqStaffRole.XO_CHIEF_OF_STAFF
         }
         val coName = coHolder?.let { "${it.rank.code} ${it.callsign}" } ?: "Directorate Command Chief"
 

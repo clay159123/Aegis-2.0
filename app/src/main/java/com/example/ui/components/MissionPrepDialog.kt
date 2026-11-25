@@ -248,7 +248,7 @@ fun MissionPrepDialog(
                     ) {
                         Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                             Text(
-                                method.label,
+                                method.label + if (TacticalCalculator.isPreferredInsertion(mission, method)) " ★ Suits ${mission.theater.terrain.label} (+${TacticalCalculator.PREFERRED_INSERTION_PASS_BONUS}%)" else "",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (blocker == null) MaterialTheme.colorScheme.onSurface else extra.textMuted
@@ -382,7 +382,7 @@ private fun PrepStat(label: String, value: String, color: Color, tag: String) {
 private fun insertionSummary(method: InsertionMethod, mission: MissionTemplate): String = when (method) {
     InsertionMethod.GROUND -> "Baseline time and risk"
     InsertionMethod.HELICOPTER -> "Faster, lower casualty risk • needs a pilot and supply"
-    InsertionMethod.FAST_ROPE -> "Helicopter with the team roping in • +4% on assault and urban missions • Air Assault-qualified team, Airfield level 3"
+    InsertionMethod.FAST_ROPE -> "Helicopter with the team roping in • suits assault and urban missions • Air Assault-qualified team, Airfield level 3"
     InsertionMethod.AIRBORNE -> "Fastest • ${TacticalCalculator.AIRBORNE_SCATTER_CHANCE_PCT}% chance of a scattered drop"
     InsertionMethod.HALO -> "Fastest" + (if (TacticalCalculator.isStealthWeighted(mission)) " • +${TacticalCalculator.HALO_STEALTH_PASS_BONUS}% pass" else "") +
         " • ${TacticalCalculator.HALO_SCATTER_CHANCE_PCT}% scatter"

@@ -43,7 +43,7 @@ fun AssignOperatorToHqRoleDialog(
     val unlockedRoles = TacticalCalculator.unlockedHqRoles(uiState.facilities)
     val lockedRoles = HqStaffRole.entries.filter { it !in unlockedRoles }.sortedBy { it.slotOrder }
     val staffByRole = uiState.operators
-        .filter { it.unlocked && it.status == OperatorStatus.HQ_STAFF && it.hqRole != null }
+        .filter { it.holdsHqSeat }
         .associateBy { it.hqRole!! }
     val isReassign = operator.status == OperatorStatus.HQ_STAFF
 
@@ -241,7 +241,7 @@ fun FillHqBilletCandidateDialog(
     BackHandler { onDismiss() }
     val extra = LocalAegisColors.current
     val fieldOps = uiState.operators.filter {
-        it.unlocked && it.status != OperatorStatus.HQ_STAFF && !it.status.isOutOfActiveService
+        it.unlocked && !it.isHqStaffer && !it.status.isOutOfActiveService
     }
     val evaluated = fieldOps.map { op ->
         val elig = TacticalCalculator.evaluateHqRoleEligibility(role, op)

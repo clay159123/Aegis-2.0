@@ -33,7 +33,7 @@ object CompoundRules {
         maxOf(1, compoundCapacity(TacticalCalculator.facilityLevel(facilities, FacilityType.SF_COMPOUND)) / SOLDIERS_PER_SF_SQUAD)
 
     fun isFieldSoldier(op: Operator): Boolean =
-        op.unlocked && op.status != OperatorStatus.HQ_STAFF && !op.status.isOutOfActiveService
+        op.unlocked && !op.isHqStaffer && !op.status.isOutOfActiveService
 
     fun sfSquadMemberIds(squads: List<TacticalSquad>): Set<String> =
         squads.filter { it.isSpecialForces }.flatMap { it.memberIds }.toSet()

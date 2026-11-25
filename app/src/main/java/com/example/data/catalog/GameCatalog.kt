@@ -578,9 +578,8 @@ object GameCatalog {
                 bravos = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.RIBBONS
                 ),
-                alphas = WardrobeKitSettings(
-                    dressDisplayMode = DressDisplayMode.FULL_MEDALS
-                ),
+                // Session 39 (item 178): Alphas on Auto, so recruits wear ribbons (full medals only for HQ staff)
+                alphas = WardrobeKitSettings(),
                 mess = WardrobeKitSettings(
                     dressDisplayMode = DressDisplayMode.FULL_MEDALS
                 )
