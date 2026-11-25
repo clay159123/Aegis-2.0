@@ -2212,7 +2212,22 @@ private fun DrawScope.drawFieldTacticalFigure(
         }
     }
 
-    if (!flightSuit) drawFieldLoadBearing(w, h, cx, fieldLoadBearingStyleFor(armorId), utilityId, secondaryCamo, accentCamo)
+    // Art 4b: carriers in the gear color that goes with the camo, with a radio, tourniquet and buckles;
+    // aviators wear the flight suit's zip pockets and, on flight ops, the survival vest
+    val gearCol = FieldGearArt.gearColor(operator.camoPattern)
+    val onOps = operator.status == OperatorStatus.DEPLOYED
+    if (!flightSuit) {
+        val lbStyle = fieldLoadBearingStyleFor(armorId)
+        drawFieldLoadBearing(w, h, cx, lbStyle, utilityId, gearCol, accentCamo)
+        if (lbStyle == FieldLoadBearingStyle.LIGHT_CARRIER || lbStyle == FieldLoadBearingStyle.HEAVY_CARRIER) {
+            with(FieldGearArt) { carrierDetails(w, h, cx, gearCol, if (lbStyle == FieldLoadBearingStyle.HEAVY_CARRIER) 0.405f else 0.420f) }
+        }
+    } else {
+        with(FieldGearArt) {
+            flightSuitPockets(w, h, cx, primaryCamo)
+            if (onOps) survivalVest(w, h, cx, Color(0xFF4F5640))
+        }
+    }
 
     // Center Chest ACU Velcro Rank Patch (visible on both plate carrier and combat shirt)
     val rankTabW = w * 0.074f
@@ -2386,7 +2401,8 @@ private fun DrawScope.drawFieldTacticalFigure(
     }
 
     if (hasWeapon) {
-        drawEnhancedFieldWeapon(w = w, h = h, cx = cx, weaponId = equippedWeaponId, suppressed = utilityId == "utl_suppressor")
+        drawEnhancedFieldWeapon(w = w, h = h, cx = cx, weaponId = equippedWeaponId, suppressed = utilityId == "utl_suppressor",
+            sleeve = primaryCamo, gloveCol = FieldGearArt.gloveColor(operator.camoPattern))
     }
 
     unscaledForBuild(operator, cx) {
@@ -2404,11 +2420,23 @@ private fun DrawScope.drawFieldTacticalFigure(
     // Session 30: the SF3 field beard; the mouth (and its morale) shows over it
     if (beardColor != null && !flightSuit) {
         drawArc(beardColor, 0f, 180f, true, Offset(cx - w * 0.097f, h * 0.196f), Size(w * 0.194f, h * 0.142f))
-        drawRect(beardColor, Offset(cx - w * 0.094f, h * 0.236f), Size(w * 0.188f, h * 0.034f))
-        drawRect(skinTone, Offset(cx - w * 0.07f, h * 0.200f), Size(w * 0.14f, h * 0.034f))
-        with(SoldierFace) { drawMouth(headBox, operator, skinShadow.copy(alpha = 0.95f)) }
+        // Sideburns up the cheeks, stopping below the eyes so the face still reads
+        drawRect(beardColor, Offset(cx - w * 0.094f, h * 0.258f), Size(w * 0.188f, h * 0.012f))
+        drawRect(beardColor, Offset(cx - w * 0.094f, h * 0.236f), Size(w * 0.020f, h * 0.030f))
+        drawRect(beardColor, Offset(cx + w * 0.074f, h * 0.236f), Size(w * 0.020f, h * 0.030f))
+        with(SoldierFace) { drawMouth(headBox, operator, lerp(skinTone, Color.White, 0.25f)) }
     }
     val deployed = operator.status == OperatorStatus.DEPLOYED
+    // Art 4b: SF on ops in desert and arid ground wear a shemagh at the neck
+    if (sterile && deployed && operator.camoPattern == CamoPattern.ARID_SAND) with(FieldGearArt) { shemagh(w, h, cx) }
+    if (flightSuit && deployed) {
+        with(FieldGearArt) { aircrewHelmet(w, h, cx, if (operator.camoPattern == CamoPattern.FLIGHT_BLACK) Color(0xFF2A2C2E) else Color(0xFF5B6150)) }
+        return@unscaledForBuild
+    }
+    if (sterile && deployed && !hasHelmet) {
+        with(FieldGearArt) { ballCap(w, h, cx, gearCol) }
+        return@unscaledForBuild
+    }
     val headgear = when {
         flightSuit || !deployed -> FieldCamo.FieldHeadgear.PATROL_CAP
         helmetId == "hlm_mesh_comms" -> FieldCamo.FieldHeadgear.HEADSET_CAP
@@ -2524,8 +2552,9 @@ private fun subduedPaletteFor(camo: CamoPattern): Pair<Color, Color> = when (cam
     CamoPattern.FLIGHT_BLACK -> Color(0xFF0C0D0F) to Color(0xFF7A7F86)
 }
 
-/** Session 30: a natural beard color picked per soldier, so it never changes between screens. */
+/** Session 30 / Art 4b: the beard matches the soldier's own hair color, graying with age like his temples. */
 internal fun sfBeardColor(op: Operator): Color {
-    val palette = listOf(0xFF1C1712, 0xFF3B2A1E, 0xFF5A3E28, 0xFF7A4A2A, 0xFFA8834F, 0xFF8E8A84)
-    return Color(palette[Math.floorMod(op.id.hashCode(), palette.size)])
+    val hair = SoldierFace.traits(op).hairColor
+    val graying = ((SoldierFace.ageOf(op) - 36) / 18f).coerceIn(0f, 0.85f)
+    return lerp(hair, Color(0xFFB9B6B0), graying * 0.8f)
 }

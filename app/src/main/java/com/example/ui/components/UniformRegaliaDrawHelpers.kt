@@ -393,7 +393,10 @@ internal fun DrawScope.drawEnhancedFieldWeapon(
     h: Float,
     cx: Float,
     weaponId: String?,
-    suppressed: Boolean = false
+    suppressed: Boolean = false,
+    /** Art 4b: forearms in the sleeve color reach the weapon; gloves in the gear's color. */
+    sleeve: Color = Color(0xFF4F5D3B),
+    gloveCol: Color = Color(0xFF3A3528)
 ) {
     val metal = Color(0xFF1A1E24)
     val furniture = when {
@@ -415,6 +418,16 @@ internal fun DrawScope.drawEnhancedFieldWeapon(
     val u = length // local units: x along the barrel, y across (down positive)
     // Sling from the stock up over the shoulder, behind the rifle
     drawLine(Color(0xFF23261F).copy(alpha = 0.85f), stock, Offset(cx - w * 0.12f, h * 0.36f), strokeWidth = w * 0.007f, cap = StrokeCap.Round)
+    // Art 4b: where the hands land on the weapon, in figure coordinates
+    val gripAtF = when (kind) { "pdw" -> 0.36f; "lmg" -> 0.33f; else -> 0.335f }
+    val supportAtF = when (kind) { "pdw" -> 0.58f; "lmg" -> 0.66f; "dmr" -> 0.66f; else -> 0.62f }
+    val rad = Math.toRadians(angle.toDouble())
+    fun onWeapon(lx: Float, ly: Float) = Offset(stock.x + (lx * cos(rad) - ly * sin(rad)).toFloat(), stock.y + (lx * sin(rad) + ly * cos(rad)).toFloat())
+    val gripHand = onWeapon(length * gripAtF, length * 0.07f)
+    val supportHand = onWeapon(length * supportAtF, length * 0.0f)
+    with(FieldGearArt) {
+        forearm(Offset(cx - w * 0.275f, h * 0.665f), gripHand, w * 0.058f, sleeve)
+    }
     withTransform({
         translate(stock.x, stock.y)
         rotate(angle, pivot = Offset.Zero)
@@ -466,17 +479,11 @@ internal fun DrawScope.drawEnhancedFieldWeapon(
             }
         }
     }
-    // Gloved hands: firing hand on the grip, support hand on the handguard
-    val glove = Color(0xFF3A3528)
-    val gripAt = when (kind) { "pdw" -> 0.36f; "lmg" -> 0.33f; else -> 0.335f }
-    val supportAt = when (kind) { "pdw" -> 0.58f; "lmg" -> 0.66f; "dmr" -> 0.66f; else -> 0.62f }
-    withTransform({
-        translate(stock.x, stock.y)
-        rotate(angle, pivot = Offset.Zero)
-    }) {
-        drawOval(glove, Offset(u * (gripAt - 0.045f), u * 0.030f), Size(u * 0.090f, u * 0.075f))
-        drawOval(glove, Offset(u * (supportAt - 0.050f), -u * 0.050f), Size(u * 0.100f, u * 0.085f))
-        drawOval(Color.Black.copy(alpha = 0.25f), Offset(u * (supportAt - 0.050f), -u * 0.050f), Size(u * 0.100f, u * 0.085f), style = androidx.compose.ui.graphics.drawscope.Stroke(1f))
+    // Gloved hands: firing hand on the grip, support arm across the body to the handguard
+    with(FieldGearArt) {
+        forearm(Offset(cx + w * 0.285f, h * 0.645f), supportHand, w * 0.058f, sleeve)
+        glove(gripHand, w * 0.032f, gloveCol)
+        glove(supportHand, w * 0.034f, gloveCol)
     }
 }
 
