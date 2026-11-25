@@ -2099,8 +2099,18 @@ private fun DrawScope.drawFieldTacticalFigure(
         addPath(sleeveR)
         addPath(torsoPath)
     }
-    // The flight suit is one plain color with no camo pattern
+    // Art 4a: the pattern's own shapes (flight suits stay one color with a faint weave)
+    with(FieldCamo) {
+        drawCamoPattern(operator.camoPattern, uniformOutline, Rect(cx - w * 0.42f, h * 0.33f, cx + w * 0.42f, h * 0.97f), w * 0.040f,
+            primaryCamo, secondaryCamo, accentCamo)
+    }
     if (!flightSuit) drawFieldUniformTexture(w, h, cx, uniformOutline, primaryCamo, secondaryCamo, accentCamo)
+    // Art 4a: arms read apart from the body: a fold where each sleeve meets the torso, reinforced elbows, one-side shading
+    for (s in listOf(-1f, 1f)) {
+        drawLine(Color.Black.copy(alpha = 0.32f), Offset(cx + s * w * 0.251f, h * 0.50f), Offset(cx + s * w * 0.258f, h * 0.96f), strokeWidth = w * 0.007f)
+        drawLine(Color.White.copy(alpha = 0.06f), Offset(cx + s * w * 0.262f, h * 0.52f), Offset(cx + s * w * 0.268f, h * 0.96f), strokeWidth = w * 0.004f)
+    }
+    with(FieldCamo) { shadeFigure(uniformOutline, cx, w) }
     drawFieldBeltAndTrousers(w, h, cx, primaryCamo, secondaryCamo, utilityId)
 
     // Field sleeve cross-section (u = 0 inner seam, 1 outer silhouette), following the sleeve paths above
@@ -2142,6 +2152,25 @@ private fun DrawScope.drawFieldTacticalFigure(
     drawFieldVelcroBox(1f, tabsTopFrac - boxPad - 0.004f, leftBoxBottom, ::fieldSleeveFaceX, h, secondaryCamo)
     drawFieldVelcroBox(-1f, tabsTopFrac - boxPad - 0.004f, emptyBoxBottom + boxPad, ::fieldSleeveFaceX, h, secondaryCamo)
     drawFieldSleevePockets(::fieldSleeveFaceX, maxOf(leftBoxBottom, emptyBoxBottom + boxPad) + 0.014f, h, secondaryCamo)
+    if (!flightSuit) {
+        // Art 4a: reinforced elbow patches with a stitched edge
+        for (side in listOf(-1f, 1f)) {
+            val top = 0.735f; val bot = 0.835f
+            val p = Path().apply {
+                moveTo(fieldSleeveFaceX(side, top, 0.22f), h * top)
+                quadraticTo(fieldSleeveFaceX(side, top - 0.012f, 0.6f), h * (top - 0.012f), fieldSleeveFaceX(side, top, 0.96f), h * top)
+                lineTo(fieldSleeveFaceX(side, bot, 0.96f), h * bot)
+                quadraticTo(fieldSleeveFaceX(side, bot + 0.012f, 0.6f), h * (bot + 0.012f), fieldSleeveFaceX(side, bot, 0.22f), h * bot)
+                close()
+            }
+            drawPath(p, Color.Black.copy(alpha = 0.14f))
+            drawPath(p, Color.Black.copy(alpha = 0.32f), style = Stroke(width = 0.8f, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(2f, 1.6f))))
+        }
+        // Pen pocket on the wearer's left forearm
+        val penTop = 0.865f
+        drawLine(Color.Black.copy(alpha = 0.3f), Offset(fieldSleeveFaceX(1f, penTop, 0.40f), h * penTop), Offset(fieldSleeveFaceX(1f, penTop, 0.80f), h * penTop), strokeWidth = 1f)
+        for (u in listOf(0.48f, 0.58f, 0.68f)) drawLine(Color.Black.copy(alpha = 0.25f), Offset(fieldSleeveFaceX(1f, penTop, u), h * penTop), Offset(fieldSleeveFaceX(1f, penTop + 0.05f, u), h * (penTop + 0.05f)), strokeWidth = 0.8f)
+    }
 
     subduedLayer(subduedLow, subduedHigh) {
         wornTabs.forEachIndexed { idx, tab ->
@@ -2362,39 +2391,36 @@ private fun DrawScope.drawFieldTacticalFigure(
 
     unscaledForBuild(operator, cx) {
     drawRect(skinShadow, Offset(cx - w * 0.05f, h * 0.30f), Size(w * 0.10f, h * 0.08f))
-    // Art 1: the soldier's own face; eye protection covers the eyes in the field
+    // Art 4a: the face stays visible; headgear follows the mission (cap at home, helmet or boonie on ops)
+    val headBox = androidx.compose.ui.geometry.Rect(cx - w * 0.095f, h * 0.14f, cx + w * 0.095f, h * 0.33f)
     with(SoldierFace) {
         drawHead(
-            box = androidx.compose.ui.geometry.Rect(cx - w * 0.095f, h * 0.14f, cx + w * 0.095f, h * 0.33f),
+            box = headBox,
             op = operator, skin = skinTone, shadow = skinShadow,
-            cover = if (flightSuit) SoldierFace.Cover.CAP else SoldierFace.Cover.FIELD_VISOR,
+            cover = SoldierFace.Cover.CAP,
             age = SoldierFace.ageOf(operator)
         )
     }
-    if (flightSuit) {
-        // Aviator: bare face and a sage patrol cap
-        drawRoundRect(primaryCamo, Offset(cx - w * 0.100f, h * 0.128f), Size(w * 0.200f, h * 0.052f), CornerRadius(5f, 5f))
-        drawRoundRect(secondaryCamo, Offset(cx - w * 0.104f, h * 0.172f), Size(w * 0.208f, h * 0.014f), CornerRadius(3f, 3f))
-    } else {
-        // Session 30: the SF3 field beard sits under the eye protection
-        if (beardColor != null) {
-            drawArc(beardColor, 0f, 180f, true, Offset(cx - w * 0.097f, h * 0.196f), Size(w * 0.194f, h * 0.142f))
-            drawRect(beardColor, Offset(cx - w * 0.094f, h * 0.236f), Size(w * 0.188f, h * 0.034f))
-            drawLine(skinShadow.copy(alpha = 0.9f), Offset(cx - w * 0.026f, h * 0.292f), Offset(cx + w * 0.026f, h * 0.292f), strokeWidth = 1.6f, cap = StrokeCap.Round)
-        }
-        drawRoundRect(visorTone, Offset(cx - w * 0.075f, h * 0.205f), Size(w * 0.15f, h * 0.042f), CornerRadius(6f, 6f))
+    // Session 30: the SF3 field beard; the mouth (and its morale) shows over it
+    if (beardColor != null && !flightSuit) {
+        drawArc(beardColor, 0f, 180f, true, Offset(cx - w * 0.097f, h * 0.196f), Size(w * 0.194f, h * 0.142f))
+        drawRect(beardColor, Offset(cx - w * 0.094f, h * 0.236f), Size(w * 0.188f, h * 0.034f))
+        drawRect(skinTone, Offset(cx - w * 0.07f, h * 0.200f), Size(w * 0.14f, h * 0.034f))
+        with(SoldierFace) { drawMouth(headBox, operator, skinShadow.copy(alpha = 0.95f)) }
     }
-
-    if (helmetId == "hlm_mesh_comms") {
-        // Comms headset only, no ballistic shell
-        drawFieldHeadset(w, h, cx)
-    } else if (hasHelmet) {
-        drawArc(secondaryCamo, 180f, 180f, true, Offset(cx - w * 0.115f, h * 0.115f), Size(w * 0.23f, h * 0.17f))
-        drawRoundRect(Color(0xFF1D222B), Offset(cx - w * 0.125f, h * 0.20f), Size(w * 0.035f, h * 0.065f), CornerRadius(6f, 6f))
-        drawRoundRect(Color(0xFF1D222B), Offset(cx + w * 0.09f, h * 0.20f), Size(w * 0.035f, h * 0.065f), CornerRadius(6f, 6f))
-        if (hasNvg) {
-            drawCircle(Color(0xFF5AC8FA), radius = w * 0.022f, center = Offset(cx - w * 0.032f, h * 0.165f))
-            drawCircle(Color(0xFF5AC8FA), radius = w * 0.022f, center = Offset(cx + w * 0.032f, h * 0.165f))
+    val deployed = operator.status == OperatorStatus.DEPLOYED
+    val headgear = when {
+        flightSuit || !deployed -> FieldCamo.FieldHeadgear.PATROL_CAP
+        helmetId == "hlm_mesh_comms" -> FieldCamo.FieldHeadgear.HEADSET_CAP
+        hasHelmet -> FieldCamo.FieldHeadgear.HELMET
+        else -> FieldCamo.FieldHeadgear.BOONIE
+    }
+    with(FieldCamo) {
+        when (headgear) {
+            FieldCamo.FieldHeadgear.PATROL_CAP -> patrolCap(w, h, cx, operator.camoPattern, primaryCamo, secondaryCamo, accentCamo)
+            FieldCamo.FieldHeadgear.HEADSET_CAP -> { patrolCap(w, h, cx, operator.camoPattern, primaryCamo, secondaryCamo, accentCamo); drawFieldHeadset(w, h, cx) }
+            FieldCamo.FieldHeadgear.BOONIE -> boonie(w, h, cx, operator.camoPattern, primaryCamo, secondaryCamo, accentCamo)
+            FieldCamo.FieldHeadgear.HELMET -> combatHelmet(w, h, cx, operator.camoPattern, primaryCamo, secondaryCamo, accentCamo, hasNvg)
         }
     }
     }
