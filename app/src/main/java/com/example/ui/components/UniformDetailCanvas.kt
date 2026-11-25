@@ -1229,13 +1229,15 @@ internal fun DrawScope.drawHeadAndDressHeadgear(
 ) {
     unscaledForBuild(operator, cx) {
         drawRect(skinShadow, Offset(cx - w * 0.052f, h * 0.242f), Size(w * 0.104f, h * 0.062f))
-        drawOval(skinShadow, Offset(cx - w * 0.112f, h * 0.158f), Size(w * 0.022f, h * 0.044f))
-        drawOval(skinShadow, Offset(cx + w * 0.090f, h * 0.158f), Size(w * 0.022f, h * 0.044f))
-        drawOval(skinTone, Offset(cx - w * 0.102f, h * 0.082f), Size(w * 0.204f, h * 0.184f))
-        drawLine(skinShadow, Offset(cx - w * 0.052f, h * 0.152f), Offset(cx - w * 0.016f, h * 0.154f), strokeWidth = 1.6f, cap = StrokeCap.Round)
-        drawLine(skinShadow, Offset(cx + w * 0.016f, h * 0.154f), Offset(cx + w * 0.052f, h * 0.152f), strokeWidth = 1.6f, cap = StrokeCap.Round)
-        drawCircle(Color(0xFF282220), radius = w * 0.0095f, center = Offset(cx - w * 0.034f, h * 0.168f))
-        drawCircle(Color(0xFF282220), radius = w * 0.0095f, center = Offset(cx + w * 0.034f, h * 0.168f))
+        // Art 1: a face of their own (head shape, hair, features, age)
+        with(SoldierFace) {
+            drawHead(
+                box = androidx.compose.ui.geometry.Rect(cx - w * 0.102f, h * 0.082f, cx + w * 0.102f, h * 0.266f),
+                op = operator, skin = skinTone, shadow = skinShadow,
+                cover = if (operator.headgearStyle.kind == HeadgearKind.BERET) SoldierFace.Cover.BERET else SoldierFace.Cover.CAP,
+                age = SoldierFace.ageOf(operator)
+            )
+        }
 
         fun skullHalfW(yFrac: Float): Float {
             val dy = ((0.174f - yFrac) / 0.092f).coerceIn(-1f, 1f)
@@ -2360,11 +2362,17 @@ private fun DrawScope.drawFieldTacticalFigure(
 
     unscaledForBuild(operator, cx) {
     drawRect(skinShadow, Offset(cx - w * 0.05f, h * 0.30f), Size(w * 0.10f, h * 0.08f))
-    drawOval(skinTone, Offset(cx - w * 0.095f, h * 0.14f), Size(w * 0.19f, h * 0.19f))
+    // Art 1: the soldier's own face; eye protection covers the eyes in the field
+    with(SoldierFace) {
+        drawHead(
+            box = androidx.compose.ui.geometry.Rect(cx - w * 0.095f, h * 0.14f, cx + w * 0.095f, h * 0.33f),
+            op = operator, skin = skinTone, shadow = skinShadow,
+            cover = if (flightSuit) SoldierFace.Cover.CAP else SoldierFace.Cover.FIELD_VISOR,
+            age = SoldierFace.ageOf(operator)
+        )
+    }
     if (flightSuit) {
         // Aviator: bare face and a sage patrol cap
-        drawCircle(Color(0xFF1A1E24), radius = w * 0.009f, center = Offset(cx - w * 0.036f, h * 0.225f))
-        drawCircle(Color(0xFF1A1E24), radius = w * 0.009f, center = Offset(cx + w * 0.036f, h * 0.225f))
         drawRoundRect(primaryCamo, Offset(cx - w * 0.100f, h * 0.128f), Size(w * 0.200f, h * 0.052f), CornerRadius(5f, 5f))
         drawRoundRect(secondaryCamo, Offset(cx - w * 0.104f, h * 0.172f), Size(w * 0.208f, h * 0.014f), CornerRadius(3f, 3f))
     } else {

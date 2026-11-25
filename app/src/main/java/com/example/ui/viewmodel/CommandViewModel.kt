@@ -3502,7 +3502,8 @@ class CommandViewModel(
                     tailorOverrides = finalOverrides,
                     wardrobe = updatedWardrobe,
                     skinToneOverride = request.skinToneOverride,
-                    bodyBuildOverride = request.bodyBuildOverride
+                    bodyBuildOverride = request.bodyBuildOverride,
+                    faceSeed = if (request.newFace) op.faceSeed + 1 else op.faceSeed
                 )
             )
             if (sanitizedCallsign != op.callsign) {
