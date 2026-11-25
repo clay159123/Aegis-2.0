@@ -43,6 +43,10 @@ private const val LEGACY_CHEST_POCKET_TOP_FRACTION = 0.565f
 /** How far the chest group sits above its original position. */
 internal const val CHEST_LIFT = LEGACY_CHEST_POCKET_TOP_FRACTION - CHEST_POCKET_TOP_FRACTION
 
+/** Item 194: the SF tier pin sits under the name plate; the right pocket badge drops to make room. */
+internal const val SF_PIN_CENTER_Y = 0.611f
+internal fun rightPocketBadgeY(sfTier: Int): Float = if (sfTier in 1..3) 0.654f else 0.638f
+
 internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     rightChestCenterX: Float,
     w: Float,
@@ -136,12 +140,12 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     val plateW = w * 0.112f
     val plateH = h * 0.026f
 
-    // 3b. Item 194: SF tier arrowhead pin on the inboard side of the name plate
+    // 3b. Item 194: SF tier arrowhead pin centered just below the name plate (a right pocket badge moves down for it)
     if (sfTier in 1..3) {
         drawSfTierPin(
-            center = Offset(plateX + plateW + w * 0.028f, plateY + plateH / 2f),
-            halfW = w * 0.020f,
-            halfH = h * 0.021f,
+            center = Offset(rightChestCenterX, h * (SF_PIN_CENTER_Y - CHEST_LIFT)),
+            halfW = w * 0.016f,
+            halfH = h * 0.014f,
             tier = sfTier
         )
     }
