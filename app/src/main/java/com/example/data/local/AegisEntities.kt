@@ -34,7 +34,13 @@ data class CommanderStateEntity(
     val lastParadeActivityAtMillis: Long = 0L,
     /** Session 41 (item 73): the unit calendar in game days and when it last advanced. */
     val calendarDays: Double = 0.0,
-    val lastClockAtMillis: Long = 0L
+    val lastClockAtMillis: Long = 0L,
+    /** Session 44 (item 71): base events run this year, the last random one, the seated CO, and any lockdown. */
+    val baseEventsDoneCsv: String = "",
+    val lastRandomBaseEventDay: Double = 0.0,
+    val seatedCoId: String = "",
+    val productionCutUntilMillis: Long = 0L,
+    val productionCutPct: Int = 0
 )
 
 @Entity(tableName = "facilities")
@@ -115,6 +121,8 @@ data class OperatorEntity(
     val escapeOffered: Boolean = false,
     val evadingUntilMillis: Long = 0L,
     val captorsHardenedPct: Int = 0,
+    val atEventUntilMillis: Long = 0L,
+    val eventKit: String? = null,
     val flightSkill: Int = 0,
     val combatSortiesFlown: Int = 0,
     val combatJumps: Int = 0,

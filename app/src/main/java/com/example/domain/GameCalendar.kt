@@ -145,6 +145,7 @@ object GameCalendar {
                     else -> {}
                 }
                 if (op.dwellUntilMillis > 0) add(Long.MIN_VALUE to op.dwellUntilMillis)
+                if (op.atEventUntilMillis > 0) add(Long.MIN_VALUE to op.atEventUntilMillis)
             }
             squads.forEach { if (it.leaveUntilMillis > 0) add(Long.MIN_VALUE to it.leaveUntilMillis) }
         }

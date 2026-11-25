@@ -10,7 +10,7 @@ import kotlin.random.Random
  * after [EVENT_EXPIRY_MILLIS]. Only soldiers who are around (READY field soldiers and seated HQ staff, not
  * deployed) can raise one, and each event only goes to soldiers it fits.
  */
-enum class SoldierEventKind(val title: String, val personal: Boolean = false) {
+enum class SoldierEventKind(val title: String, val personal: Boolean = false, val base: Boolean = false) {
     TRAINING_REQUEST("Training Request", personal = true),
     SQUAD_TRANSFER("Squad Transfer Request", personal = true),
     OP_REQUEST("Op Request", personal = true),
@@ -20,6 +20,21 @@ enum class SoldierEventKind(val title: String, val personal: Boolean = false) {
     CONTRACT_END("Contract Decision", personal = true),
     /** Session 43: a POW sees a chance to escape. */
     ESCAPE_CHANCE("Escape Chance", personal = true),
+    /** Session 44 (item 71): base-wide events. */
+    BASE_ARMY_BALL("Army Birthday Ball", base = true),
+    BASE_FAMILY_DAY("Family Day", base = true),
+    BASE_IG_INSPECTION("IG Inspection", base = true),
+    BASE_BLOCK_LEAVE("Holiday Block Leave", base = true),
+    BASE_CHANGE_OF_COMMAND("Change of Command", base = true),
+    BASE_GENERAL_VISIT("General's Visit", base = true),
+    BASE_GATE_INCIDENT("Gate Security Incident", base = true),
+    BASE_STORM("Storm Damage", base = true),
+    BASE_FISCAL_YEAR_END("Fiscal Year-End", base = true),
+    /** Session 44 (item 169): team leader events. */
+    TL_TRAINING_LANE("Team Training Lane", personal = true),
+    TL_FRICTION("Leadership Friction", personal = true),
+    TL_BOARD_REC("Board Recommendation", personal = true),
+    TL_SCHOOL_BUDDY("School Together", personal = true),
     BARRACKS_INSPECTION("Failed Barracks Inspection"),
     RANGE_TIME("Extra Range Time", personal = true),
     SOLDIER_OF_MONTH("Soldier of the Month Board"),
@@ -117,7 +132,11 @@ data class SoldierEventOutcome(
     val deeds: List<PendingDeed> = emptyList(),
     /** Petitions hand off to the existing approve or decline flow. */
     val petitionAction: PetitionAction? = null,
-    val banner: String
+    val banner: String,
+    /** Session 44: base events can slow a building or lock down production. */
+    val facilityUpdates: List<FacilityState> = emptyList(),
+    val productionCutPct: Int = 0,
+    val productionCutUntilMillis: Long = 0L
 )
 
 enum class PetitionAction { APPROVE_TRANSFER, DECLINE_TRANSFER, APPROVE_RETIREMENT, DENY_RETIREMENT, CONTRACT_LEAVE }
@@ -241,6 +260,8 @@ object SoldierEvents {
             }
             // Positions
             if (squad != null && squad.leaderId == op.id) out += ev(SoldierEventKind.SQUAD_TRAINING_DAY, op, squad.id)
+            // Session 44 (item 169): team leader events
+            out += BaseEvents.teamLeaderCandidates(op, ctx) { k, t -> ev(k, op, t) }
             if (op.specialty == OperatorSpecialty.MEDIC && inMedbay) out += ev(SoldierEventKind.MEDBAY_PUSH, op)
             if (squad?.isSpecialForces == true) out += ev(SoldierEventKind.SF_REHEARSAL, op, squad.id)
             if (hq && op.hqRole == HqStaffRole.S2_INTEL_OVERWATCH) out += ev(SoldierEventKind.INTEL_LEAD, op)
@@ -268,7 +289,7 @@ object SoldierEvents {
 
     /** True when the waiting event still makes sense (soldier around, target still valid). */
     fun stillValid(e: PendingSoldierEvent, ctx: SoldierEventContext): Boolean =
-        ctx.now < e.expiresAtMillis && if (e.kind == SoldierEventKind.ESCAPE_CHANCE) {
+        ctx.now < e.expiresAtMillis && if (e.kind.base) true else if (e.kind == SoldierEventKind.ESCAPE_CHANCE) {
             ctx.op(e.operatorId)?.let { it.status == OperatorStatus.CAPTURED && it.evadingUntilMillis == 0L } == true
         } else idleOperators(ctx).any { it.id == e.operatorId }
 
@@ -400,6 +421,7 @@ object SoldierEvents {
     // ---------- Cards ----------
 
     fun card(e: PendingSoldierEvent, ctx: SoldierEventContext): SoldierEventCard {
+        if (e.kind.base) return BaseEvents.card(e, ctx)
         val op = ctx.op(e.operatorId)
         val who = op?.let { "${it.rank.code} ${it.callsign}" } ?: "A soldier"
         val target = ctx.op(e.targetId)
@@ -425,6 +447,8 @@ object SoldierEvents {
                 "$who requests a transfer to another command.",
                 listOf(c("approve", "Approve Transfer", "They leave the command; +10 PRS."), c("decline", "Decline", "They stay.")))
             SoldierEventKind.CONTRACT_END -> contractCard(e, op, who, ctx)
+            SoldierEventKind.TL_TRAINING_LANE, SoldierEventKind.TL_FRICTION, SoldierEventKind.TL_BOARD_REC, SoldierEventKind.TL_SCHOOL_BUDDY ->
+                BaseEvents.teamLeaderCard(e, who, ctx)
             SoldierEventKind.ESCAPE_CHANCE -> {
                 val pct = op?.let { PowRules.escapeChancePct(it) } ?: PowRules.ESCAPE_PCT_NONE
                 val death = op?.let { PowRules.failedEscapeDeathPct(it) } ?: PowRules.FAILED_ESCAPE_DEATH_PCT
@@ -512,6 +536,7 @@ object SoldierEvents {
             SoldierEventKind.FAMILY_NEWS -> SoldierEventCard(e.kind.title,
                 "$who just got word: a baby on the way.",
                 listOf(c("approve", "Grant leave", "Away 1 week; +30 XP."), c("decline", "Not now", "Nothing changes.")))
+            else -> SoldierEventCard(e.kind.title, "", listOf(decline))
         }
     }
 
@@ -538,6 +563,7 @@ object SoldierEvents {
     // ---------- Applying a choice ----------
 
     fun apply(e: PendingSoldierEvent, choiceId: String, ctx: SoldierEventContext, random: Random = Random): SoldierEventOutcome {
+        if (e.kind.base) return BaseEvents.apply(e, choiceId, ctx, random)
         val op = ctx.op(e.operatorId) ?: return SoldierEventOutcome(banner = "That soldier is no longer available.")
         val who = "${op.rank.code} ${op.callsign}"
         val (cr, sup) = choiceCost(e.kind, choiceId)
@@ -560,6 +586,8 @@ object SoldierEvents {
             SoldierEventKind.RETIREMENT_PETITION -> SoldierEventOutcome(
                 petitionAction = if (declined) PetitionAction.DENY_RETIREMENT else PetitionAction.APPROVE_RETIREMENT, banner = "")
             SoldierEventKind.CONTRACT_END -> applyContract(op, who, choiceId, ctx, random)
+            SoldierEventKind.TL_TRAINING_LANE, SoldierEventKind.TL_FRICTION, SoldierEventKind.TL_BOARD_REC, SoldierEventKind.TL_SCHOOL_BUDDY ->
+                BaseEvents.teamLeaderApply(e, op, who, choiceId, ctx)
             SoldierEventKind.ESCAPE_CHANCE -> when {
                 declined -> SoldierEventOutcome(banner = "$who waits for another day.")
                 random.nextInt(100) < PowRules.escapeChancePct(op) -> SoldierEventOutcome(
@@ -673,6 +701,7 @@ object SoldierEvents {
                     operatorUpdates = listOf(away(op).copy(xp = op.xp + 30)))
                 SoldierEventKind.TRANSFER_PETITION, SoldierEventKind.RETIREMENT_PETITION, SoldierEventKind.CONTRACT_END,
                 SoldierEventKind.ESCAPE_CHANCE -> SoldierEventOutcome(banner = "")
+                else -> SoldierEventOutcome(banner = "")
             }
         }
     }

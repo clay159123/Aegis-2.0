@@ -345,7 +345,7 @@ fun HqOpsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(132.dp)
+                        .height(150.dp)
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.img_fob_banner),
@@ -492,6 +492,15 @@ fun HqOpsScreen(
                                         .padding(vertical = 2.dp)
                                         .testTag("ops_calendar")
                                 )
+                                // Session 44: calendar events are announced a month ahead
+                                com.example.domain.BaseEvents.upcoming(uiState.calendarDays, uiState.baseEventsDone)?.let { (kind, month) ->
+                                    Text(
+                                        text = "NEXT: ${kind.title.uppercase()} IN ${month.uppercase()}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.testTag("ops_upcoming_event")
+                                    )
+                                }
 
                             }
                             Button(

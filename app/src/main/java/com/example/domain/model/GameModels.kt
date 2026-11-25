@@ -1519,6 +1519,9 @@ data class Operator(
     val escapeOffered: Boolean = false,
     val evadingUntilMillis: Long = 0L,
     val captorsHardenedPct: Int = 0,
+    /** Session 44: at a base event until this time; "MESS" or "ALPHAS" when it calls for a dress uniform. */
+    val atEventUntilMillis: Long = 0L,
+    val eventKit: String? = null,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */
