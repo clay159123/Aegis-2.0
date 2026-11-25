@@ -100,9 +100,10 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
                 val t = ((yFrac - 0.320f) / (0.520f - 0.320f)).coerceIn(0f, 1f)
                 0.246f - t * 0.008f
             }
+            // Art 5b: arms hang straighter, like the dress coats
             else -> {
                 val t = ((yFrac - 0.520f) / (0.895f - 0.520f)).coerceIn(0f, 1f)
-                0.238f + t * 0.056f
+                0.238f + t * 0.026f
             }
         }
         return cx + sideSign * w * x
@@ -121,7 +122,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
             }
             else -> {
                 val t = ((yFrac - 0.556f) / (0.895f - 0.556f)).coerceIn(0f, 1f)
-                0.364f + t * 0.014f
+                0.376f - t * 0.018f
             }
         }
         return cx + sideSign * w * x
@@ -175,42 +176,10 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
             )
         )
 
-        // Bare hands & thumbs at attention
+        // Art 5b: relaxed hands, same as the dress coats
         val wristLeft = minOf(armInnerX(sideSign, 0.895f), armOuterX(sideSign, 0.895f))
         val wristW = kotlin.math.abs(armOuterX(sideSign, 0.895f) - armInnerX(sideSign, 0.895f))
-        val handX = wristLeft + wristW * 0.08f
-        val handW = wristW * 0.84f
-        val handTopY = h * 0.896f
-        val handH = h * 0.052f
-        val thumbW = handW * 0.28f
-        val thumbX = if (sideSign < 0f) handX + handW - thumbW * 0.78f else handX - thumbW * 0.22f
-
-        drawRoundRect(skinTone, Offset(handX, handTopY), Size(handW, handH), CornerRadius(6f, 6f))
-        drawRoundRect(skinTone, Offset(thumbX, handTopY + handH * 0.12f), Size(thumbW, handH * 0.64f), CornerRadius(4f, 4f))
-        drawRoundRect(
-            skinShadow.copy(alpha = 0.70f),
-            Offset(thumbX, handTopY + handH * 0.12f),
-            Size(thumbW, handH * 0.64f),
-            CornerRadius(4f, 4f),
-            style = Stroke(1.0f)
-        )
-        for (finger in 1..2) {
-            val fx = handX + handW * (finger / 3f)
-            drawLine(
-                color = skinShadow.copy(alpha = 0.55f),
-                start = Offset(fx, handTopY + handH * 0.52f),
-                end = Offset(fx, handTopY + handH * 0.94f),
-                strokeWidth = 1.0f,
-                cap = StrokeCap.Round
-            )
-        }
-        drawRoundRect(
-            skinShadow.copy(alpha = 0.58f),
-            Offset(handX, handTopY),
-            Size(handW, handH),
-            CornerRadius(6f, 6f),
-            style = Stroke(1.0f)
-        )
+        drawRelaxedHand(sideSign, wristLeft + wristW * 0.5f, h * 0.894f, wristW * 0.78f, h * 0.064f, skinTone, skinShadow)
 
         // Short shirt sleeve (shoulder to mid-bicep hem)
         val shortSleevePath = Path().apply {
@@ -271,6 +240,17 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         shirtBodyPath,
         brush = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.06f), Color.Transparent, Color.Black.copy(alpha = 0.12f)))
     )
+    // Art 5b: light from the upper left, pressed creases through the pockets, blousing above the belt
+    drawPath(shirtBodyPath, Brush.horizontalGradient(
+        0f to Color.White.copy(alpha = 0.08f), 0.45f to Color.Transparent, 0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.16f),
+        startX = cx - w * 0.25f, endX = cx + w * 0.25f))
+    for (s in listOf(-1f, 1f)) {
+        drawLine(shirtShadeCol.copy(alpha = 0.55f), Offset(cx + s * w * 0.168f, h * 0.300f), Offset(cx + s * w * 0.168f, h * 0.745f), strokeWidth = 0.9f)
+        for (k in 0..2) {
+            val fx = cx + s * w * (0.070f + k * 0.055f)
+            drawArc(shirtShadeCol.copy(alpha = 0.6f), 200f, 140f, false, Offset(fx - w * 0.022f, h * 0.728f), Size(w * 0.044f, h * 0.018f), style = Stroke(0.9f))
+        }
+    }
     // Armhole shoulder seams
     drawLine(shirtShadeCol, Offset(cx - w * 0.246f, h * 0.322f), Offset(cx - w * 0.238f, h * 0.520f), strokeWidth = 1.3f)
     drawLine(shirtShadeCol, Offset(cx + w * 0.246f, h * 0.322f), Offset(cx + w * 0.238f, h * 0.520f), strokeWidth = 1.3f)
@@ -301,6 +281,18 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         },
         color = shirtShadeCol.copy(alpha = 0.55f)
     )
+    // Art 5b: collar points lying open on the shoulders
+    for (s in listOf(-1f, 1f)) {
+        val collar = Path().apply {
+            moveTo(cx + s * w * 0.056f, h * 0.292f)
+            lineTo(cx + s * w * 0.118f, h * 0.300f)
+            lineTo(cx + s * w * 0.098f, h * 0.364f)
+            lineTo(cx + s * w * 0.010f, h * 0.384f)
+            close()
+        }
+        drawPath(collar, shirtCol)
+        drawPath(collar, shirtShadeCol, style = Stroke(1f))
+    }
     // Center placket strip & crisp buttons
     drawRect(
         color = shirtShadeCol.copy(alpha = 0.28f),
