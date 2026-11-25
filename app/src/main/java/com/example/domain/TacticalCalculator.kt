@@ -524,6 +524,10 @@ object TacticalCalculator {
     }
 
     /** Prestige to finish a running build now, scaled by the time left. */
+    /** Session 42: Rush price for any timer: 1 PRS per real minute left (minimum applies). */
+    fun rushPrestigeCostFor(leftMillis: Long): Int =
+        kotlin.math.ceil((leftMillis.coerceAtLeast(0L) / 60_000.0) * RUSH_PRESTIGE_PER_MINUTE).toInt().coerceAtLeast(RUSH_MIN_PRESTIGE)
+
     fun rushPrestigeCost(facility: FacilityState, nowMillis: Long): Int {
         if (!facility.isUpgrading) return 0
         val minutesLeft = ((facility.upgradeEndsAtMillis - nowMillis).coerceAtLeast(0L) / 60_000.0)

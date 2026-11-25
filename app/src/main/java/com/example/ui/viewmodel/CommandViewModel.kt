@@ -78,7 +78,7 @@ data class CommandUiState(
     /** Session 41 (item 73): the unit calendar in game days. */
     val calendarDays: Double = 0.0
 ) {
-    fun eventContext(): SoldierEventContext = SoldierEventContext(operators, squads, deployments, facilities, resources, nowMillis)
+    fun eventContext(): SoldierEventContext = SoldierEventContext(operators, squads, deployments, facilities, resources, nowMillis, citations)
 
     /** Deployments that use an HQ tasking slot. Schools and training never take a slot. */
     val occupiedDeploymentSlots: Int
@@ -446,6 +446,7 @@ class CommandViewModel(
                 }
                 tickSoldierEvents(state, now)
                 stampServiceRecords(state)
+                tickContracts(state)
                 enforceMandatoryRetirement(state, now)
                 repairPowRecords(state, now)
                 repairOcsCommissions(state)
@@ -609,6 +610,7 @@ class CommandViewModel(
             PetitionAction.DECLINE_TRANSFER -> declineTransferRequest(event.operatorId)
             PetitionAction.APPROVE_RETIREMENT -> approveRetirement(event.operatorId)
             PetitionAction.DENY_RETIREMENT -> denyRetirementRequest(event.operatorId)
+            PetitionAction.CONTRACT_LEAVE -> approveTransferOut(event.operatorId, endOfContract = true)
             null -> Unit
         }
         if (outcome.deeds.isNotEmpty()) enqueueAwardPrompts(outcome.deeds)
@@ -762,6 +764,42 @@ class CommandViewModel(
             val done = current.copy(level = (current.level + 1).coerceAtMost(MAX_FACILITY_LEVEL), upgradeEndsAtMillis = 0L, upgradeStartedAtMillis = 0L)
             repository.saveFacility(done)
             showBanner("${type.title} rushed to Lv ${done.level} for $cost PRS")
+        }
+    }
+
+    /** Session 42: finish an op or school now for Prestige. The calendar only counts the time it actually ran. */
+    fun rushDeployment(deploymentId: String) {
+        val state = uiState.value
+        val now = System.currentTimeMillis()
+        val d = state.deployments.find { it.id == deploymentId } ?: return
+        if (d.isComplete(now)) return
+        val left = d.startedAtMillis + d.durationMillis - now
+        val cost = TacticalCalculator.rushPrestigeCostFor(left)
+        if (state.resources.prestige < cost) {
+            showBanner("Need $cost PRS to rush ${d.missionTitle ?: "this op"}.")
+            return
+        }
+        viewModelScope.launch {
+            repository.updateCommanderState { cur -> cur.copy(prestige = (cur.prestige - cost).coerceAtLeast(0.0)) }
+            repository.saveDeployment(d.copy(durationMillis = (now - d.startedAtMillis).coerceAtLeast(1L)))
+            showBanner("${d.missionTitle ?: "Op"} rushed for $cost PRS. Ready to debrief.")
+        }
+    }
+
+    /** Session 42: bring a soldier back from leave now for Prestige. */
+    fun rushLeave(operatorId: String) {
+        val state = uiState.value
+        val now = System.currentTimeMillis()
+        val op = state.operators.find { it.id == operatorId && it.status == OperatorStatus.ON_LEAVE } ?: return
+        val cost = TacticalCalculator.rushPrestigeCostFor(op.recoveryUntilMillis - now)
+        if (state.resources.prestige < cost) {
+            showBanner("Need $cost PRS to call ${op.callsign} back.")
+            return
+        }
+        viewModelScope.launch {
+            repository.updateCommanderState { cur -> cur.copy(prestige = (cur.prestige - cost).coerceAtLeast(0.0)) }
+            repository.saveOperator(op.copy(recoveryUntilMillis = now))
+            showBanner("${op.callsign} called back from leave for $cost PRS.")
         }
     }
 
@@ -1852,23 +1890,8 @@ class CommandViewModel(
                     combatMissionsCompleted = newCombatOpsCount,
                     status = nextStatus
                 )
-                val askRetirement = if (
-                    !wasHqStaff &&
-                    !petitionAlreadyActive &&
-                    cooldownCleared &&
-                    missionSucceeded &&
-                    outcome == OperatorOutcomeType.SAFE &&
-                    !askTransfer &&
-                    !op.transferRequested &&
-                    !op.retirementRequested &&
-                    TacticalCalculator.evaluateRetirementEligibility(postMissionCandidate).eligible
-                ) {
-                    (Random.nextInt(100) < (7 * TacticalCalculator.dfacPetitionFactor(state.facilities) * MoraleRules.petitionFactor(op)).roundToInt()).also { triggered ->
-                        if (triggered) petitionAlreadyActive = true
-                    }
-                } else {
-                    op.retirementRequested
-                }
+                // Session 42: retirement requests come once a year from 20 years of service (see tickContracts)
+                val askRetirement = op.retirementRequested
 
                 val jumped = isCombatOp && op.id != pilotId && outcome != OperatorOutcomeType.FALLEN &&
                     (deployment.insertion == InsertionMethod.AIRBORNE || deployment.insertion == InsertionMethod.HALO)
@@ -1885,6 +1908,9 @@ class CommandViewModel(
                     highestRiskSurvived = updatedHighestRisk,
                     timesWounded = updatedWoundedCount,
                     combatPatchHistory = updatedCombatPatchHistory,
+                    // Session 42: progress on a "send me on X ops" contract ask
+                    contractAskProgress = op.contractAskProgress +
+                        if (missionSucceeded && com.example.domain.ContractRules.countsForMissionAsk(op, mission)) 1 else 0,
                     // Session 41: dwell time at home after a field op (1:1 with the time actually deployed)
                     dwellUntilMillis = if (mission.scope == MissionScope.FIELD_COMBAT && outcome != OperatorOutcomeType.FALLEN) {
                         val ran = (minOf(System.currentTimeMillis(), deployment.startedAtMillis + deployment.durationMillis) - deployment.startedAtMillis).coerceAtLeast(0L)
@@ -2067,21 +2093,8 @@ class CommandViewModel(
                 it.unlocked && !it.status.isOutOfActiveService && (it.transferRequested || it.retirementRequested)
             }
             val staffTotalOps = staff.missionsCompleted + nextSupportCount
-            val staffAskRetirement = if (
-                !staffPetitionBlocked &&
-                staffTotalOps >= staff.petitionCooldownUntilOps &&
-                missionSucceeded &&
-                !mission.risk.isTraining &&
-                !staff.retirementRequested &&
-                !staff.transferRequested &&
-                TacticalCalculator.evaluateRetirementEligibility(candidateStaff).eligible
-            ) {
-                (Random.nextInt(100) < (5 * TacticalCalculator.dfacPetitionFactor(state.facilities) * MoraleRules.petitionFactor(staff)).roundToInt()).also { triggered ->
-                    if (triggered) staffPetitionBlocked = true
-                }
-            } else {
-                staff.retirementRequested
-            }
+            // Session 42: retirement requests come once a year from 20 years of service
+            val staffAskRetirement = staff.retirementRequested
             val updatedStaff = TacticalCalculator.applyExperience(
                 candidateStaff.copy(retirementRequested = staffAskRetirement),
                 setOf(StatType.TECH),
@@ -2929,7 +2942,7 @@ class CommandViewModel(
      * transfer earn +10 PRS; a player-initiated transfer earns nothing. The soldier stays on file as
      * TRANSFERRED so their name and callsign aren't reused.
      */
-    fun approveTransferOut(operatorId: String) {
+    fun approveTransferOut(operatorId: String, endOfContract: Boolean = false) {
         val state = uiState.value
         val op = state.operators.find { it.id == operatorId && it.unlocked && !it.status.isOutOfActiveService } ?: return
         val deployedOpIds = state.deployments.flatMap { it.operatorIds }.toSet()
@@ -2966,8 +2979,11 @@ class CommandViewModel(
                 )
             )
             showBanner(
-                if (requested) "${op.rank.code} ${op.callsign} transferred to another command (+10 PRS). Roster slot freed."
-                else "${op.rank.code} ${op.callsign} transferred to another command. Roster slot freed."
+                when {
+                    endOfContract -> "${op.rank.code} ${op.callsign} left the Army at the end of their contract. Roster slot freed."
+                    requested -> "${op.rank.code} ${op.callsign} transferred to another command (+10 PRS). Roster slot freed."
+                    else -> "${op.rank.code} ${op.callsign} transferred to another command. Roster slot freed."
+                }
             )
         }
     }
@@ -3000,7 +3016,10 @@ class CommandViewModel(
                     priorServiceDays = GameCalendar.typicalServiceYears(op.rank) * GameCalendar.DAYS_PER_YEAR,
                     rankSinceDay = today,
                     rankSinceName = op.rank.name,
-                    goodConductSinceDay = today
+                    goodConductSinceDay = today,
+                    // Session 42: first contract on arrival
+                    contractStartDay = today,
+                    contractEndDay = com.example.domain.ContractRules.firstContractEnd(op, today)
                 )
                 op.rankSinceName != op.rank.name -> op.copy(rankSinceDay = today, rankSinceName = op.rank.name)
                 else -> null
@@ -3010,6 +3029,27 @@ class CommandViewModel(
     }
 
     /** Session 41: 30 years of service, or a general at 62, means retirement now (once they're home). */
+    /** Session 42: asks met mid-contract, and yearly retirement requests from 20 years. */
+    private suspend fun tickContracts(state: CommandUiState) {
+        val today = GameCalendar.today
+        val updates = mutableListOf<Operator>()
+        val notes = mutableListOf<String>()
+        state.operators.filter { it.unlocked && !it.status.isOutOfActiveService }.forEach { op ->
+            var o = op
+            if (o.contractAsk != null && !o.contractAskMet && com.example.domain.ContractRules.askSatisfied(o, state.squads)) {
+                notes += "${o.rank.code} ${o.callsign}'s request met (+${com.example.domain.ContractRules.ASK_MET_MORALE} morale)"
+                o = MoraleRules.adjust(o, com.example.domain.ContractRules.ASK_MET_MORALE).copy(contractAskMet = true)
+            }
+            if (o.joinedDay >= 0 && com.example.domain.ContractRules.retireAskDue(o, today)) {
+                val asks = Random.nextInt(100) < com.example.domain.ContractRules.retireAskChancePct(o, today)
+                o = o.copy(retirementRequested = asks, nextRetireAskDay = today + GameCalendar.DAYS_PER_YEAR)
+            }
+            if (o != op) updates += o
+        }
+        if (updates.isNotEmpty()) repository.saveOperators(updates)
+        if (notes.isNotEmpty()) showBanner(notes.joinToString(". ") + ".")
+    }
+
     private val mandatoryRetiring = mutableSetOf<String>()
 
     private fun enforceMandatoryRetirement(state: CommandUiState, now: Long) {
