@@ -21,7 +21,7 @@ class AegisRepository(private val dao: AegisDao) {
          * changed (new award ids, gear ownership rules, renamed missions). Saves with a
          * different value are replaced with a new game on launch.
          */
-        const val SAVE_FORMAT_VERSION = 43
+        const val SAVE_FORMAT_VERSION = 44
     }
 
     private val commanderMutex = Mutex()
@@ -466,6 +466,13 @@ private fun OperatorEntity.toDomain(): Operator = Operator(
     rankSinceName = rankSinceName,
     goodConductSinceDay = goodConductSinceDay,
     dwellUntilMillis = dwellUntilMillis,
+    contractStartDay = contractStartDay,
+    contractEndDay = contractEndDay,
+    contractAsk = contractAsk,
+    contractAskMet = contractAskMet,
+    contractAskProgress = contractAskProgress,
+    swaysUsed = swaysUsed,
+    nextRetireAskDay = nextRetireAskDay,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
     combatJumps = combatJumps,
@@ -572,6 +579,13 @@ private fun Operator.toEntity(): OperatorEntity = OperatorEntity(
     rankSinceName = rankSinceName,
     goodConductSinceDay = goodConductSinceDay,
     dwellUntilMillis = dwellUntilMillis,
+    contractStartDay = contractStartDay,
+    contractEndDay = contractEndDay,
+    contractAsk = contractAsk,
+    contractAskMet = contractAskMet,
+    contractAskProgress = contractAskProgress,
+    swaysUsed = swaysUsed,
+    nextRetireAskDay = nextRetireAskDay,
     flightSkill = flightSkill,
     combatSortiesFlown = combatSortiesFlown,
     combatJumps = combatJumps,

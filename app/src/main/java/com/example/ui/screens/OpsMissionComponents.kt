@@ -56,7 +56,10 @@ internal fun ActiveHqDeploymentCard(
     squads: List<TacticalSquad> = emptyList(),
     nowMillis: Long,
     onClaim: () -> Unit,
-    onCancel: (() -> Unit)? = null
+    onCancel: (() -> Unit)? = null,
+    /** Session 42: finish now for Prestige (the calendar only counts the time it actually ran). */
+    onRush: (() -> Unit)? = null,
+    rushCost: Int = 0
 ) {
     val extra = LocalAegisColors.current
     val mission = GameCatalog.missions.find { it.id == deployment.templateId } ?: return
@@ -181,7 +184,21 @@ internal fun ActiveHqDeploymentCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Debrief & Review Deeds")
             }
-        } else if (onCancel != null) {
+        } else if (onCancel != null || onRush != null) {
+          if (onRush != null && deployment.coverBlownAtMillis <= 0L) {
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onRush,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 44.dp)
+                    .testTag("rush_deployment_${deployment.id}"),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = extra.brassBright)
+            ) {
+                Text("Rush ($rushCost PRS)")
+            }
+          }
+          if (onCancel != null) {
             // Item 103: cancel a school or abort a mission, with confirmation
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
@@ -195,6 +212,7 @@ internal fun ActiveHqDeploymentCard(
             ) {
                 Text(if (mission.risk.isTraining) "Cancel Class" else "Abort Mission")
             }
+          }
         }
     }
 

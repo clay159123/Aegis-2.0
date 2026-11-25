@@ -1506,6 +1506,14 @@ data class Operator(
     val goodConductSinceDay: Double = -1.0,
     /** Session 41: home from a field op until this time (dwell); field ops wait until then. */
     val dwellUntilMillis: Long = 0L,
+    /** Session 42 (item 73): the current contract (calendar days), its ask and progress, sways used, next retirement ask. */
+    val contractStartDay: Double = -1.0,
+    val contractEndDay: Double = -1.0,
+    val contractAsk: String? = null,
+    val contractAskMet: Boolean = false,
+    val contractAskProgress: Int = 0,
+    val swaysUsed: Int = 0,
+    val nextRetireAskDay: Double = -1.0,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */

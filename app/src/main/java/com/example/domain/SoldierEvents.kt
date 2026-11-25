@@ -16,6 +16,8 @@ enum class SoldierEventKind(val title: String, val personal: Boolean = false) {
     OP_REQUEST("Op Request", personal = true),
     TRANSFER_PETITION("Transfer Request", personal = true),
     RETIREMENT_PETITION("Retirement Request", personal = true),
+    /** Session 42: a contract has run out; the soldier re-ups or leaves. */
+    CONTRACT_END("Contract Decision", personal = true),
     BARRACKS_INSPECTION("Failed Barracks Inspection"),
     RANGE_TIME("Extra Range Time", personal = true),
     SOLDIER_OF_MONTH("Soldier of the Month Board"),
@@ -86,7 +88,8 @@ data class SoldierEventContext(
     val deployments: List<ActiveDeployment>,
     val facilities: List<FacilityState>,
     val resources: ResourceBundle,
-    val now: Long
+    val now: Long,
+    val citations: List<AwardedMedal> = emptyList()
 ) {
     val deployedIds: Set<String> = deployments.flatMap { it.operatorIds }.toSet()
     fun op(id: String?): Operator? = operators.find { it.id == id }
@@ -115,7 +118,7 @@ data class SoldierEventOutcome(
     val banner: String
 )
 
-enum class PetitionAction { APPROVE_TRANSFER, DECLINE_TRANSFER, APPROVE_RETIREMENT, DENY_RETIREMENT }
+enum class PetitionAction { APPROVE_TRANSFER, DECLINE_TRANSFER, APPROVE_RETIREMENT, DENY_RETIREMENT, CONTRACT_LEAVE }
 
 object SoldierEvents {
     const val EVENT_INTERVAL_MILLIS = 5 * 60_000L
@@ -171,6 +174,8 @@ object SoldierEvents {
             PendingSoldierEvent(kind, op.id, target, ctx.now, ctx.now + expiryMillis())
         val petitions = idle.mapNotNull { op ->
             when {
+                // Session 42: contract decisions come first
+                ContractRules.contractDue(op) -> ev(SoldierEventKind.CONTRACT_END, op)
                 op.transferRequested -> ev(SoldierEventKind.TRANSFER_PETITION, op)
                 op.retirementRequested -> ev(SoldierEventKind.RETIREMENT_PETITION, op)
                 else -> null
@@ -263,6 +268,106 @@ object SoldierEvents {
     fun stillValid(e: PendingSoldierEvent, ctx: SoldierEventContext): Boolean =
         ctx.now < e.expiresAtMillis && idleOperators(ctx).any { it.id == e.operatorId }
 
+    // ---------- Session 42: contracts ----------
+
+    data class ContractDecision(val wantsToStay: Boolean, val stayPct: Int, val ask: ContractRules.Ask?)
+
+    /** The soldier's decision is fixed for this contract end, so letting the card lapse never re-rolls it. */
+    fun contractDecision(op: Operator, ctx: SoldierEventContext): ContractDecision {
+        val seed = op.id.hashCode() * 31 + op.contractEndDay.toInt() * 7 + op.swaysUsed
+        val r = Random(seed)
+        val awards = ctx.citations.count { it.operatorId == op.id }
+        val pct = ContractRules.reUpChancePct(op, awards)
+        val stays = r.nextInt(100) < pct
+        val ask = if (stays) ContractRules.rollAsk(op, ctx.squads, ctx.operators, r) else null
+        return ContractDecision(stays, pct, ask)
+    }
+
+    private fun contractCard(e: PendingSoldierEvent, op: Operator?, who: String, ctx: SoldierEventContext): SoldierEventCard {
+        fun c(id: String, label: String, result: String) = SoldierEventChoice(id, label, result)
+        if (op == null) return SoldierEventCard(e.kind.title, "$who's contract is up.", listOf(c("release", "Close", "Nothing changes.")))
+        val d = contractDecision(op, ctx)
+        val term = ContractRules.termYears(op).toInt()
+        val prior = ContractRules.askLabel(op, ctx.squads)?.let { label ->
+            if (op.contractAskMet) " Their last ask ($label) was met." else " Their last ask ($label) was never met."
+        } ?: ""
+        if (d.wantsToStay) {
+            val ask = d.ask
+            val bonus = ContractRules.signingBonus(op)
+            return when (ask?.type) {
+                ContractRules.AskType.MONEY -> SoldierEventCard(e.kind.title,
+                    "$who's contract is up.$prior They'll re-up for $term years if you pay a $bonus CR signing bonus.",
+                    listOf(
+                        c("pay", "Pay $bonus CR and sign", "They sign happy; their ask is met."),
+                        c("sign", "Sign without the bonus", "They sign unhappy: ${ContractRules.ASK_MISSED_MORALE} morale, and they'll remember it next time."),
+                        c("release", "Let them go", "They leave the Army; their awards stay in Honors.")))
+                null -> SoldierEventCard(e.kind.title,
+                    "$who's contract is up.$prior They want to re-up for $term years.",
+                    listOf(c("sign", "Sign them", "A new $term-year contract."), c("release", "Let them go", "They leave the Army; their awards stay in Honors.")))
+                else -> {
+                    val asked = ContractRules.askLabel(op.copy(contractAsk = ask.encode(), contractAskProgress = 0), ctx.squads)
+                    SoldierEventCard(e.kind.title,
+                        "$who's contract is up.$prior They'll re-up for $term years and ask for $asked this contract.",
+                        listOf(
+                            c("sign", "Sign them", "Meet the ask for +${ContractRules.ASK_MET_MORALE} morale and a likely re-up; miss it and they'll want out."),
+                            c("release", "Let them go", "They leave the Army; their awards stay in Honors.")))
+                }
+            }
+        }
+        val choices = buildList {
+            if (ContractRules.canSway(op)) {
+                val cost = ContractRules.swayCost(op)
+                add(c("sway", "Offer $cost CR to stay", "${ContractRules.swayChancePct(op)}% they accept (paid only if they do). ${ContractRules.MAX_SWAYS - op.swaysUsed - 1} more tries after this in their career."))
+            }
+            add(c("release", "Let them go", "They leave the Army; their awards stay in Honors."))
+        }
+        val finalNote = if (ContractRules.canSway(op)) "" else " You've already talked them into staying twice; this time it's final."
+        return SoldierEventCard(e.kind.title, "$who's contract is up and they plan to leave the Army.$prior$finalNote", choices)
+    }
+
+    private fun applyContract(op: Operator, who: String, choiceId: String, ctx: SoldierEventContext, random: Random): SoldierEventOutcome {
+        val today = GameCalendar.today
+        val d = contractDecision(op, ctx)
+        // A missed ask from the last contract costs morale either way
+        val priorMissed = ContractRules.Ask.decode(op.contractAsk) != null && !op.contractAskMet
+        val base = if (priorMissed) MoraleRules.adjust(op, ContractRules.ASK_MISSED_MORALE) else op
+        val leave = SoldierEventOutcome(petitionAction = PetitionAction.CONTRACT_LEAVE, banner = "")
+        return when (choiceId) {
+            "release" -> leave
+            "pay" -> {
+                val bonus = ContractRules.signingBonus(op).toDouble()
+                if (ctx.resources.credits < bonus) return SoldierEventOutcome(banner = "Not enough credits for the bonus.")
+                SoldierEventOutcome(operatorUpdates = listOf(ContractRules.signed(base, today, d.ask, askMet = true)),
+                    creditsDelta = -bonus, banner = "$who re-upped for ${ContractRules.termYears(op).toInt()} years with a signing bonus.")
+            }
+            "sign" -> {
+                val ask = d.ask
+                if (ask?.type == ContractRules.AskType.MONEY) {
+                    val signedOp = ContractRules.signed(MoraleRules.adjust(base, ContractRules.ASK_MISSED_MORALE), today, ask, askMet = false)
+                    SoldierEventOutcome(operatorUpdates = listOf(signedOp), banner = "$who signed without the bonus and isn't happy about it.")
+                } else {
+                    SoldierEventOutcome(operatorUpdates = listOf(ContractRules.signed(base, today, ask)),
+                        banner = "$who re-upped for ${ContractRules.termYears(op).toInt()} years." +
+                            (ask?.let { " Their ask: ${ContractRules.askLabel(op.copy(contractAsk = it.encode(), contractAskProgress = 0), ctx.squads)}." } ?: ""))
+                }
+            }
+            "sway" -> {
+                if (!ContractRules.canSway(op)) return leave
+                val cost = ContractRules.swayCost(op).toDouble()
+                if (ctx.resources.credits < cost) return SoldierEventOutcome(banner = "Not enough credits for that offer.")
+                val tried = base.copy(swaysUsed = op.swaysUsed + 1)
+                if (random.nextInt(100) < ContractRules.swayChancePct(op)) {
+                    SoldierEventOutcome(operatorUpdates = listOf(ContractRules.signed(tried, today, null)), creditsDelta = -cost,
+                        banner = "$who took the offer and re-upped for ${ContractRules.termYears(op).toInt()} years.")
+                } else {
+                    SoldierEventOutcome(operatorUpdates = listOf(tried), petitionAction = PetitionAction.CONTRACT_LEAVE,
+                        banner = "$who turned down the offer.")
+                }
+            }
+            else -> SoldierEventOutcome(banner = "")
+        }
+    }
+
     // ---------- Targets ----------
 
     /** A school this soldier qualifies for and hasn't finished. */
@@ -315,6 +420,7 @@ object SoldierEvents {
             SoldierEventKind.TRANSFER_PETITION -> SoldierEventCard(e.kind.title,
                 "$who requests a transfer to another command.",
                 listOf(c("approve", "Approve Transfer", "They leave the command; +10 PRS."), c("decline", "Decline", "They stay.")))
+            SoldierEventKind.CONTRACT_END -> contractCard(e, op, who, ctx)
             SoldierEventKind.RETIREMENT_PETITION -> SoldierEventCard(e.kind.title,
                 "$who requests retirement after a full career.",
                 listOf(c("approve", "Approve Retirement", "They retire with honors and add to the veteran legacy."), c("decline", "Deny", "They stay on duty.")))
@@ -440,6 +546,7 @@ object SoldierEvents {
                 petitionAction = if (declined) PetitionAction.DECLINE_TRANSFER else PetitionAction.APPROVE_TRANSFER, banner = "")
             SoldierEventKind.RETIREMENT_PETITION -> SoldierEventOutcome(
                 petitionAction = if (declined) PetitionAction.DENY_RETIREMENT else PetitionAction.APPROVE_RETIREMENT, banner = "")
+            SoldierEventKind.CONTRACT_END -> applyContract(op, who, choiceId, ctx, random)
             // Session 38: turning down a personal request costs that soldier morale
             else -> if (declined) SoldierEventOutcome(
                 banner = "$who: request declined." + if (e.kind.personal) " (Morale ${MoraleRules.REQUEST_DECLINED})" else "",
@@ -539,7 +646,7 @@ object SoldierEvents {
                 SoldierEventKind.INTEL_LEAD -> base("$who ran down the lead: +40 INT.").copy(intelDelta = 40.0)
                 SoldierEventKind.FAMILY_NEWS -> base("$who is on leave. Congratulations!").copy(
                     operatorUpdates = listOf(away(op).copy(xp = op.xp + 30)))
-                SoldierEventKind.TRANSFER_PETITION, SoldierEventKind.RETIREMENT_PETITION -> SoldierEventOutcome(banner = "")
+                SoldierEventKind.TRANSFER_PETITION, SoldierEventKind.RETIREMENT_PETITION, SoldierEventKind.CONTRACT_END -> SoldierEventOutcome(banner = "")
             }
         }
     }

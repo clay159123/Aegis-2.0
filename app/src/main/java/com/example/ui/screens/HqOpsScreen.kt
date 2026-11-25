@@ -94,6 +94,9 @@ fun HqOpsScreen(
     onReviewPromotion: (String) -> Unit = { onNavigateToDress() },
     /** Session 41: testing build only, tapping the calendar advances it a month. */
     onCalendarTap: (() -> Unit)? = null,
+    /** Session 42: Rush ops, schools and leave for Prestige. */
+    onRushDeployment: ((String) -> Unit)? = null,
+    onRushLeave: ((String) -> Unit)? = null,
     onSwitchOperatorsToKit: (List<String>, WardrobeKit) -> Unit = { _, _ -> },
     onSetTeamCamo: (List<String>, CamoPattern?) -> Unit = { _, _ -> },
     onRefreshRotatingMissions: () -> Unit = {},
@@ -659,11 +662,21 @@ fun HqOpsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text(
-                                text = "back in ${formatCountdown(remSec)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = extra.amberTelemetry
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "back in ${formatCountdown(remSec)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = extra.amberTelemetry
+                                )
+                                if (onRushLeave != null) {
+                                    TextButton(
+                                        onClick = { onRushLeave(op.id) },
+                                        modifier = Modifier.testTag("rush_leave_${op.id}")
+                                    ) {
+                                        Text("Recall ${TacticalCalculator.rushPrestigeCostFor(op.recoveryUntilMillis - uiState.nowMillis)} PRS", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -755,7 +768,9 @@ fun HqOpsScreen(
                         squads = uiState.squads,
                         nowMillis = uiState.nowMillis,
                         onClaim = { onClaimDeployment(deployment.id) },
-                        onCancel = { onCancelDeployment(deployment.id) }
+                        onCancel = { onCancelDeployment(deployment.id) },
+                        onRush = onRushDeployment?.let { r -> { r(deployment.id) } },
+                        rushCost = TacticalCalculator.rushPrestigeCostFor(deployment.startedAtMillis + deployment.durationMillis - uiState.nowMillis)
                     )
                 }
             }

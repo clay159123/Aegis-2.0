@@ -194,6 +194,27 @@ fun OperatorDetailView(
                                 color = extra.brassBright,
                                 modifier = Modifier.testTag("operator_service_line")
                             )
+                            // Session 42: contract status and this contract's ask
+                            Text(
+                                text = buildString {
+                                    when {
+                                        com.example.domain.ContractRules.isRetirementPhase(operator, today) -> append("Retirement eligible • asks yearly")
+                                        com.example.domain.ContractRules.isIndefinite(operator, today) -> append("Indefinite status")
+                                        operator.contractEndDay >= 0 -> {
+                                            val left = (operator.contractEndDay - today).coerceAtLeast(0.0)
+                                            append("Contract ends ${GameCalendar.label(operator.contractEndDay).substringBeforeLast(" · ")}")
+                                            append(if (left > 0) " (${GameCalendar.formatGameSpan(left)} left)" else " (due now)")
+                                        }
+                                    }
+                                    com.example.domain.ContractRules.askLabel(operator, uiState.squads)?.let { ask ->
+                                        append(" • Asked for $ask")
+                                        append(if (operator.contractAskMet) " ✓" else "")
+                                    }
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.testTag("operator_contract_line")
+                            )
                         }
                     }
                 }
