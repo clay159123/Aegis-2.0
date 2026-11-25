@@ -91,7 +91,7 @@ class Session15Test {
     @Test
     fun goodConductEverySixCleanActions() {
         val m = GameCatalog.missions.first { it.scope == MissionScope.FIELD_COMBAT && it.risk == MissionRisk.LOW }
-        val veteran = op.copy(missionsCompleted = 5, goodConductStreak = 5)
+        val veteran = op.copy(missionsCompleted = 5, goodConductStreak = AwardRules.GOOD_CONDUCT_STREAK - 1)
         val r = AwardRules.serviceAwardsFor(veteran, m, OperatorOutcomeType.SAFE, true, emptyMap(), emptySet(), FixedRandom(0.99))
         assertTrue(AwardRules.GOOD_CONDUCT_ID in r.medalIds)
         assertEquals(0, r.operator.goodConductStreak)

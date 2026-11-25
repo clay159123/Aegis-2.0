@@ -756,7 +756,8 @@ private fun DrawScope.drawDressUniformFigure(
         unitAwards = unitAwards,
         leaderRole = leaderRole,
         textMeasurer = textMeasurer,
-        environmentBadge = environmentBadge
+        environmentBadge = environmentBadge,
+        sfTier = com.example.domain.TacticalCalculator.sfTier(operator)
     )
 
     // Center Brass Coat Buttons

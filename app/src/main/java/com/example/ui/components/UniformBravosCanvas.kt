@@ -426,7 +426,8 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
         unitAwards = unitAwards,
         leaderRole = leaderRole,
         textMeasurer = textMeasurer,
-        environmentBadge = environmentBadge
+        environmentBadge = environmentBadge,
+        sfTier = com.example.domain.TacticalCalculator.sfTier(operator)
     )
 
     // 8. Left Chest: Ribbons ONLY (no full hanging medals in Bravos) + School Pins + Marksmanship

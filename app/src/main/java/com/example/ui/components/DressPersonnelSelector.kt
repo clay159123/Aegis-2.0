@@ -246,21 +246,9 @@ fun DressPersonnelSwitcherCard(
     val promotableIds = remember(unlockedOps) { unlockedOps.filter { it.pinEligibleRank != null }.map { it.id }.toSet() }
     // Session 38: low or broken morale also counts as needing attention
     val lowMoraleIds = remember(unlockedOps) { unlockedOps.filter { it.morale < com.example.domain.MoraleRules.STEADY_AT }.map { it.id }.toSet() }
+    // Item 192: the same list as the Ops promotion card, so warrant boards (which stay inside one tier) count too
     val boardReadyIds = promotableIds + lowMoraleIds + remember(unlockedOps, citations, gearItems, facilities) {
-        unlockedOps.filter { op ->
-            val next = OperatorRank.nextRank(op.rank)
-            if (next == null || next.tier == op.rank.tier || op.status == OperatorStatus.FALLEN) {
-                false
-            } else {
-                TacticalCalculator.evaluatePromotionBoard(
-                    operator = op,
-                    allOperators = unlockedOps,
-                    citations = citations,
-                    gearItems = gearItems,
-                    facilities = facilities
-                ).allMeritsMet
-            }
-        }.map { it.id }.toSet()
+        TacticalCalculator.promotableSoldiers(unlockedOps, citations, gearItems, facilities).map { it.id }.toSet()
     }
 
     val organizedSections = remember(unlockedOps, squads) {

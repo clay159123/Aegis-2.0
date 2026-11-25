@@ -9,6 +9,8 @@ import com.example.domain.model.*
  * to Auto or sorted in Tailor dropdowns.
  */
 object UniformRegaliaRules {
+    const val CIB_ID = "insig_cib"
+    const val EIB_ID = "insig_eib_rifle"
 
     /**
      * Left-shoulder Auto order per MOS. SF Emerald always leads once earned. Assault (11B) wears
@@ -422,6 +424,8 @@ object UniformRegaliaRules {
             if (TacticalCalculator.SENIOR_PARA_ID in ownedIdsAll) add("insig_parachutist")
             if (TacticalCalculator.MASTER_AVIATOR_WINGS_ID in ownedIdsAll) { add(TacticalCalculator.SENIOR_AVIATOR_WINGS_ID); add(TacticalCalculator.AVIATOR_WINGS_ID) }
             if (TacticalCalculator.SENIOR_AVIATOR_WINGS_ID in ownedIdsAll) add(TacticalCalculator.AVIATOR_WINGS_ID)
+            // Item 195: the CIB replaces the EIB on the uniform; the EIB stays on the Honors record
+            if (CIB_ID in ownedIdsAll) add(EIB_ID)
         }
         val ownedBadgeMedals = ownedBadgeMedalsAll.filter { it.id !in TacticalCalculator.ENVIRONMENT_BADGE_IDS && it.id !in outranked }
         val slots = listOf(
@@ -516,12 +520,20 @@ object UniformRegaliaRules {
     fun isSfSquadMember(operator: Operator, squads: List<TacticalSquad>): Boolean =
         squads.any { it.isSpecialForces && operator.id in it.memberIds }
 
-    /** Combat patches the soldier has earned, newest campaign first. */
-    fun earnedCombatPatches(operator: Operator): List<UnitPatchStyle> =
-        operator.combatPatchHistory
-            .sortedByDescending { it.recordedAtMillis }
+    /**
+     * Combat patches the soldier has earned. Item 193: an SF patch (ODA or SF aviation) leads once earned,
+     * even after later campaigns with a regular squad; the rest go newest campaign first. "Unassigned"
+     * only counts when it's all they have.
+     */
+    fun earnedCombatPatches(operator: Operator): List<UnitPatchStyle> {
+        val all = operator.combatPatchHistory
+            .sortedWith(compareByDescending<CombatPatchRecord> { it.patch.isSfTeamPatch || it.patch == UnitPatchStyle.SOA }
+                .thenByDescending { it.recordedAtMillis })
             .map { it.patch }
             .distinct()
+        val real = all.filter { it != UnitPatchStyle.UNASSIGNED }
+        return real.ifEmpty { all }
+    }
 
     /**
      * Right shoulder (combat patch): the squad patch worn in the soldier's most recent
@@ -647,6 +659,15 @@ object UniformRegaliaRules {
         )
     }
 
+    /** Item 191: enlisted coats for enlisted, officer coats for officers, and the wearer meets the coat's minimum tier. */
+    fun coatFitsRank(style: DressUniformStyle, tier: RankTier): Boolean {
+        val required = style.requiredTier
+        if (required.isOfficer != tier.isOfficer) return false
+        if (!tier.isOfficer) return tier.order >= required.order
+        // Flag coats need a general; any officer or warrant may wear the other officer cuts
+        return required != RankTier.FLAG_OFFICER || tier == RankTier.FLAG_OFFICER
+    }
+
     fun evaluateUniformInspection(
         operators: List<Operator>,
         citations: List<AwardedMedal>,
@@ -689,7 +710,8 @@ object UniformRegaliaRules {
                 }
             }
 
-            if (op.dressStyle.requiredTier == op.rank.tier || (op.rank.tier.isOfficer && op.dressStyle.requiredTier.isOfficer)) {
+            // Item 191: a coat passes when it's from the wearer's band (enlisted or officer) and they meet its minimum tier
+            if (UniformRegaliaRules.coatFitsRank(op.dressStyle, op.rank.tier)) {
                 opScore += 15
             } else {
                 opScore += 8

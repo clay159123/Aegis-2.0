@@ -11,6 +11,8 @@ import com.example.domain.model.MissionScope
 import com.example.domain.model.MissionTemplate
 import com.example.domain.model.Operator
 import com.example.domain.model.OperatorOutcomeType
+import com.example.domain.model.OperatorRank
+import com.example.domain.model.isHqStaffer
 import com.example.domain.model.TheaterRegion
 import kotlin.random.Random
 
@@ -53,17 +55,34 @@ object AwardRules {
     const val SOLDIERS_MEDAL_ODDS = 0.015
 
     // Item 52: routine service awards
-    const val GOOD_CONDUCT_STREAK = 6
-    const val ARCOM_COOLDOWN_ACTIONS = 4
-    const val ARCOM_CHANCE = 0.40
-    const val AAM_COOLDOWN_ACTIONS = 3
-    const val AAM_CHANCE = 0.50
+    // Item 196: slowed after Chris's medal-count review (racks were filling at about 2 awards per op)
+    const val GOOD_CONDUCT_STREAK = 9
+    const val ARCOM_COOLDOWN_ACTIONS = 6
+    const val ARCOM_CHANCE = 0.25
+    const val AAM_COOLDOWN_ACTIONS = 5
+    const val AAM_CHANCE = 0.30
     /** A school this hard (base pass rate at or below) counts as a strong result for the ARCOM. */
     const val HARD_SCHOOL_PASS_RATE = 70
     const val JSCM_CHANCE = 0.35
     const val JSAM_CHANCE = 0.50
     const val SENIOR_LEADER_AWARD_CHANCE = 0.20
     const val DSM_STAFF_CHANCE = 0.12
+
+    // Item 196: rank floors for the senior service awards (from Chris's medal-count review)
+    private val FLAG_RANKS = setOf(OperatorRank.BG, OperatorRank.MG, OperatorRank.LTG, OperatorRank.GEN)
+    val MSM_RANKS: Set<OperatorRank> = setOf(
+        OperatorRank.SFC, OperatorRank.MSG, OperatorRank.SGM, OperatorRank.CSM,
+        OperatorRank.CW2, OperatorRank.CW3, OperatorRank.CW4, OperatorRank.CW5,
+        OperatorRank.CPT, OperatorRank.MAJ, OperatorRank.LTC, OperatorRank.COL
+    ) + FLAG_RANKS
+    val LOM_RANKS: Set<OperatorRank> = setOf(
+        OperatorRank.SGM, OperatorRank.CSM, OperatorRank.CW4, OperatorRank.CW5, OperatorRank.LTC, OperatorRank.COL
+    ) + FLAG_RANKS
+    val DSM_RANKS: Set<OperatorRank> = setOf(OperatorRank.COL, OperatorRank.CW5) + FLAG_RANKS
+    val DSM_BILLETS: Set<HqStaffRole?> = setOf(HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.DEPUTY_COMMANDER)
+    val LOM_REPEAT_BILLETS: Set<HqStaffRole?> = setOf(
+        HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.XO_CHIEF_OF_STAFF, HqStaffRole.DEPUTY_COMMANDER
+    )
 
     /** Awards earned only through a roll on a mission, never by meeting a checklist. */
     val ROLL_ONLY_IDS: Set<String> = setOf(DSC_ID, SILVER_VANGUARD_ID, BRONZE_VALOR_ID, DFC_ID, SOLDIERS_MEDAL_ID)
@@ -229,6 +248,8 @@ object AwardRules {
         var streak = when {
             outcome == OperatorOutcomeType.WOUNDED -> 0
             !isSchool && !missionSucceeded && !isStaff -> 0
+            // Item 196: schools don't count toward the streak
+            isSchool -> op.goodConductStreak
             else -> op.goodConductStreak + 1
         }
         if (streak >= GOOD_CONDUCT_STREAK && eligible(GOOD_CONDUCT_ID)) {
@@ -280,9 +301,7 @@ object AwardRules {
 
             // HQ duty: senior staff may earn the DSM or the Legion of Merit
             if (isStaff) {
-                val seniorBillet = op.hqRole in setOf(
-                    HqStaffRole.CO_COMMANDING_OFFICER, HqStaffRole.XO_CHIEF_OF_STAFF, HqStaffRole.DEPUTY_COMMANDER
-                )
+                val seniorBillet = op.hqRole in DSM_BILLETS
                 if (seniorBillet && rng.nextDouble() < DSM_STAFF_CHANCE && eligible(DSM_ID)) {
                     awards += DSM_ID
                 } else if (rng.nextDouble() < SENIOR_LEADER_AWARD_CHANCE / 2 && eligible(LEGION_OF_MERIT_ID)) {
@@ -341,12 +360,18 @@ object AwardRules {
         }
         when (medalId) {
             DSM_ID -> {
-                if (op.rank.tier.isEnlisted) missing += "Officers and warrant officers only"
+                // Item 196: general-officer level award, earned from the top seats only
+                if (op.rank !in DSM_RANKS) missing += "COL, general officer or CW5 only"
+                if (op.hqRole !in DSM_BILLETS || !op.isHqStaffer) missing += "Commanding Officer or Deputy Commander billet only"
                 if (careerOps < 10) missing += "Complete 10+ ops ($careerOps/10)"
             }
             LEGION_OF_MERIT_ID -> {
-                if (op.rank.tier.order < com.example.domain.model.RankTier.SNCO.order) missing += "SNCO, officer or warrant officer only"
+                // Item 196: senior leaders only, and once per career unless in a CO, XO or DCG seat
+                if (op.rank !in LOM_RANKS) missing += "SGM, CSM, CW4+, LTC+ or general officer only"
                 if (careerOps < 8) missing += "Complete 8+ ops ($careerOps/8)"
+                if (heldCount >= 1 && !(op.isHqStaffer && op.hqRole in LOM_REPEAT_BILLETS)) {
+                    missing += "One per career outside the CO, XO and DCG seats"
+                }
             }
             DFC_ID -> {
                 if (!op.isAviator) missing += "Aviators only"
