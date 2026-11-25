@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.domain.UniformRegaliaRules
@@ -66,19 +67,16 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
     //    Up to 3 per row (a second row sits above the first), each with gold frame and oak leaf clusters.
     if (unitAwards.isNotEmpty()) {
         val baseTop = if (showLeaderPin) h * (0.514f - CHEST_LIFT) else h * (0.526f - CHEST_LIFT)
-        val emblemW = w * 0.050f
-        val emblemH = h * 0.018f
-        val gap = w * 0.004f
+        // Art 6a: unit awards the same size as a ribbon (the frame adds only a hair), centered on the pocket
+        val emblemW = w * 0.039f
+        val emblemH = h * 0.0086f
+        val gap = w * 0.0025f
         unitAwards.take(6).chunked(3).forEachIndexed { row, rowAwards ->
             val rowW = rowAwards.size * emblemW + (rowAwards.size - 1) * gap
             val top = baseTop - row * (emblemH + gap)
             rowAwards.forEachIndexed { i, (type, count) ->
                 val left = rightChestCenterX - rowW / 2f + i * (emblemW + gap)
-                val stripeW = emblemW / type.stripes.size
-                type.stripes.forEachIndexed { s, hex ->
-                    drawRect(Color(hex), Offset(left + s * stripeW, top), Size(stripeW + 0.5f, emblemH))
-                }
-                drawRect(Color(type.frameHex), Offset(left, top), Size(emblemW, emblemH), style = Stroke(1.3f))
+                drawRibbonBar(Offset(left, top), Size(emblemW, emblemH), type.stripes, frame = Color(type.frameHex))
                 drawRibbonDeviceOverlay(Offset(left, top), Size(emblemW, emblemH), UniformRegaliaRules.unitAwardDevices(count))
             }
         }
@@ -89,7 +87,7 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
         val unitTop = if (unitAwards.isNotEmpty()) {
             val baseTop = if (showLeaderPin) h * (0.514f - CHEST_LIFT) else h * (0.526f - CHEST_LIFT)
             val rows = (unitAwards.take(6).size + 2) / 3
-            baseTop - (rows - 1) * (h * 0.018f + w * 0.004f)
+            baseTop - (rows - 1) * (h * 0.0086f + w * 0.0025f)
         } else if (showLeaderPin) h * (0.552f - CHEST_LIFT) - h * 0.0085f else h * (0.568f - CHEST_LIFT)
         val badgeH = h * 0.030f
         val badgeW = w * 0.060f
@@ -156,6 +154,9 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
         size = Size(plateW, plateH),
         cornerRadius = CornerRadius(2f, 2f)
     )
+    // Art 6a: a slight bevel (light along the top, shadow along the bottom) inside the metal edge
+    drawLine(Color.White.copy(alpha = 0.22f), Offset(plateX + 2f, plateY + 1.4f), Offset(plateX + plateW - 2f, plateY + 1.4f), strokeWidth = 0.8f)
+    drawLine(Color.Black.copy(alpha = 0.55f), Offset(plateX + 2f, plateY + plateH - 1.4f), Offset(plateX + plateW - 2f, plateY + plateH - 1.4f), strokeWidth = 0.8f)
     drawRoundRect(
         color = trimCol,
         topLeft = Offset(plateX, plateY),
@@ -186,6 +187,8 @@ internal fun DrawScope.drawEngravedNameplateAndLeaderPin(
         right = plateX + plateW - 1.5f,
         bottom = plateY + plateH - 1f
     ) {
+        // Engraved lettering: a dark cut line under the white fill
+        drawText(textLayoutResult = measured, topLeft = Offset(tx, ty + 0.7f), color = Color.Black.copy(alpha = 0.6f))
         drawText(
             textLayoutResult = measured,
             topLeft = Offset(tx, ty)
@@ -323,6 +326,40 @@ internal fun DrawScope.drawMarksmanshipBadge(
     drawCircle(metal, radius = r * 0.20f, center = Offset(cx, crossY))
 }
 
+/**
+ * Art 6a: one ribbon (or unit award) bar as worn: the stripes, a woven sheen that is lighter along the top,
+ * a faint horizontal weave on larger bars, and a thin dark edge that separates it from its neighbors.
+ * [frame] draws a metal frame (unit awards); null for an ordinary ribbon.
+ */
+internal fun DrawScope.drawRibbonBar(topLeft: Offset, size: Size, stripes: List<Long>, frame: Color? = null) {
+    val n = stripes.size.coerceAtLeast(1)
+    val sw = size.width / n
+    stripes.forEachIndexed { i, hex -> drawRect(Color(hex), Offset(topLeft.x + i * sw, topLeft.y), Size(sw + 0.5f, size.height)) }
+    if (size.height >= 6f) {
+        var y = topLeft.y + 1.2f
+        while (y < topLeft.y + size.height) {
+            drawLine(Color.Black.copy(alpha = 0.07f), Offset(topLeft.x, y), Offset(topLeft.x + size.width, y), strokeWidth = 0.5f)
+            y += 1.6f
+        }
+    }
+    drawRect(
+        Brush.verticalGradient(
+            0f to Color.White.copy(alpha = 0.24f), 0.35f to Color.White.copy(alpha = 0.04f), 1f to Color.Black.copy(alpha = 0.26f),
+            startY = topLeft.y, endY = topLeft.y + size.height
+        ),
+        topLeft, size
+    )
+    if (frame != null) {
+        // Frame weight scales with the bar so it stays a thin metal edge at card size
+        val fw = (size.height * 0.16f).coerceIn(0.7f, 1.6f)
+        drawRect(Color(0xFF3A2A10), Offset(topLeft.x - fw * 0.4f, topLeft.y - fw * 0.4f), Size(size.width + fw * 0.8f, size.height + fw * 0.8f), style = Stroke(fw * 1.4f))
+        drawRect(frame, topLeft, size, style = Stroke(fw))
+        drawLine(Color.White.copy(alpha = 0.45f), topLeft, Offset(topLeft.x + size.width, topLeft.y), strokeWidth = fw * 0.45f)
+    } else {
+        drawRect(Color(0xFF10141B).copy(alpha = 0.75f), topLeft, size, style = Stroke(0.7f))
+    }
+}
+
 internal fun DrawScope.drawRibbonDeviceOverlay(
     rectTopLeft: Offset,
     rectSize: Size,
@@ -357,16 +394,18 @@ internal fun DrawScope.drawRibbonDeviceOverlay(
                 drawPath(vp, color = Color(0xFFF5D576), style = Stroke(width = 1.25f, cap = StrokeCap.Round))
             }
             1, 2 -> {
-                val fill = if (kind == 1) Color(0xFFF0F4FA) else Color(0xFFD2873E)
-                val diamond = Path().apply {
-                    moveTo(x, cy - r)
-                    lineTo(x + r * 0.85f, cy)
-                    lineTo(x, cy + r)
-                    lineTo(x - r * 0.85f, cy)
+                // Art 6a: an oak leaf cluster: a broad leaf on a short stem with a midrib, in silver or bronze
+                val fill = if (kind == 1) Color(0xFFE4E8EE) else Color(0xFFC07A36)
+                val leaf = Path().apply {
+                    moveTo(x, cy - r * 1.05f)
+                    cubicTo(x + r * 1.0f, cy - r * 0.7f, x + r * 0.95f, cy + r * 0.45f, x, cy + r * 0.75f)
+                    cubicTo(x - r * 0.95f, cy + r * 0.45f, x - r * 1.0f, cy - r * 0.7f, x, cy - r * 1.05f)
                     close()
                 }
-                drawPath(diamond, color = fill)
-                drawPath(diamond, color = Color(0xFF10141B), style = Stroke(width = 0.65f))
+                drawPath(leaf, color = fill)
+                drawPath(leaf, color = Color(0xFF10141B), style = Stroke(width = 0.6f))
+                drawLine(Color(0xFF10141B).copy(alpha = 0.55f), Offset(x, cy - r * 0.7f), Offset(x, cy + r * 1.05f), strokeWidth = 0.45f)
+                drawCircle(Color.White.copy(alpha = 0.55f), r * 0.22f, Offset(x - r * 0.35f, cy - r * 0.35f))
             }
             3, 4 -> {
                 // Five-point service star
@@ -383,6 +422,7 @@ internal fun DrawScope.drawRibbonDeviceOverlay(
                 }
                 drawPath(star, color = fill)
                 drawPath(star, color = Color(0xFF10141B), style = Stroke(width = 0.55f))
+                drawCircle(Color.White.copy(alpha = 0.5f), r * 0.2f, Offset(x - r * 0.2f, cy - r * 0.3f))
             }
         }
     }

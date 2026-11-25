@@ -981,7 +981,8 @@ private fun DrawScope.drawDressUniformFigure(
         val linkH = h * 0.004f
         val medalTotalH = broochH + ribH + linkH + (medRadius * 2f)
         val rowStepY = medalTotalH + h * 0.008f
-        val startTopY = h * (0.468f - CHEST_LIFT)
+        // Art 6a: miniatures sit lower so the badge above them clears the shoulder board
+        val startTopY = h * (0.512f - CHEST_LIFT)
         topDecorationY = startTopY
 
         miniRows.forEachIndexed { rowIdx, rowItems ->
@@ -1043,17 +1044,7 @@ private fun DrawScope.drawDressUniformFigure(
             drawRect(trimCol, Offset(mx - 1f, my), Size(medW + 2f, broochH))
 
             val ribTopY = my + broochH
-            val stripes = medal.ribbonStripeHexes.size.coerceAtLeast(1)
-            val sw = medW / stripes
-            medal.ribbonStripeHexes.forEachIndexed { sIdx, hex ->
-                drawRect(Color(hex), Offset(mx + sIdx * sw, ribTopY), Size(sw + 0.5f, ribH))
-            }
-            drawRect(
-                brush = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Black.copy(alpha = 0.24f))),
-                topLeft = Offset(mx, ribTopY),
-                size = Size(medW, ribH)
-            )
-            drawRect(trimCol, Offset(mx, ribTopY), Size(medW, ribH), style = Stroke(0.9f))
+            drawRibbonBar(Offset(mx, ribTopY), Size(medW, ribH), medal.ribbonStripeHexes)
             awardDevices[medal.id]?.let { dev ->
                 if (dev.hasAnyDevice) {
                     drawRibbonDeviceOverlay(
@@ -1081,13 +1072,15 @@ private fun DrawScope.drawDressUniformFigure(
         }
     } else if (rackDecorations.isNotEmpty()) {
         val rackCols = 3
-        val ribW = w * 0.045f
-        val ribH = h * 0.019f
-        val gapX = w * 0.0035f
-        val gapY = h * 0.003f
+        // Art 6a: ribbons at their real proportions (about 3.5 wide to 1 tall), not near-square tiles
+        val ribW = w * 0.038f
+        val ribH = h * 0.0080f
+        val gapX = w * 0.0025f
+        val gapY = h * 0.0022f
         val totalRackW = rackCols * ribW + (rackCols - 1) * gapX
         val rackLeftEdge = leftChestCenterX - totalRackW / 2f
-        val baseBottomY = h * (0.532f - CHEST_LIFT)
+        // Art 6a: the bottom row sits just above the pocket flap, as worn
+        val baseBottomY = h * (0.550f - CHEST_LIFT)
         val displayMedals = rackDecorations.take(TacticalCalculator.MAX_WORN_RIBBONS)
         // AR 670-1 row partitioning: partial counts (1 or 2) sit centered on the TOP row over full 3-ribbon lower rows
         val rows = TacticalCalculator.layoutRibbonRackRows(displayMedals, rackCols)
@@ -1103,12 +1096,7 @@ private fun DrawScope.drawDressUniformFigure(
 
             rowItems.forEachIndexed { colInRow, medal ->
                 val rx = rackLeftEdge + rowCenterOffset + colInRow * (ribW + gapX)
-                val stripes = medal.ribbonStripeHexes.size.coerceAtLeast(1)
-                val sw = ribW / stripes
-                medal.ribbonStripeHexes.forEachIndexed { sIdx, hex ->
-                    drawRect(Color(hex), Offset(rx + sIdx * sw, ry), Size(sw + 0.5f, ribH))
-                }
-                drawRect(trimCol, Offset(rx, ry), Size(ribW, ribH), style = Stroke(0.9f))
+                drawRibbonBar(Offset(rx, ry), Size(ribW, ribH), medal.ribbonStripeHexes)
                 awardDevices[medal.id]?.let { dev ->
                     if (dev.hasAnyDevice) {
                         drawRibbonDeviceOverlay(

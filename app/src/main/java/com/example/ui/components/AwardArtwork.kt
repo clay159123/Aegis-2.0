@@ -336,7 +336,8 @@ fun MedalRibbonBar(
     isSupremeFrame: Boolean = false
 ) {
     val extra = LocalAegisColors.current
-    val borderColor = if (isSupremeFrame) extra.brassBright else extra.brass.copy(alpha = 0.85f)
+    // Art 6a: ordinary ribbons get a thin dark edge like the worn rack; top awards keep a brass frame
+    val borderColor = if (isSupremeFrame) extra.brassBright else Color(0xFF10141B).copy(alpha = 0.8f)
     Canvas(
         modifier = modifier
             .size(width = width, height = height)
