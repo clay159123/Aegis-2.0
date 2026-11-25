@@ -540,6 +540,7 @@ fun HqCommandScreen(
                 onRush = onRushFacility,
                 fallenCount = uiState.operators.count { it.status == OperatorStatus.FALLEN },
                 completedCampaignIds = uiState.completedCampaignIds,
+                campaignCompletedDays = uiState.campaignCompletedDays,
                 operators = uiState.operators,
                 onOpenMemorial = onOpenMemorial,
                 onOpenParadeGround = { showParade = true },

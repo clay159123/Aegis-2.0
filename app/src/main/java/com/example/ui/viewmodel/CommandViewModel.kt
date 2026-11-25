@@ -65,6 +65,8 @@ data class CommandUiState(
     val smartWardrobeEnabled: Boolean = true,
     val completedCampaignStageIds: Set<String> = emptySet(),
     val completedCampaignIds: Set<String> = emptySet(),
+    /** Art 2b: day each campaign was first completed. */
+    val campaignCompletedDays: Map<String, Double> = emptyMap(),
     val allCampaignsCleared: Boolean = false,
     val rotatingMissionIds: List<String> = emptyList(),
     val rotationUpdatedAtMillis: Long = 0L,
@@ -249,6 +251,7 @@ class CommandViewModel(
                 smartWardrobeEnabled = data.commander.smartWardrobeEnabled,
                 completedCampaignStageIds = completedStages,
                 completedCampaignIds = completedCampaigns,
+                campaignCompletedDays = parseCampaignDays(data.commander.campaignDaysCsv),
                 allCampaignsCleared = TacticalCalculator.isAllCampaignsCleared(completedCampaigns),
                 rotatingMissionIds = rotatingIds,
                 rotationUpdatedAtMillis = data.commander.rotationUpdatedAtMillis,
@@ -2023,6 +2026,7 @@ class CommandViewModel(
                     } else op.dwellUntilMillis,
                     status = nextStatus,
                     fallenNote = if (outcome == OperatorOutcomeType.FALLEN) "Killed in action: ${mission.displayTitle}" else op.fallenNote,
+                    fallenDay = if (outcome == OperatorOutcomeType.FALLEN) GameCalendar.today else op.fallenDay,
                     hqRole = if (outcome == OperatorOutcomeType.FALLEN) null else op.hqRole,
                     recoveryUntilMillis = recoveryAt,
                     transferRequested = askTransfer,
@@ -2522,6 +2526,10 @@ class CommandViewModel(
                     totalMissionsCompleted = cur.totalMissionsCompleted + if (missionSucceeded) 1 else 0,
                     completedCampaignStageIdsCsv = mergedStages.sorted().joinToString(","),
                     completedCampaignIdsCsv = mergedCamps.sorted().joinToString(","),
+                    // Art 2b: remember the day each campaign was first finished (its Heritage Walk statue)
+                    campaignDaysCsv = (mergedCamps - curCamps).fold(cur.campaignDaysCsv) { csv, id ->
+                        if (parseCampaignDays(csv).containsKey(id)) csv else (if (csv.isBlank()) "" else "$csv,") + "$id:${GameCalendar.today}"
+                    },
                     lastSimulatedAtMillis = now,
                     // Item 69: the rehearsal bonus is spent on the next SF mission
                     sfRehearsalBonusPct = if (TacticalCalculator.isSfOperation(mission)) 0 else cur.sfRehearsalBonusPct
@@ -2705,6 +2713,7 @@ class CommandViewModel(
                     else -> homeStatus(op)
                 },
                 fallenNote = if (outcome == OperatorOutcomeType.FALLEN) "Killed during the withdrawal from ${mission.displayTitle}" else op.fallenNote,
+                fallenDay = if (outcome == OperatorOutcomeType.FALLEN) GameCalendar.today else op.fallenDay,
                 recoveryUntilMillis = if (outcome == OperatorOutcomeType.WOUNDED) {
                     now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * TacticalCalculator.aidRecoveryMultiplier(state.facilities) *
                         // Item 118: the SF Compound's own medics speed SF soldiers' recovery
@@ -4352,3 +4361,11 @@ class CommandViewModel(
             }
     }
 }
+
+/** Art 2b: "campaignId:day,..." to a map of the day each campaign was first completed. */
+internal fun parseCampaignDays(csv: String): Map<String, Double> =
+    csv.split(",").mapNotNull { part ->
+        val id = part.substringBefore(":", "").trim()
+        val day = part.substringAfter(":", "").toDoubleOrNull()
+        if (id.isEmpty() || day == null) null else id to day
+    }.toMap()

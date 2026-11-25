@@ -189,6 +189,7 @@ object PowRules {
     fun diedInCaptivity(operator: Operator): Operator = operator.copy(
         status = OperatorStatus.FALLEN,
         fallenNote = "Died in captivity" + (operator.captureTheater?.let { ": ${it.label}" } ?: ""),
+        fallenDay = GameCalendar.today,
         capturedAtMillis = 0L,
         captivityResolveAtMillis = 0L,
         evadingUntilMillis = 0L

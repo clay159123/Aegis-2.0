@@ -178,6 +178,8 @@ object GameCalendar {
     // ------------------------------------------------------------
 
     fun year(days: Double): Int = floor(days / DAYS_PER_YEAR).toInt() + 1
+    /** Art 2b: "Mar, Year 3" for plaques. */
+    fun dateLabel(days: Double): String = "${MONTHS[monthIndex(days)]}, Year ${year(days)}"
     fun monthIndex(days: Double): Int = (floor((days % DAYS_PER_YEAR) / DAYS_PER_MONTH).toInt()).coerceIn(0, 11)
 
     /** Northern hemisphere seasons. */
