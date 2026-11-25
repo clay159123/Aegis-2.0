@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.lerp
 import com.example.domain.model.CamoPattern
 import kotlin.math.PI
 import kotlin.math.cos
@@ -282,4 +283,205 @@ internal object FieldCamo {
     }
 
     private fun lerpDark(c: Color, f: Float) = Color(c.red * (1 - f), c.green * (1 - f), c.blue * (1 - f), c.alpha)
+}
+
+/**
+ * Art 4b: field gear. Carrier colors by camo, forearms and gloves on the weapon, the flight suit's pockets and
+ * survival vest, the rotary-wing aircrew helmet, and the SF ball cap and shemagh.
+ */
+internal object FieldGearArt {
+    /** Carrier and pouch color that goes with each camo (coyote, ranger green, wolf gray, black). */
+    fun gearColor(camo: CamoPattern): Color = when (camo) {
+        CamoPattern.WOODLAND_OLIVE -> Color(0xFF7E6B4C)
+        CamoPattern.RANGER_GREEN -> Color(0xFF3F4734)
+        CamoPattern.ARID_SAND -> Color(0xFF8E7A58)
+        CamoPattern.ALPINE_FROST -> Color(0xFFB5BCC0)
+        CamoPattern.LITTORAL_TIDE -> Color(0xFF4F5B63)
+        CamoPattern.NIGHT_CHARCOAL, CamoPattern.FLIGHT_BLACK -> Color(0xFF202328)
+        CamoPattern.FLIGHT_SAGE -> Color(0xFF4F5640)
+    }
+
+    fun gloveColor(camo: CamoPattern): Color = when (camo) {
+        CamoPattern.NIGHT_CHARCOAL, CamoPattern.FLIGHT_BLACK -> Color(0xFF1A1C20)
+        CamoPattern.FLIGHT_SAGE -> Color(0xFFB09A72)
+        CamoPattern.ALPINE_FROST -> Color(0xFF6B7178)
+        else -> Color(0xFF6E5E44)
+    }
+
+    /** A gloved hand: palm, wrapped fingers and a knuckle seam. */
+    fun DrawScope.glove(c: Offset, r: Float, col: Color) {
+        drawRoundRect(col, Offset(c.x - r, c.y - r * 0.8f), Size(r * 2f, r * 1.6f), CornerRadius(r * 0.7f, r * 0.7f))
+        for (i in 0..2) drawLine(Color.Black.copy(alpha = 0.3f), Offset(c.x - r * 0.55f + i * r * 0.55f, c.y - r * 0.7f), Offset(c.x - r * 0.55f + i * r * 0.55f, c.y + r * 0.1f), strokeWidth = r * 0.12f)
+        drawLine(Color.White.copy(alpha = 0.15f), Offset(c.x - r * 0.7f, c.y - r * 0.55f), Offset(c.x + r * 0.5f, c.y - r * 0.55f), strokeWidth = r * 0.14f, cap = StrokeCap.Round)
+    }
+
+    /** A forearm in the uniform's sleeve from the elbow to the wrist, with a cuff. */
+    fun DrawScope.forearm(elbow: Offset, wrist: Offset, width: Float, sleeve: Color) {
+        drawLine(Color.Black.copy(alpha = 0.35f), elbow, wrist, strokeWidth = width * 1.12f, cap = StrokeCap.Round)
+        drawLine(sleeve, elbow, wrist, strokeWidth = width, cap = StrokeCap.Round)
+        val dx = wrist.x - elbow.x; val dy = wrist.y - elbow.y
+        val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+        val cuff = Offset(wrist.x - dx / len * width * 0.45f, wrist.y - dy / len * width * 0.45f)
+        drawLine(Color.Black.copy(alpha = 0.25f), cuff, wrist, strokeWidth = width * 1.02f)
+    }
+
+    /** Admin pouch, radio with antenna and a tourniquet on the carrier (drawn after the carrier itself). */
+    fun DrawScope.carrierDetails(w: Float, h: Float, cx: Float, gear: Color, top: Float) {
+        val strap = Color(0xFF23261F)
+        // Shoulder-strap buckles
+        for (s in listOf(-1f, 1f)) drawRoundRect(Color(0xFF15171A), Offset(cx + s * w * 0.135f - w * 0.018f, h * 0.392f), Size(w * 0.036f, h * 0.012f), CornerRadius(2f, 2f))
+        // Radio on the wearer's left shoulder with its whip antenna
+        val rx = cx + w * 0.175f
+        drawRoundRect(Color(0xFF2A2E33), Offset(rx, h * (top + 0.005f)), Size(w * 0.050f, h * 0.070f), CornerRadius(3f, 3f))
+        drawRoundRect(gear, Offset(rx - w * 0.004f, h * (top + 0.040f)), Size(w * 0.058f, h * 0.050f), CornerRadius(3f, 3f))
+        drawLine(Color(0xFF15171A), Offset(rx + w * 0.036f, h * (top + 0.005f)), Offset(rx + w * 0.060f, h * (top - 0.13f)), strokeWidth = 1.4f, cap = StrokeCap.Round)
+        // Tourniquet in a band on the wearer's right shoulder strap
+        val tx = cx - w * 0.150f
+        drawRoundRect(Color(0xFF1E1F1C), Offset(tx - w * 0.018f, h * (top - 0.040f)), Size(w * 0.036f, h * 0.050f), CornerRadius(3f, 3f))
+        drawRect(Color(0xFFB8322B), Offset(tx - w * 0.010f, h * (top - 0.034f)), Size(w * 0.020f, h * 0.008f))
+        // Bungee on the plate bag edge
+        drawLine(strap.copy(alpha = 0.7f), Offset(cx - w * 0.12f, h * (top + 0.004f)), Offset(cx + w * 0.12f, h * (top + 0.004f)), strokeWidth = 1.2f)
+    }
+
+    /** Flight suit: zippered chest and sleeve pockets (name tag and wings draw over the wearer's left pocket). */
+    fun DrawScope.flightSuitPockets(w: Float, h: Float, cx: Float, suit: Color) {
+        val zip = Color(0xFF2A2C26)
+        for (s in listOf(-1f, 1f)) {
+            val l = cx + s * w * 0.04f; val r = cx + s * w * 0.20f
+            val p = Path().apply { moveTo(l, h * 0.440f); lineTo(r, h * 0.440f); lineTo(r, h * 0.560f); lineTo(l, h * 0.560f); close() }
+            drawPath(p, Color.Black.copy(alpha = 0.10f))
+            drawPath(p, Color.Black.copy(alpha = 0.30f), style = Stroke(0.9f))
+            // Slanted zipper across the pocket
+            drawLine(zip, Offset(l + s * w * 0.010f, h * 0.452f), Offset(r - s * w * 0.010f, h * 0.470f), strokeWidth = 1.3f)
+            drawRect(Color(0xFFB9BBB0), Offset(r - s * w * 0.016f - w * 0.004f, h * 0.466f), Size(w * 0.008f, h * 0.010f))
+        }
+        // Thigh-height leg pocket zips showing above the belt line are hidden; add sleeve zip pockets
+        for (s in listOf(-1f, 1f)) drawLine(zip, Offset(cx + s * w * 0.29f, h * 0.62f), Offset(cx + s * w * 0.33f, h * 0.70f), strokeWidth = 1.2f)
+    }
+
+    /** Aircrew survival vest over the flight suit: mesh panels with pouches, a chest holster and a radio. */
+    fun DrawScope.survivalVest(w: Float, h: Float, cx: Float, vest: Color) {
+        val strap = Color(0xFF23261F)
+        for (s in listOf(-1f, 1f)) {
+            val panel = Path().apply {
+                moveTo(cx + s * w * 0.03f, h * 0.40f)
+                lineTo(cx + s * w * 0.12f, h * 0.355f)
+                lineTo(cx + s * w * 0.235f, h * 0.40f)
+                lineTo(cx + s * w * 0.240f, h * 0.80f)
+                lineTo(cx + s * w * 0.03f, h * 0.80f)
+                close()
+            }
+            drawPath(panel, vest)
+            // Mesh
+            clipPath(panel) {
+                var y = h * 0.36f
+                while (y < h * 0.80f) { drawLine(Color.Black.copy(alpha = 0.16f), Offset(cx - w * 0.3f, y), Offset(cx + w * 0.3f, y), strokeWidth = 0.6f); y += h * 0.010f }
+                var x = cx - w * 0.3f
+                while (x < cx + w * 0.3f) { drawLine(Color.Black.copy(alpha = 0.12f), Offset(x, h * 0.35f), Offset(x, h * 0.80f), strokeWidth = 0.6f); x += w * 0.012f }
+            }
+            drawPath(panel, Color.Black.copy(alpha = 0.35f), style = Stroke(1f))
+            // Pouch row near the bottom
+            for (k in 0..1) {
+                val px = cx + s * w * (0.06f + k * 0.085f) - (if (s < 0) w * 0.075f else 0f)
+                drawRoundRect(lerp(vest, Color.Black, 0.15f), Offset(px, h * 0.66f), Size(w * 0.075f, h * 0.085f), CornerRadius(3f, 3f))
+                drawLine(Color.Black.copy(alpha = 0.35f), Offset(px, h * 0.685f), Offset(px + w * 0.075f, h * 0.685f), strokeWidth = 1f)
+            }
+        }
+        // Waist strap
+        drawRect(strap, Offset(cx - w * 0.24f, h * 0.775f), Size(w * 0.48f, h * 0.016f))
+        // Chest holster with the pistol grip on the wearer's right
+        val hx = cx - w * 0.19f
+        drawRoundRect(Color(0xFF1E2024), Offset(hx, h * 0.56f), Size(w * 0.080f, h * 0.075f), CornerRadius(4f, 4f))
+        drawRoundRect(Color(0xFF2E3238), Offset(hx + w * 0.020f, h * 0.535f), Size(w * 0.030f, h * 0.040f), CornerRadius(2f, 2f))
+        // Survival radio on the wearer's left with its stub antenna
+        val rx = cx + w * 0.135f
+        drawRoundRect(Color(0xFF2A2E33), Offset(rx, h * 0.585f), Size(w * 0.050f, h * 0.065f), CornerRadius(3f, 3f))
+        drawLine(Color(0xFF15171A), Offset(rx + w * 0.040f, h * 0.585f), Offset(rx + w * 0.046f, h * 0.545f), strokeWidth = 1.6f, cap = StrokeCap.Round)
+    }
+
+    /**
+     * Rotary-wing aircrew helmet: a full round shell over the ears, the visor housing across the brow with the
+     * tinted visor raised, an NVG mount plate on the front and a boom mic.
+     */
+    fun DrawScope.aircrewHelmet(w: Float, h: Float, cx: Float, shellCol: Color) {
+        val shell = Path().apply {
+            moveTo(cx - w * 0.122f, h * 0.268f)
+            lineTo(cx - w * 0.124f, h * 0.190f)
+            cubicTo(cx - w * 0.128f, h * 0.090f, cx + w * 0.128f, h * 0.090f, cx + w * 0.124f, h * 0.190f)
+            lineTo(cx + w * 0.122f, h * 0.268f)
+            quadraticTo(cx + w * 0.100f, h * 0.278f, cx + w * 0.090f, h * 0.262f)
+            lineTo(cx + w * 0.090f, h * 0.200f)
+            quadraticTo(cx, h * 0.188f, cx - w * 0.090f, h * 0.200f)
+            lineTo(cx - w * 0.090f, h * 0.262f)
+            quadraticTo(cx - w * 0.100f, h * 0.278f, cx - w * 0.122f, h * 0.268f)
+            close()
+        }
+        drawPath(shell, shellCol)
+        with(FieldCamo) { shadeFigure(shell, cx, w * 0.32f) }
+        drawPath(shell, Color.Black.copy(alpha = 0.4f), style = Stroke(1f))
+        // Edge roll around the face opening
+        drawLine(Color(0xFF1A1C1F), Offset(cx - w * 0.090f, h * 0.200f), Offset(cx - w * 0.090f, h * 0.262f), strokeWidth = w * 0.010f)
+        drawLine(Color(0xFF1A1C1F), Offset(cx + w * 0.090f, h * 0.200f), Offset(cx + w * 0.090f, h * 0.262f), strokeWidth = w * 0.010f)
+        // Visor housing with the raised visor showing under its lip
+        drawRoundRect(lerp(shellCol, Color.Black, 0.18f), Offset(cx - w * 0.108f, h * 0.140f), Size(w * 0.216f, h * 0.034f), CornerRadius(10f, 10f))
+        drawRoundRect(Color(0xFF3A3326).copy(alpha = 0.9f), Offset(cx - w * 0.096f, h * 0.172f), Size(w * 0.192f, h * 0.016f), CornerRadius(6f, 6f))
+        drawLine(Color.White.copy(alpha = 0.3f), Offset(cx - w * 0.07f, h * 0.176f), Offset(cx - w * 0.02f, h * 0.176f), strokeWidth = 1.1f, cap = StrokeCap.Round)
+        // Visor knob and the NVG mount plate
+        drawCircle(Color(0xFF15171A), w * 0.010f, Offset(cx + w * 0.080f, h * 0.152f))
+        drawRoundRect(Color(0xFF15171A), Offset(cx - w * 0.024f, h * 0.118f), Size(w * 0.048f, h * 0.026f), CornerRadius(3f, 3f))
+        // Boom mic from the wearer's left ear cup to the mouth, and the chin strap
+        drawLine(Color(0xFF15171A), Offset(cx + w * 0.105f, h * 0.250f), Offset(cx + w * 0.030f, h * 0.288f), strokeWidth = 2f, cap = StrokeCap.Round)
+        drawCircle(Color(0xFF15171A), w * 0.010f, Offset(cx + w * 0.026f, h * 0.290f))
+        drawArc(Color(0xFF2A2C2E), 20f, 140f, false, Offset(cx - w * 0.092f, h * 0.250f), Size(w * 0.184f, h * 0.090f), style = Stroke(1.4f))
+    }
+
+    /** SF ball cap (camo or coyote) with a small velcro patch on the front. */
+    fun DrawScope.ballCap(w: Float, h: Float, cx: Float, capCol: Color) {
+        val crown = Path().apply {
+            moveTo(cx - w * 0.100f, h * 0.190f)
+            cubicTo(cx - w * 0.104f, h * 0.104f, cx + w * 0.104f, h * 0.104f, cx + w * 0.100f, h * 0.190f)
+            close()
+        }
+        drawPath(crown, capCol)
+        with(FieldCamo) { shadeFigure(crown, cx, w * 0.3f) }
+        drawLine(Color.Black.copy(alpha = 0.2f), Offset(cx, h * 0.116f), Offset(cx, h * 0.188f), strokeWidth = 0.8f)
+        drawRoundRect(lerp(capCol, Color.Black, 0.25f), Offset(cx - w * 0.030f, h * 0.140f), Size(w * 0.060f, h * 0.026f), CornerRadius(2f, 2f))
+        // Brim
+        val brim = Path().apply {
+            moveTo(cx - w * 0.094f, h * 0.186f)
+            quadraticTo(cx, h * 0.176f, cx + w * 0.094f, h * 0.186f)
+            quadraticTo(cx, h * 0.222f, cx - w * 0.094f, h * 0.186f)
+            close()
+        }
+        drawPath(brim, lerp(capCol, Color.Black, 0.2f))
+    }
+
+    /** Shemagh wrapped around the neck and shoulders. */
+    fun DrawScope.shemagh(w: Float, h: Float, cx: Float) {
+        val cloth = Color(0xFFD9CFB4)
+        val pattern = Color(0xFF6E5A3E)
+        val wrap = Path().apply {
+            moveTo(cx - w * 0.120f, h * 0.300f)
+            quadraticTo(cx, h * 0.330f, cx + w * 0.120f, h * 0.300f)
+            lineTo(cx + w * 0.150f, h * 0.370f)
+            quadraticTo(cx, h * 0.420f, cx - w * 0.150f, h * 0.370f)
+            close()
+        }
+        drawPath(wrap, cloth)
+        clipPath(wrap) {
+            var x = cx - w * 0.16f
+            while (x < cx + w * 0.16f) {
+                drawLine(pattern.copy(alpha = 0.55f), Offset(x, h * 0.29f), Offset(x + w * 0.05f, h * 0.43f), strokeWidth = 0.9f)
+                drawLine(pattern.copy(alpha = 0.55f), Offset(x + w * 0.05f, h * 0.29f), Offset(x, h * 0.43f), strokeWidth = 0.9f)
+                x += w * 0.022f
+            }
+        }
+        drawPath(wrap, Color.Black.copy(alpha = 0.25f), style = Stroke(1f))
+        // Folds and a hanging tail with tassels
+        drawArc(Color.Black.copy(alpha = 0.2f), 20f, 140f, false, Offset(cx - w * 0.12f, h * 0.31f), Size(w * 0.24f, h * 0.06f), style = Stroke(1f))
+        val tail = Path().apply { moveTo(cx + w * 0.07f, h * 0.38f); lineTo(cx + w * 0.13f, h * 0.38f); lineTo(cx + w * 0.115f, h * 0.47f); lineTo(cx + w * 0.085f, h * 0.47f); close() }
+        drawPath(tail, cloth)
+        drawPath(tail, Color.Black.copy(alpha = 0.25f), style = Stroke(0.8f))
+        for (i in 0..3) drawLine(pattern, Offset(cx + w * (0.087f + i * 0.008f), h * 0.47f), Offset(cx + w * (0.087f + i * 0.008f), h * 0.482f), strokeWidth = 0.8f)
+    }
 }
