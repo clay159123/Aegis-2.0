@@ -123,6 +123,7 @@ data class OperatorEntity(
     val captorsHardenedPct: Int = 0,
     val atEventUntilMillis: Long = 0L,
     val eventKit: String? = null,
+    val faceSeed: Int = 0,
     val flightSkill: Int = 0,
     val combatSortiesFlown: Int = 0,
     val combatJumps: Int = 0,

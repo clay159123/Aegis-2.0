@@ -406,6 +406,18 @@ fun UniformTailorStudioCard(
                     onSelect = { build -> updateRequest { it.copy(bodyBuildOverride = build) } },
                     fieldTestTag = "dropdown_body_build"
                 )
+                // Art 1: a fresh face (features, hair, marks); morale still sets the expression
+                OutlinedButton(
+                    onClick = { updateRequest { it.copy(newFace = true) } },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("tailor_new_face")
+                ) {
+                    Icon(Icons.Filled.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("New Face")
+                }
             }
 
             // 2. Unit Patches & Shoulder Tabs

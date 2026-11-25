@@ -1522,6 +1522,8 @@ data class Operator(
     /** Session 44: at a base event until this time; "MESS" or "ALPHAS" when it calls for a dress uniform. */
     val atEventUntilMillis: Long = 0L,
     val eventKit: String? = null,
+    /** Art 1: reroll seed for the soldier's face (Tailor "New face"). */
+    val faceSeed: Int = 0,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */
@@ -1685,7 +1687,9 @@ data class UniformTailorRequest(
     val followSquadStandard: Boolean = false,
     /** Appearance overrides; null = Auto (derived from the soldier id) */
     val skinToneOverride: SkinTone? = null,
-    val bodyBuildOverride: BodyBuild? = null
+    val bodyBuildOverride: BodyBuild? = null,
+    /** Art 1: rerolls the soldier's face (bumps faceSeed) */
+    val newFace: Boolean = false
 ) {
     companion object {
         fun fromOperator(
