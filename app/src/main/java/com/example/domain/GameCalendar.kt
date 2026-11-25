@@ -138,7 +138,10 @@ object GameCalendar {
                 if (!op.unlocked || op.status.isOutOfActiveService) return@forEach
                 when (op.status) {
                     OperatorStatus.ON_LEAVE, OperatorStatus.RECOVERING -> if (op.recoveryUntilMillis > 0) add(Long.MIN_VALUE to op.recoveryUntilMillis)
-                    OperatorStatus.CAPTURED -> if (op.captivityResolveAtMillis > 0) add(Long.MIN_VALUE to op.captivityResolveAtMillis)
+                    OperatorStatus.CAPTURED -> when {
+                        op.captivityResolveAtMillis > 0 -> add(Long.MIN_VALUE to op.captivityResolveAtMillis)
+                        op.evadingUntilMillis > 0 -> add(Long.MIN_VALUE to op.evadingUntilMillis)
+                    }
                     else -> {}
                 }
                 if (op.dwellUntilMillis > 0) add(Long.MIN_VALUE to op.dwellUntilMillis)

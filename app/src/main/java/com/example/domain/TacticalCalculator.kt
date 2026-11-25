@@ -1518,6 +1518,10 @@ object TacticalCalculator {
             OperatorStatus.DEPLOYED -> return EligibilityResult(false, listOf("Already Deployed"))
             else -> {}
         }
+        // Session 43 fix: a soldier whose contract has run out stays home until the player settles it
+        if (ContractRules.contractDue(operator)) {
+            return EligibilityResult(false, listOf("Contract up: re-up or release first"))
+        }
         // Session 41: home from the last field op for a while before the next one (POW Rescue never waits)
         if (GameCalendar.dwellBlocks(mission)) {
             val left = GameCalendar.dwellLeftMillis(operator, System.currentTimeMillis())
@@ -2348,7 +2352,9 @@ object TacticalCalculator {
         // Item 69: a lieutenant running their first plan costs a little
         val ltPlan = if (selectedOperators.any { it.eventBuffs.leadsNextMission }) -SoldierEvents.LT_PLAN_PASS_PENALTY else 0
         // Item 63: who sits at the table for release talks, and how hard the captors have become
-        val talks = if (mission.id == PowRules.NEGOTIATION_MISSION_ID) PowRules.talksModifierPct(selectedOperators, PowRules.activeTalksFailures) else 0
+        val talks = (if (mission.id == PowRules.NEGOTIATION_MISSION_ID) PowRules.talksModifierPct(selectedOperators, PowRules.activeTalksFailures) else 0) +
+            // Session 43: a Personnel Recovery (pickup of an escaped POW) is easier than a rescue raid
+            (if (mission.id == PowRules.RESCUE_MISSION_ID && PowRules.activeRescueTargetEvading) PowRules.PERSONNEL_RECOVERY_PASS_BONUS else 0)
         // Item 98: the guerrilla force and the Op Free Strait completion perk
         val freeStrait = ClandestineRules.guerrillaPassBonus(mission) + ClandestineRules.freeStraitSfBonus(mission) +
             ClandestineRules.nativeSfPassBonus(mission, selectedOperators) +

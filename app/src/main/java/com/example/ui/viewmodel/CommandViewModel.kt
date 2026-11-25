@@ -494,6 +494,19 @@ class CommandViewModel(
             }
             return
         }
+        // Session 43 fix: contract decisions come up right away, one after another, instead of waiting on the event roll
+        SoldierEvents.idleOperators(ctx).firstOrNull { com.example.domain.ContractRules.contractDue(it) }?.let { op ->
+            val ev = PendingSoldierEvent(com.example.domain.SoldierEventKind.CONTRACT_END, op.id, null, now, now + SoldierEvents.expiryMillis())
+            repository.updateCommanderState { it.copy(pendingEventCsv = ev.toCsv()) }
+            return
+        }
+        // Session 43: an escape chance comes up right away, once per captivity term
+        state.operators.firstOrNull { PowRules.escapeDue(it, now) }?.let { pow ->
+            val ev = PendingSoldierEvent(com.example.domain.SoldierEventKind.ESCAPE_CHANCE, pow.id, null, now, now + SoldierEvents.expiryMillis())
+            repository.saveOperator(pow.copy(escapeOffered = true))
+            repository.updateCommanderState { it.copy(pendingEventCsv = ev.toCsv()) }
+            return
+        }
         // The first check waits a full interval after a fresh start
         if (state.lastEventCheckAtMillis == 0L) {
             repository.updateCommanderState { it.copy(lastEventCheckAtMillis = now) }
@@ -513,14 +526,29 @@ class CommandViewModel(
 
     /** Item 63: held soldiers whose wait has run out are released or die in captivity. */
     private suspend fun resolveCaptivity(state: CommandUiState, now: Long) {
+        // Session 43: an evader nobody picked up in time is caught again
+        val lapsed = state.operators.filter {
+            PowRules.evasionLapsed(it, now) && state.deployments.none { d -> d.targetOperatorId == it.id }
+        }
+        if (lapsed.isNotEmpty()) {
+            repository.saveOperators(lapsed.map { PowRules.recaptured(it, now) })
+            showBanner("${lapsed.joinToString { "${it.rank.code} ${it.callsign}" }} caught again after evading.")
+        }
         val due = state.operators.filter {
             it.status == OperatorStatus.CAPTURED && it.captivityResolveAtMillis in 1..now &&
                 state.deployments.none { d -> d.targetOperatorId == it.id }
         }
         if (due.isEmpty()) return
         val deeds = mutableListOf<PendingDeed>()
+        val heldOver = mutableListOf<Operator>()
         val updated = due.map { op ->
-            if (Random.nextInt(100) < PowRules.releaseSurvivalPct(op)) {
+            // Session 43: each term ends released, held over (fresh term) or dead; the last term can't be held over
+            val result = PowRules.rollTerm(op, Random.nextInt(100))
+            if (result == PowRules.TermResult.HELD) {
+                heldOver += op
+                return@map PowRules.newTerm(op.copy(captorsHardenedPct = 0), now)
+            }
+            if (result == PowRules.TermResult.RELEASED) {
                 deeds += PendingDeed(
                     id = "deed_${UUID.randomUUID().toString().take(8)}",
                     operatorId = op.id,
@@ -537,7 +565,20 @@ class CommandViewModel(
         updated.forEach { ops[it.id] = it }
         var moraleSquads = state.squads
         val moraleChanged = mutableSetOf<String>()
+        // Session 43: squadmates take it harder each time a friend is held over
+        heldOver.forEach { pow ->
+            val hit = PowRules.HELD_OVER_MORALE_PER_TERM * pow.captivityTerm
+            state.squads.filter { pow.id in it.memberIds || pow.id in it.shakenForIds || pow.id in it.ralliedForIds }.forEach { sq ->
+                sq.memberIds.filter { it != pow.id }.forEach { mid ->
+                    (ops[mid] ?: state.operators.find { it.id == mid })?.let { ops[mid] = MoraleRules.adjust(it, hit) }
+                }
+            }
+        }
+        if (heldOver.isNotEmpty()) {
+            showBanner("${heldOver.joinToString { "${it.rank.code} ${it.callsign}" }} held for another term.")
+        }
         for (u in updated) {
+            if (u.status == OperatorStatus.CAPTURED) continue
             if (u.status == OperatorStatus.FALLEN) {
                 moraleSquads = moraleSquads.map { sq ->
                     if (u.id !in sq.memberIds && u.id !in sq.shakenForIds && u.id !in sq.ralliedForIds) return@map sq
@@ -591,7 +632,9 @@ class CommandViewModel(
 
     fun selectPowTarget(operatorId: String) {
         powOperationTargetId = operatorId
-        PowRules.activeTalksFailures = uiState.value.operators.find { it.id == operatorId }?.powTalksFailures ?: 0
+        val target = uiState.value.operators.find { it.id == operatorId }
+        PowRules.activeTalksFailures = target?.powTalksFailures ?: 0
+        PowRules.activeRescueTargetEvading = target != null && PowRules.isEvading(target, System.currentTimeMillis())
     }
 
     /** Item 69: answer the waiting soldier event. */
@@ -1737,6 +1780,7 @@ class CommandViewModel(
                 TacticalCalculator.PLATOON_LEADER_SURVIVAL_BONUS
             } else 0
             PowRules.activeTalksFailures = deployment.targetOperatorId?.let { id -> state.operators.find { it.id == id }?.powTalksFailures } ?: 0
+            PowRules.activeRescueTargetEvading = deployment.targetOperatorId?.let { id -> state.operators.find { it.id == id }?.evadingUntilMillis?.let { it > 0 } } ?: false
             val successOdds = TacticalCalculator.missionSuccessOddsPct(
                 insertion = deployment.insertion,
                 scatteredDrop = scatteredDrop,
@@ -2357,6 +2401,11 @@ class CommandViewModel(
             updatedOperators.add(afterTalks)
             showBanner(note)
         }
+        // Session 43: a failed Personnel Recovery means the evader is caught again
+        if (mission.id == PowRules.RESCUE_MISSION_ID && !missionSucceeded && freedPow != null && freedPow.evadingUntilMillis > 0) {
+            updatedOperators.add(PowRules.recaptured(freedPow, now))
+            showBanner("Personnel Recovery failed: ${freedPow.rank.code} ${freedPow.callsign} was caught again.")
+        }
         if (PowRules.isPowOperation(mission) && missionSucceeded && freedPow != null) {
             updatedOperators.add(PowRules.released(freedPow, now, TacticalCalculator.aidRecoveryMultiplier(state.facilities)))
             newDeeds.add(
@@ -2364,7 +2413,11 @@ class CommandViewModel(
                     id = "deed_${UUID.randomUUID().toString().take(8)}",
                     operatorId = freedPow.id,
                     missionTitle = mission.title,
-                    deedSummary = "Held as a prisoner of war and brought home by ${if (mission.id == PowRules.RESCUE_MISSION_ID) "a rescue raid" else "negotiated release"}.",
+                    deedSummary = "Held as a prisoner of war and brought home by ${when {
+                        mission.id == PowRules.RESCUE_MISSION_ID && freedPow.evadingUntilMillis > 0 -> "a Personnel Recovery after escaping"
+                        mission.id == PowRules.RESCUE_MISSION_ID -> "a rescue raid"
+                        else -> "negotiated release"
+                    }}.",
                     recommendedMedalId = PowRules.POW_MEDAL_ID,
                     createdAtMillis = now
                 )

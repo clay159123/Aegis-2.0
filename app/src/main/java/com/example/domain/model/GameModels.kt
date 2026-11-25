@@ -1514,6 +1514,11 @@ data class Operator(
     val contractAskProgress: Int = 0,
     val swaysUsed: Int = 0,
     val nextRetireAskDay: Double = -1.0,
+    /** Session 43: captivity term (1 to 3), escape offered this term, evading until (Personnel Recovery window), captors hardened (%). */
+    val captivityTerm: Int = 0,
+    val escapeOffered: Boolean = false,
+    val evadingUntilMillis: Long = 0L,
+    val captorsHardenedPct: Int = 0,
     /** Aviator skill, raised by Flight School and Flight Hours. Lowers helicopter insertion risk and time. */
     val flightSkill: Int = 0,
     /** Combat missions flown as the pilot (Flight Hours never count). Drives the Air Medal. */

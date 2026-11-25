@@ -138,6 +138,10 @@ object PowRules {
         status = OperatorStatus.CAPTURED,
         capturedAtMillis = now,
         captivityResolveAtMillis = now + captivityMillis(operator),
+        captivityTerm = 1,
+        escapeOffered = false,
+        evadingUntilMillis = 0L,
+        captorsHardenedPct = 0,
         captureTheater = mission.theater,
         timesCaptured = operator.timesCaptured + 1,
         powTalksFailures = 0,
@@ -175,15 +179,113 @@ object PowRules {
         recoveryUntilMillis = now + GameTiming.millis((TacticalCalculator.BASE_RECOVERY_MILLIS * recoveryMultiplier * RETURN_RECOVERY_FACTOR).toLong()),
         capturedAtMillis = 0L,
         captivityResolveAtMillis = 0L,
-        captureTheater = null
+        captureTheater = null,
+        captivityTerm = 0,
+        escapeOffered = false,
+        evadingUntilMillis = 0L,
+        captorsHardenedPct = 0
     )
 
     fun diedInCaptivity(operator: Operator): Operator = operator.copy(
         status = OperatorStatus.FALLEN,
         fallenNote = "Died in captivity" + (operator.captureTheater?.let { ": ${it.label}" } ?: ""),
         capturedAtMillis = 0L,
-        captivityResolveAtMillis = 0L
+        captivityResolveAtMillis = 0L,
+        evadingUntilMillis = 0L
     )
+
+    // ============================================================
+    // Session 43 (item 73): captivity terms, escape, Personnel Recovery
+    // ============================================================
+
+    const val MAX_TERMS = 3
+    /** End of a term: released / held another term / dies (percent). SERE graduates fare better. */
+    const val RELEASE_PCT = 55
+    const val HELD_PCT = 30
+    const val SERE_RELEASE_PCT = 65
+    const val SERE_HELD_PCT = 28
+    /** The last term: released or dies only. */
+    const val FINAL_RELEASE_PCT = 80
+    const val SERE_FINAL_RELEASE_PCT = 90
+    const val HARDENED_STEP_PCT = 10
+    /** Squadmates lose this much morale per term each time a POW is held over. */
+    const val HELD_OVER_MORALE_PER_TERM = -4
+    const val ESCAPE_PCT_NONE = 5
+    const val ESCAPE_PCT_SERE2 = 12
+    const val ESCAPE_PCT_SERE3 = 20
+    const val FAILED_ESCAPE_DEATH_PCT = 10
+    const val SERE3_FAILED_ESCAPE_DEATH_PCT = 5
+    const val EVADE_WINDOW_DAYS = 14.0
+    const val PERSONNEL_RECOVERY_PASS_BONUS = 20
+
+    /** Set while a rescue is staged or resolved, so the shared odds formula knows it's a Personnel Recovery. */
+    @Volatile var activeRescueTargetEvading: Boolean = false
+
+    enum class TermResult { RELEASED, HELD, DIED }
+
+    fun isEvading(op: Operator, now: Long): Boolean = op.status == OperatorStatus.CAPTURED && op.evadingUntilMillis > now
+
+    /** Odds (percent) at the end of a term: released, held over, died. Hardened captors move release odds to held. */
+    fun termOdds(op: Operator): Triple<Int, Int, Int> {
+        val sere = TacticalCalculator.isSereQualified(op)
+        if (op.captivityTerm >= MAX_TERMS) {
+            val rel = ((if (sere) SERE_FINAL_RELEASE_PCT else FINAL_RELEASE_PCT) - op.captorsHardenedPct).coerceIn(5, 95)
+            return Triple(rel, 0, 100 - rel)
+        }
+        val baseRel = if (sere) SERE_RELEASE_PCT else RELEASE_PCT
+        val baseHeld = if (sere) SERE_HELD_PCT else HELD_PCT
+        val rel = (baseRel - op.captorsHardenedPct).coerceAtLeast(5)
+        val held = baseHeld + (baseRel - rel)
+        return Triple(rel, held, 100 - rel - held)
+    }
+
+    fun rollTerm(op: Operator, roll: Int): TermResult {
+        val (rel, held, _) = termOdds(op)
+        return when {
+            roll < rel -> TermResult.RELEASED
+            roll < rel + held -> TermResult.HELD
+            else -> TermResult.DIED
+        }
+    }
+
+    /** Held over: a new term. The rescue window and talks reopen, and another escape chance will come. */
+    fun newTerm(op: Operator, now: Long): Operator = op.copy(
+        captivityTerm = (op.captivityTerm + 1).coerceAtMost(MAX_TERMS),
+        capturedAtMillis = now,
+        captivityResolveAtMillis = now + captivityMillis(op),
+        powRescueClosed = false,
+        powTalksCooldownUntilMillis = 0L,
+        escapeOffered = false,
+        evadingUntilMillis = 0L
+    )
+
+    fun escapeChancePct(op: Operator): Int = when (TacticalCalculator.sereLevel(op)) {
+        3 -> ESCAPE_PCT_SERE3
+        2 -> ESCAPE_PCT_SERE2
+        else -> ESCAPE_PCT_NONE
+    }
+
+    fun failedEscapeDeathPct(op: Operator): Int =
+        if (TacticalCalculator.sereLevel(op) >= 3) SERE3_FAILED_ESCAPE_DEATH_PCT else FAILED_ESCAPE_DEATH_PCT
+
+    /** Partway through the term, once: the escape chance comes up. */
+    fun escapeDue(op: Operator, now: Long): Boolean =
+        op.status == OperatorStatus.CAPTURED && !op.escapeOffered && op.evadingUntilMillis == 0L &&
+            op.captivityResolveAtMillis > 0 && now >= op.capturedAtMillis + (op.captivityResolveAtMillis - op.capturedAtMillis) / 2
+
+    /** A successful escape: out, but not home. The term clock stops while they evade. */
+    fun escaped(op: Operator, now: Long): Operator = op.copy(
+        evadingUntilMillis = now + GameCalendar.daysToMillis(EVADE_WINDOW_DAYS),
+        captivityResolveAtMillis = 0L,
+        escapeOffered = true
+    )
+
+    /** Caught after evading (window lapsed or Personnel Recovery failed): a fresh term with harder captors. */
+    fun recaptured(op: Operator, now: Long): Operator =
+        newTerm(op.copy(captorsHardenedPct = op.captorsHardenedPct + HARDENED_STEP_PCT, captivityTerm = op.captivityTerm), now)
+
+    fun evasionLapsed(op: Operator, now: Long): Boolean =
+        op.status == OperatorStatus.CAPTURED && op.evadingUntilMillis in 1..now
 
     fun isPowOperation(mission: MissionTemplate): Boolean = mission.id == RESCUE_MISSION_ID || mission.id == NEGOTIATION_MISSION_ID
 
@@ -198,7 +300,8 @@ object PowRules {
     ): String? = when {
         target == null || target.status != OperatorStatus.CAPTURED -> "Pick a soldier on the POW list"
         deployments.any { it.targetOperatorId == target.id } -> "An operation for ${target.callsign} is already under way"
-        mission.id == RESCUE_MISSION_ID && !rescueWindowOpen(target, now) -> "The rescue window for ${target.callsign} has closed"
+        mission.id == RESCUE_MISSION_ID && !isEvading(target, now) && !rescueWindowOpen(target, now) -> "The rescue window for ${target.callsign} has closed"
+mission.id == NEGOTIATION_MISSION_ID && isEvading(target, now) -> "${target.callsign} is on the run; send a Personnel Recovery"
         mission.id == NEGOTIATION_MISSION_ID && talksCoolingDown(target, now) -> "Talks for ${target.callsign} collapsed; try again later"
         mission.id == NEGOTIATION_MISSION_ID && team.isNotEmpty() && team.none { it.isSeniorNegotiator() } ->
             "Talks need an officer, warrant officer or senior NCO at the table"

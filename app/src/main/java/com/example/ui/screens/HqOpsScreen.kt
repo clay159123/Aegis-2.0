@@ -1252,7 +1252,7 @@ private fun PowListPanel(
         Text(
             "Held soldiers keep their roster slot. Rescue them while the window is open, open release talks " +
                 "(${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS, ${PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST.toInt()} with a general; senior people at the table help), " +
-                "or wait: they're released or lost when the time runs out.",
+                "or wait: each 6-month term ends in release, another term or loss (up to ${PowRules.MAX_TERMS} terms). Once a term they may get a chance to escape.",
             style = MaterialTheme.typography.labelSmall,
             color = extra.textMuted
         )
@@ -1272,29 +1272,54 @@ private fun PowListPanel(
                         "${pow.rank.code} ${pow.callsign}" + (if (TacticalCalculator.isSereQualified(pow)) " • SERE" else ""),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
+                    // Session 43: terms, escape and evasion
+                    val evading = PowRules.isEvading(pow, nowMillis)
+                    val (rel, held, died) = PowRules.termOdds(pow)
+                    if (evading) {
+                        Text(
+                            "ESCAPED • EVADING • pickup window ${formatMinSec(pow.evadingUntilMillis - nowMillis)}",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = extra.brassBright,
+                            modifier = Modifier.testTag("pow_evading_${pow.id}")
+                        )
+                    }
                     Text(
-                        "Held in ${pow.captureTheater?.label ?: "enemy territory"} • " +
-                            (if (inProgress) "operation under way" else "release or loss in ${formatMinSec(waitLeft)}") +
-                            " • ${PowRules.releaseSurvivalPct(pow)}% survive the wait" +
-                            (if (pow.powTalksFailures > 0) " • captors hardened -${pow.powTalksFailures * PowRules.HARDENED_PENALTY_PCT}%" else "") +
-                            (if (pow.powRescueClosed) " • prisoner moved" else ""),
+                        "Held in ${pow.captureTheater?.label ?: "enemy territory"} • term ${pow.captivityTerm.coerceAtLeast(1)} of ${PowRules.MAX_TERMS} • " +
+                            when {
+                                inProgress -> "operation under way"
+                                evading -> "send a Personnel Recovery (+${PowRules.PERSONNEL_RECOVERY_PASS_BONUS}%) before they're caught"
+                                else -> "term ends in ${formatMinSec(waitLeft)}: $rel% released, " +
+                                    (if (held > 0) "$held% held over, " else "") + "$died% lost"
+                            } +
+                            (if (pow.captorsHardenedPct > 0) " • captors hardened" else "") +
+                            (if (pow.powTalksFailures > 0) " • talks hardened -${pow.powTalksFailures * PowRules.HARDENED_PENALTY_PCT}%" else "") +
+                            (if (pow.powRescueClosed && !evading) " • prisoner moved" else ""),
                         style = MaterialTheme.typography.labelSmall,
                         color = extra.textMuted
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         Button(
                             onClick = { onRescue(pow.id) },
-                            enabled = !inProgress && rescueLeft > 0L,
+                            enabled = !inProgress && (evading || rescueLeft > 0L),
                             modifier = Modifier.weight(1f).testTag("pow_rescue_${pow.id}")
-                        ) { Text(if (rescueLeft > 0L) "Rescue (${formatMinSec(rescueLeft)})" else "Rescue closed", maxLines = 1) }
+                        ) {
+                            Text(
+                                when {
+                                    evading -> "Recover"
+                                    rescueLeft > 0L -> "Rescue (${formatMinSec(rescueLeft)})"
+                                    else -> "Rescue closed"
+                                },
+                                maxLines = 1
+                            )
+                        }
                         val cooling = PowRules.talksCoolingDown(pow, nowMillis)
                         OutlinedButton(
                             onClick = { onNegotiate(pow.id) },
-                            enabled = !inProgress && !cooling && prestige >= PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST,
+                            enabled = !inProgress && !evading && !cooling && prestige >= PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST,
                             modifier = Modifier.weight(1f).testTag("pow_negotiate_${pow.id}")
                         ) {
                             Text(
-                                if (cooling) "Talks (${formatMinSec(pow.powTalksCooldownUntilMillis - nowMillis)})" else "Talks (${PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST.toInt()}-${PowRules.NEGOTIATION_PRESTIGE_COST.toInt()} PRS)",
+                                if (cooling) "Talks (${formatMinSec(pow.powTalksCooldownUntilMillis - nowMillis)})" else "Talks ${PowRules.GENERAL_NEGOTIATION_PRESTIGE_COST.toInt()}+ PRS",
                                 maxLines = 1
                             )
                         }
