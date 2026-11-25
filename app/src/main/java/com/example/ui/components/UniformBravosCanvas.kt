@@ -427,13 +427,15 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
     var topDecorationY = h * (0.528f - CHEST_LIFT)
     if (operator.dressDisplayMode != DressDisplayMode.CLEAN && rackDecorations.isNotEmpty()) {
         val rackCols = 3
-        val ribW = w * 0.045f
-        val ribH = h * 0.019f
-        val gapX = w * 0.0035f
-        val gapY = h * 0.003f
+        // Art 6a: ribbons at their real proportions (about 3.5 wide to 1 tall), not near-square tiles
+        val ribW = w * 0.038f
+        val ribH = h * 0.0080f
+        val gapX = w * 0.0025f
+        val gapY = h * 0.0022f
         val totalRackW = rackCols * ribW + (rackCols - 1) * gapX
         val rackLeftEdge = leftChestCenterX - totalRackW / 2f
-        val baseBottomY = h * (0.532f - CHEST_LIFT)
+        // Art 6a: the bottom row sits just above the pocket flap, as worn
+        val baseBottomY = h * (0.550f - CHEST_LIFT)
         val displayMedals = rackDecorations.take(TacticalCalculator.MAX_WORN_RIBBONS)
         val rows = TacticalCalculator.layoutRibbonRackRows(displayMedals, rackCols)
         val totalRows = rows.size
@@ -448,12 +450,7 @@ internal fun DrawScope.drawBravosShortSleeveFigure(
 
             rowItems.forEachIndexed { colInRow, medal ->
                 val rx = rackLeftEdge + rowCenterOffset + colInRow * (ribW + gapX)
-                val stripes = medal.ribbonStripeHexes.size.coerceAtLeast(1)
-                val sw = ribW / stripes
-                medal.ribbonStripeHexes.forEachIndexed { sIdx, hex ->
-                    drawRect(Color(hex), Offset(rx + sIdx * sw, ry), Size(sw + 0.5f, ribH))
-                }
-                drawRect(trimCol, Offset(rx, ry), Size(ribW, ribH), style = Stroke(0.9f))
+                drawRibbonBar(Offset(rx, ry), Size(ribW, ribH), medal.ribbonStripeHexes)
                 awardDevices[medal.id]?.let { dev ->
                     if (dev.hasAnyDevice) {
                         drawRibbonDeviceOverlay(
