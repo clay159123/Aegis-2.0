@@ -94,7 +94,7 @@ class Session19Test {
         val fired = (1..5000).count { SoldierEvents.roll(c, rng) != null }
         val rate = fired / 5000.0
         assertTrue("rate $rate", rate in (SoldierEvents.EVENT_FIRE_CHANCE - 0.03)..(SoldierEvents.EVENT_FIRE_CHANCE + 0.03))
-        assertEquals(5 * 60_000L, SoldierEvents.EVENT_INTERVAL_MILLIS)
+        assertEquals(9 * 60_000L, SoldierEvents.EVENT_INTERVAL_MILLIS)
         val e = SoldierEvents.pick(c)!!
         assertEquals(SoldierEvents.expiryMillis(), e.expiresAtMillis - e.createdAtMillis)
         assertFalse(SoldierEvents.stillValid(e, c.copy(now = e.expiresAtMillis)))

@@ -31,15 +31,28 @@ class Session44Test {
 
     @Test
     fun calendar_events_by_month() {
-        assertNull(BaseEvents.dueScheduled(0.0, emptySet()))
-        assertEquals(SoldierEventKind.BASE_FAMILY_DAY, BaseEvents.dueScheduled(3 * M + 1, emptySet()))
-        val familyDone = setOf(BaseEvents.key(SoldierEventKind.BASE_FAMILY_DAY, 3 * M + 1))
-        assertNull(BaseEvents.dueScheduled(4 * M + 1, familyDone))
-        assertEquals(SoldierEventKind.BASE_ARMY_BALL, BaseEvents.dueScheduled(5 * M + 1, familyDone))
-        // Announced a month ahead
-        assertEquals(SoldierEventKind.BASE_ARMY_BALL to "Jun", BaseEvents.upcoming(4 * M + 5, familyDone))
+        // Item 198: year 3 has Family Day (every 4 years) and block leave (odd years), no Ball and no IG
+        val y3 = 2 * GameCalendar.DAYS_PER_YEAR
+        assertNull(BaseEvents.dueScheduled(y3, emptySet()))
+        assertEquals(SoldierEventKind.BASE_FAMILY_DAY, BaseEvents.dueScheduled(y3 + 3 * M + 1, emptySet()))
+        val familyDone = setOf(BaseEvents.key(SoldierEventKind.BASE_FAMILY_DAY, y3 + 3 * M + 1))
+        assertNull(BaseEvents.dueScheduled(y3 + 6 * M + 1, familyDone))
+        assertEquals(SoldierEventKind.BASE_BLOCK_LEAVE, BaseEvents.dueScheduled(y3 + 11 * M + 1, familyDone))
+        // Year 2 has the Ball, announced a month ahead
+        val y2 = GameCalendar.DAYS_PER_YEAR
+        assertNull(BaseEvents.dueScheduled(y2 + 4 * M + 1, emptySet()))
+        assertEquals(SoldierEventKind.BASE_ARMY_BALL, BaseEvents.dueScheduled(y2 + 5 * M + 1, emptySet()))
+        assertEquals(SoldierEventKind.BASE_ARMY_BALL to "Jun", BaseEvents.upcoming(y2 + 4 * M + 5, emptySet()))
+        assertNull(BaseEvents.upcoming(y3 + 4 * M + 5, familyDone))
         assertFalse(BaseEvents.scheduledLapsed(SoldierEventKind.BASE_ARMY_BALL, 6 * M + 1))
         assertTrue(BaseEvents.scheduledLapsed(SoldierEventKind.BASE_ARMY_BALL, 7 * M + 1))
+        // The IG and Family Day never share a year; each comes once in 4 years
+        for (y in 1..8) {
+            val d = (y - 1) * GameCalendar.DAYS_PER_YEAR
+            assertFalse(BaseEvents.scheduledThisYear(SoldierEventKind.BASE_IG_INSPECTION, d) && BaseEvents.scheduledThisYear(SoldierEventKind.BASE_FAMILY_DAY, d))
+            assertTrue(BaseEvents.scheduledThisYear(SoldierEventKind.BASE_ARMY_BALL, d) != BaseEvents.scheduledThisYear(SoldierEventKind.BASE_BLOCK_LEAVE, d))
+        }
+        assertEquals(2, (1..8).count { BaseEvents.scheduledThisYear(SoldierEventKind.BASE_IG_INSPECTION, (it - 1) * GameCalendar.DAYS_PER_YEAR) })
         // Family Day comes once a year
         assertEquals(1, BaseEvents.SCHEDULED.keys.count { it == SoldierEventKind.BASE_FAMILY_DAY })
     }

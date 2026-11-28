@@ -125,6 +125,7 @@ data class OperatorEntity(
     val captorsHardenedPct: Int = 0,
     val atEventUntilMillis: Long = 0L,
     val eventKit: String? = null,
+    val eventLabel: String = "",
     val faceSeed: Int = 0,
     val fallenDay: Double = -1.0,
     val flightSkill: Int = 0,

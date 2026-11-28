@@ -10,7 +10,7 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
- * Session 44 (item 71): base-wide events at a home-country Fort. Calendar events come on a set month each year
+ * Session 44 (item 71): base-wide events at a home-country Fort. Calendar events come on a set month in their year ([CYCLE])
  * (and change of command when a new CO is seated); random ones about once a game quarter. Each event draws
  * whoever is home and available, never needs a full squad, scales its rewards with turnout, and takes the
  * attendees off deployment for its length (AT EVENT). Formal events put attendees in Mess Dress; the honor guard
@@ -24,6 +24,24 @@ object BaseEvents {
         SoldierEventKind.BASE_IG_INSPECTION to 9,   // October
         SoldierEventKind.BASE_BLOCK_LEAVE to 11     // December
     )
+
+    /**
+     * Item 198: calendar events no longer come every year. The Ball and block leave alternate years (the Ball
+     * in even years, block leave in odd ones); the IG and Family Day come every 4 years, staggered so they never
+     * share a year. Year 1: block leave and the IG; year 2: the Ball; year 3: block leave and Family Day; year 4: the Ball.
+     */
+    val CYCLE: Map<SoldierEventKind, Pair<Int, Int>> = mapOf(
+        SoldierEventKind.BASE_ARMY_BALL to (2 to 0),
+        SoldierEventKind.BASE_BLOCK_LEAVE to (2 to 1),
+        SoldierEventKind.BASE_IG_INSPECTION to (4 to 1),
+        SoldierEventKind.BASE_FAMILY_DAY to (4 to 3)
+    )
+
+    /** Whether a calendar event comes in the game year that [days] falls in. */
+    fun scheduledThisYear(kind: SoldierEventKind, days: Double): Boolean {
+        val (every, offset) = CYCLE[kind] ?: return true
+        return GameCalendar.year(days) % every == offset
+    }
     const val RANDOM_EVERY_DAYS = 91.0
     const val HONOR_GUARD_MIN = 4
     const val GATE_RESPONSE_MIN = 2
@@ -75,7 +93,7 @@ object BaseEvents {
     /** A calendar event due this month that hasn't run yet this year. */
     fun dueScheduled(today: Double, done: Set<String>): SoldierEventKind? {
         val month = GameCalendar.monthIndex(today)
-        return SCHEDULED.entries.firstOrNull { (k, m) -> month >= m && key(k, today) !in done }?.key
+        return SCHEDULED.entries.firstOrNull { (k, m) -> month >= m && scheduledThisYear(k, today) && key(k, today) !in done }?.key
     }
 
     /** Past the month's grace with nobody home: it passes with the default. */
@@ -87,7 +105,8 @@ object BaseEvents {
     /** Next calendar event within a month, for the Ops header ("Army Birthday Ball in Jun"). */
     fun upcoming(today: Double, done: Set<String>): Pair<SoldierEventKind, String>? {
         val inMonth = GameCalendar.monthIndex(today + GameCalendar.DAYS_PER_MONTH)
-        return SCHEDULED.entries.firstOrNull { (k, m) -> m == inMonth && GameCalendar.monthIndex(today) != m && key(k, today + GameCalendar.DAYS_PER_MONTH) !in done }
+        val ahead = today + GameCalendar.DAYS_PER_MONTH
+        return SCHEDULED.entries.firstOrNull { (k, m) -> m == inMonth && GameCalendar.monthIndex(today) != m && scheduledThisYear(k, ahead) && key(k, ahead) !in done }
             ?.let { (k, _) -> k to GameCalendar.label(today + GameCalendar.DAYS_PER_MONTH).split(" · ")[1] }
     }
 
@@ -194,6 +213,15 @@ object BaseEvents {
         op.copy(atEventUntilMillis = ctx.now + GameCalendar.daysToMillis(days), eventKit = kit)
 
     fun apply(e: PendingSoldierEvent, choiceId: String, ctx: SoldierEventContext, random: Random = Random): SoldierEventOutcome {
+        val out = applyChoice(e, choiceId, ctx, random)
+        // Item 197: everyone newly pulled to the event carries its name, for the countdown on Ops
+        val before = ctx.operators.associateBy { it.id }
+        return out.copy(operatorUpdates = out.operatorUpdates.map { op ->
+            if (op.atEventUntilMillis > ctx.now && op.atEventUntilMillis != before[op.id]?.atEventUntilMillis) op.copy(eventLabel = e.kind.title) else op
+        })
+    }
+
+    private fun applyChoice(e: PendingSoldierEvent, choiceId: String, ctx: SoldierEventContext, random: Random): SoldierEventOutcome {
         val all = everyoneHome(ctx)
         val hq = hqHome(ctx)
         val soldiers = soldiersHome(ctx)

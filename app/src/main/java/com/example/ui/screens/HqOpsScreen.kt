@@ -92,6 +92,8 @@ fun HqOpsScreen(
     onNavigateToSquad: () -> Unit,
     /** Session 39: open the Uniform tab on a soldier up for promotion. */
     onReviewPromotion: (String) -> Unit = { onNavigateToDress() },
+    /** Item 199: open a soldier's record (from the promises panel). */
+    onOpenSoldier: (String) -> Unit = onReviewPromotion,
     /** Session 41: testing build only, tapping the calendar advances it a month. */
     onCalendarTap: (() -> Unit)? = null,
     /** Session 42: Rush ops, schools and leave for Prestige. */
@@ -649,6 +651,55 @@ fun HqOpsScreen(
             }
         }
 
+        // Item 199: promises made at reenlistment that are still open, soonest contract end first
+        val promises = uiState.operators
+            .filter { it.unlocked && !it.status.isOutOfActiveService && it.contractAsk != null && !it.contractAskMet }
+            .mapNotNull { op -> com.example.domain.ContractRules.askLabel(op, uiState.squads)?.let { op to it } }
+            .sortedBy { (op, _) -> if (op.contractEndDay >= 0) op.contractEndDay else Double.MAX_VALUE }
+        if (promises.isNotEmpty()) {
+            item(key = "ops_promises") {
+                TacticalPanelCard(borderColor = extra.signalsCyan.copy(alpha = 0.55f), modifier = Modifier.testTag("ops_promises")) {
+                    Text(
+                        text = "OPEN PROMISES (${promises.size})",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = extra.signalsCyan
+                    )
+                    Text(
+                        text = "What soldiers asked for when they signed. A kept promise makes the next re-up likelier; a broken one hurts it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    promises.forEach { (op, ask) ->
+                        val left = op.contractEndDay - uiState.calendarDays
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenSoldier(op.id) }
+                                .padding(vertical = 4.dp)
+                                .testTag("ops_promise_${op.id}"),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("${op.rank.code} ${op.callsign}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text(ask.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(
+                                text = when {
+                                    op.contractEndDay < 0 -> ""
+                                    left <= 0 -> "contract due"
+                                    else -> "${GameCalendar.formatGameSpan(left)} left"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (left in 0.0..(GameCalendar.DAYS_PER_YEAR / 4)) extra.amberTelemetry else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Session 39 (item 186): who is on leave and when they're back
         val onLeave = uiState.operators.filter { it.unlocked && it.status == OperatorStatus.ON_LEAVE }
             .sortedBy { it.recoveryUntilMillis }
@@ -687,6 +738,46 @@ fun HqOpsScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Item 197: base events running now (the Ball, an honor guard, a gate response), with who is there and time left
+        val atEvents = uiState.operators.filter { it.unlocked && it.atEventUntilMillis > uiState.nowMillis && !it.status.isOutOfActiveService }
+            .groupBy { it.eventLabel.ifBlank { "Base event" } }
+            .toList().sortedBy { (_, ops) -> ops.minOf { it.atEventUntilMillis } }
+        if (atEvents.isNotEmpty()) {
+            item(key = "ops_base_events") {
+                TacticalPanelCard(borderColor = extra.brass.copy(alpha = 0.6f), modifier = Modifier.testTag("ops_base_events")) {
+                    Text(
+                        text = "BASE EVENTS (${atEvents.size})",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = extra.brassBright
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    atEvents.forEach { (label, ops) ->
+                        val remSec = ((ops.maxOf { it.atEventUntilMillis } - uiState.nowMillis + 999L) / 1000L).coerceAtLeast(0L)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).testTag("ops_event_$label"),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text(
+                                    text = "${ops.size} attending: " + ops.take(4).joinToString(", ") { "${it.rank.code} ${it.callsign}" } +
+                                        if (ops.size > 4) " +${ops.size - 4} more" else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = "ends in ${formatCountdown(remSec)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = extra.brassBright
+                            )
                         }
                     }
                 }

@@ -142,7 +142,8 @@ data class SoldierEventOutcome(
 enum class PetitionAction { APPROVE_TRANSFER, DECLINE_TRANSFER, APPROVE_RETIREMENT, DENY_RETIREMENT, CONTRACT_LEAVE }
 
 object SoldierEvents {
-    const val EVENT_INTERVAL_MILLIS = 5 * 60_000L
+    /** Item 200: raised from 5 to 9 real minutes (Chris: 8 to 10). */
+    const val EVENT_INTERVAL_MILLIS = 9 * 60_000L
     const val EVENT_FIRE_CHANCE = 0.40
     const val EVENT_EXPIRY_MILLIS = 15 * 60_000L
     /** Leave and other away time from an event. Release can vary this by event. */

@@ -1522,6 +1522,8 @@ data class Operator(
     /** Session 44: at a base event until this time; "MESS" or "ALPHAS" when it calls for a dress uniform. */
     val atEventUntilMillis: Long = 0L,
     val eventKit: String? = null,
+    /** Item 197: which base event the soldier is at ("Army Birthday Ball"), for the Ops countdown. */
+    val eventLabel: String = "",
     /** Art 1: reroll seed for the soldier's face (Tailor "New face"). */
     val faceSeed: Int = 0,
     /** Art 2b: calendar day this soldier fell (for the Memorial Wall plaque); -1 = unknown or alive. */
